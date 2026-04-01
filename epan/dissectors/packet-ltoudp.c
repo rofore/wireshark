@@ -24,6 +24,7 @@ static int dissect_ltoudp(tvbuff_t *tvb,
 {
     tvbuff_t *next_tvb;
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "ltoudp");
+    
     /* Clear the info column */
     col_clear(pinfo->cinfo, COL_INFO);
 
@@ -59,9 +60,9 @@ void proto_register_ltoudp(void)
     static gint *ett[] = {&ett_foo};
 
     proto_ltoudp = proto_register_protocol(
-        "LocalTalk over UDP", /* name */
-        "LToUDP",			 /* short_name  */
-        "ltoudp"				 /* filter_name */
+        "LocalTalk over UDP",   /* Name */
+        "LToUDP",               /* Short Name  */
+        "ltoudp"                /* Filter Name */
     );
 
     proto_register_field_array(proto_ltoudp, hf, array_length(hf));
