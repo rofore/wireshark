@@ -19,7 +19,7 @@
 #include <epan/oids.h>
 #include <epan/expert.h>
 #include <epan/asn1.h>
-
+#include <wsutil/array.h>
 #include "packet-ber.h"
 #include "packet-p1.h"
 
@@ -31,17 +31,13 @@
 #define CDT_P3         3
 #define CDT_P7         4
 
-#define PNAME  "Compressed Data Type"
-#define PSNAME "CDT"
-#define PFNAME "cdt"
-
 void proto_register_cdt(void);
 void proto_reg_handoff_cdt(void);
 
-static proto_tree *top_tree = NULL;
-static proto_item *cdt_item = NULL;
+static proto_tree *top_tree;
+static proto_item *cdt_item;
 
-static guint32 content_type = 0;
+static uint32_t content_type;
 
 /* Initialize the protocol and registered fields */
 static int proto_cdt;
@@ -89,7 +85,7 @@ void proto_register_cdt (void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 #include "packet-cdt-ettarr.c"
   };
 
@@ -101,7 +97,7 @@ void proto_register_cdt (void) {
   expert_module_t* expert_cdt;
 
   /* Register protocol */
-  proto_cdt = proto_register_protocol (PNAME, PSNAME, PFNAME);
+  proto_cdt = proto_register_protocol ("Compressed Data Type", "CDT", "cdt");
 
   /* Register fields and subtrees */
   proto_register_field_array (proto_cdt, hf, array_length(hf));

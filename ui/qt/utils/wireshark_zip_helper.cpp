@@ -11,17 +11,42 @@
 
 #include <ui/qt/utils/wireshark_zip_helper.h>
 
-#ifdef HAVE_MINIZIP
+#if defined(HAVE_MINIZIP) || defined(HAVE_MINIZIPNG)
 #include "config.h"
-
-#include "glib.h"
 
 #include <iosfwd>
 #include <iostream>
-#include <zlib.h>  // For Z_DEFLATED, etc.
+// The original minizip API uses constants defined in zlib.h like Z_DEFLATED.
+// The original minizip's zip.h and unzip.h include zlib.h, but minizip-ng's
+// do not until 4.0.8.
+// https://github.com/zlib-ng/minizip-ng/commit/91112baa265fcea729f534ceb085c54f4fd285d3
+//
+// The minizip-ng library itself does include either zlib.h or zlib-ng.h, depending
+// on which one was linked against when building.
+// The zlib.h included with the MacOS SDK is built without ZLIB_CONST so it's
+// not ABI compatible with zlib.h that do define ZLIB_CONST (or with zlib-ng.h
+// in general) so if we include one here, we have to include the same one used
+// when building minizip-ng.
+// Fedora and Red Hat Linux provide minizip-ng and zlib-ng as minizip and zlib,
+// respectively, so HAVE_MINIZIP being defined doesn't necessarily mean we have
+// the original minizip instead of minizip-ng.
+#ifdef HAVE_MINIZIP
 #include <minizip/unzip.h>
 #include <minizip/zip.h>
-
+#if !defined(Z_DEFLATED) || !defined(Z_DEFAULT_STRATEGY)
+#include <zlib.h>  // For Z_DEFLATED, etc.
+#endif /* !defined(Z_DEFLATED) || !defined(Z_DEFAULT_STRATEGY) */
+#else /* HAVE_MINIZIP */
+#include <minizip-ng/unzip.h>
+#include <minizip-ng/zip.h>
+#if !defined(Z_DEFLATED) || !defined(Z_DEFAULT_STRATEGY)
+#ifdef HAVE_ZLIBNG
+#include <zlib-ng.h>  // For Z_DEFLATED, etc.
+#else /* HAVE_ZLIBNG */
+#include <zlib.h>  // For Z_DEFLATED, etc.
+#endif /* HAVE_ZLIBNG */
+#endif /* !defined(Z_DEFLATED) || !defined(Z_DEFAULT_STRATEGY) */
+#endif /* HAVE_MINIZIP */
 #include "epan/prefs.h"
 #include "wsutil/file_util.h"
 
@@ -61,6 +86,7 @@ bool WiresharkZipHelper::unzip(QString zipFile, QString directory, bool (*fileCh
         return false;
 
     QMap<QString, QString> cleanPaths;
+    QString canonicalDir = QFileInfo(di.path()).canonicalFilePath();
 
     for (unsigned int cnt = 0; cnt < nmbr; cnt++)
     {
@@ -87,6 +113,13 @@ bool WiresharkZipHelper::unzip(QString zipFile, QString directory, bool (*fileCh
                 continue;
             }
 
+#ifndef _WIN32
+            /* Reject paths outside the extraction root, to prevent directory traversal attacks on Posix systems */
+            if (!QFileInfo(fileInZip).absoluteFilePath().startsWith(canonicalDir + "/")) {
+                continue;
+            }
+#endif
+
             if (di.exists())
             {
 #ifdef _WIN32
@@ -98,12 +131,12 @@ bool WiresharkZipHelper::unzip(QString zipFile, QString directory, bool (*fileCh
                 {
                     QFileInfo fileName(fileInZip);
                     QFileInfo path(fileName.dir(), "");
-                    QString newFile = path.baseName() + "/" + fileName.baseName();
+                    QString newFile = QStringLiteral("%1/%2").arg(path.baseName(), fileName.baseName());
                     fileInZip = newFile;
                 }
 #endif
 
-                QString fullPath = di.path() + "/" + fileInZip;
+                QString fullPath = QStringLiteral("%1/%2").arg(di.path(), fileInZip);
                 QFileInfo fi(fullPath);
                 QString dirPath = fi.absolutePath();
 
@@ -116,7 +149,7 @@ bool WiresharkZipHelper::unzip(QString zipFile, QString directory, bool (*fileCh
                         int cnt = 1;
                         while (QFile::exists(tempPath))
                         {
-                            tempPath = cleanName(dirPath) + QString::number(cnt);
+                            tempPath = QStringLiteral("%1%2").arg(cleanName(dirPath)).arg(cnt);
                             cnt++;
                         }
                         cleanPaths.insert(dirPath, tempPath);

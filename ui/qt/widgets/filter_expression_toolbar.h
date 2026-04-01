@@ -9,8 +9,6 @@
 
 #include <ui/qt/widgets/drag_drop_toolbar.h>
 
-#include <glib.h>
-
 #include <QMenu>
 
 #ifndef FILTER_EXPRESSION_TOOLBAR_H
@@ -54,7 +52,7 @@ private:
     void updateStyleSheet();
     int uatRowIndexForFilter(QString label, QString expression);
 
-    void customMenu(FilterExpressionToolBar * target, QAction * filterAction, const QPoint& pos);
+    void customMenu(QWidget* target, QAction * filterAction, const QPoint& pos);
 
     static bool filter_expression_add_action(const void *key, void *value, void *user_data);
     static QMenu * findParentMenu(const QStringList tree, void *fed_data, QMenu *parent = Q_NULLPTR);

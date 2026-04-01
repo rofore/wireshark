@@ -17,10 +17,6 @@
 
 #include <epan/packet.h>
 
-#define PNAME  "BCTP Q.1990"
-#define PSNAME "BCTP"
-#define PFNAME "bctp"
-
 void proto_register_bctp(void);
 void proto_reg_handoff_bctp(void);
 
@@ -30,7 +26,7 @@ static int hf_bctp_bvi;
 static int hf_bctp_tpei;
 static int hf_bctp_tpi;
 
-static gint ett_bctp;
+static int ett_bctp;
 static dissector_table_t bctp_dissector_table;
 static dissector_handle_t text_handle;
 
@@ -58,7 +54,7 @@ static int dissect_bctp(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree, voi
 	proto_item* pi = proto_tree_add_item(tree, proto_bctp, tvb,0,2, ENC_NA);
 	proto_tree* pt = proto_item_add_subtree(pi,ett_bctp);
 	tvbuff_t* sub_tvb = tvb_new_subset_remaining(tvb, 2);
-	guint8 tpi = tvb_get_guint8(tvb,1) & 0x3f;
+	uint8_t tpi = tvb_get_uint8(tvb,1) & 0x3f;
 
 	proto_tree_add_item(pt, hf_bctp_bvei, tvb,0,2, ENC_BIG_ENDIAN);
 	proto_tree_add_item(pt, hf_bctp_bvi, tvb,0,2, ENC_BIG_ENDIAN);
@@ -85,11 +81,11 @@ proto_register_bctp (void)
 		{&hf_bctp_tpei, {"TPEI", "bctp.tpei", FT_UINT16, BASE_HEX, NULL, 0x0040, "Tunneled Protocol Error Indicator", HFILL }},
 		{&hf_bctp_tpi, {"TPI", "bctp.tpi", FT_UINT16, BASE_HEX, NULL, 0x003F, "Tunneled Protocol Indicator", HFILL }},
 	};
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_bctp
 	};
 
-	proto_bctp = proto_register_protocol(PNAME, PSNAME, PFNAME);
+	proto_bctp = proto_register_protocol("BCTP Q.1990", "BCTP", "bctp");
 	proto_register_field_array(proto_bctp, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 

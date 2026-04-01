@@ -16,15 +16,16 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#ifdef HAVE_PCAP_REMOTE
-#include <capture_opts.h>
-#endif
+#include <app/application_flavor.h>
 #include <wsutil/filesystem.h>
 #include <epan/prefs.h>
 #include <epan/prefs-int.h>
 #include <epan/column.h>
-#include <epan/value_string.h>
+#include <wsutil/value_string.h>
 
+#ifdef HAVE_PCAP_REMOTE
+#include "ui/capture_opts.h"
+#endif
 #include "ui/util.h"
 #include "ui/recent.h"
 #include "ui/recent_utils.h"
@@ -44,6 +45,7 @@
 #define RECENT_KEY_STATUSBAR_SHOW               "gui.statusbar_show"
 #define RECENT_KEY_PACKET_LIST_COLORIZE         "gui.packet_list_colorize"
 #define RECENT_KEY_CAPTURE_AUTO_SCROLL          "capture.auto_scroll"
+#define RECENT_KEY_AGGREGATION_VIEW             "capture.aggregation_view"
 #define RECENT_GUI_TIME_FORMAT                  "gui.time_format"
 #define RECENT_GUI_TIME_PRECISION               "gui.time_precision"
 #define RECENT_GUI_SECONDS_FORMAT               "gui.seconds_format"
@@ -64,6 +66,7 @@
 #define RECENT_GUI_GEOMETRY_MAIN_MASTER_SPLIT   "gui.geometry_main_master_split"
 #define RECENT_GUI_GEOMETRY_MAIN_EXTRA_SPLIT    "gui.geometry_main_extra_split"
 #define RECENT_LAST_USED_PROFILE                "gui.last_used_profile"
+#define RECENT_PROFILE_SWITCH_CHECK_COUNT       "gui.profile_switch_check_count"
 #define RECENT_GUI_FILEOPEN_REMEMBERED_DIR      "gui.fileopen_remembered_dir"
 #define RECENT_GUI_CONVERSATION_TABS            "gui.conversation_tabs"
 #define RECENT_GUI_CONVERSATION_TABS_COLUMNS    "gui.conversation_tabs_columns"
@@ -83,6 +86,15 @@
 #define RECENT_GUI_FOLLOW_DELTA                 "gui.follow_delta"
 #define RECENT_GUI_SHOW_BYTES_DECODE            "gui.show_bytes_decode"
 #define RECENT_GUI_SHOW_BYTES_SHOW              "gui.show_bytes_show"
+#define RECENT_GUI_TSD_MA_WINDOW_SIZE           "gui.tsd_ma_window_size"
+#define RECENT_GUI_TSD_THROUGHPUT_SHOW          "gui.tsd_throughput_show"
+#define RECENT_GUI_TSD_GOODPUT_SHOW             "gui.tsd_goodput_show"
+#define RECENT_KEY_SIDEBAR_LEARN_VISIBLE        "gui.welcome_page.sidebar.learn_visible"
+#define RECENT_KEY_SIDEBAR_TIPS_VISIBLE         "gui.welcome_page.sidebar.tips_visible"
+#define RECENT_KEY_SIDEBAR_TIPS_EVENTS          "gui.welcome_page.sidebar.tips_events"
+#define RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP     "gui.welcome_page.sidebar.tips_sponsorship"
+#define RECENT_KEY_SIDEBAR_TIPS_TIPS            "gui.welcome_page.sidebar.tips_tips"
+#define RECENT_KEY_SIDEBAR_TIPS_INTERVAL        "gui.welcome_page.sidebar.tips_interval"
 
 #define RECENT_GUI_GEOMETRY                   "gui.geom."
 
@@ -96,6 +108,7 @@ recent_settings_t recent;
 
 static const value_string ts_type_values[] = {
     { TS_RELATIVE,             "RELATIVE"           },
+    { TS_RELATIVE_CAP,         "RELATIVE_CAP"       },
     { TS_ABSOLUTE,             "ABSOLUTE"           },
     { TS_ABSOLUTE_WITH_YMD,    "ABSOLUTE_WITH_YMD"  },
     { TS_ABSOLUTE_WITH_YDOY,   "ABSOLUTE_WITH_YDOY" },
@@ -208,7 +221,7 @@ static const value_string show_bytes_decode_values[] = {
 };
 
 static void
-free_col_width_data(gpointer data)
+free_col_width_data(void *data)
 {
     col_width_data *cfmt = (col_width_data *)data;
     g_free(cfmt);
@@ -228,7 +241,7 @@ recent_free_column_width_info(recent_settings_t *rs)
  * @param rfh recent file handle (FILE)
  */
 static void
-write_recent_geom(gpointer key _U_, gpointer value, gpointer rfh)
+write_recent_geom(void *key _U_, void *value, void *rfh)
 {
     window_geometry_t *geom = (window_geometry_t *)value;
     FILE *rf = (FILE *)rfh;
@@ -242,9 +255,9 @@ write_recent_geom(gpointer key _U_, gpointer value, gpointer rfh)
     fprintf(rf, RECENT_GUI_GEOMETRY "%s.height: %d\n", geom->key,
             geom->height);
 
-    fprintf(rf, "# TRUE or FALSE (case-insensitive).\n");
+    fprintf(rf, "# true or false (case-insensitive).\n");
     fprintf(rf, RECENT_GUI_GEOMETRY "%s.maximized: %s\n", geom->key,
-            geom->maximized == TRUE ? "TRUE" : "FALSE");
+            geom->maximized == true ? "true" : "false");
 
     fprintf(rf, "# Qt Geometry State (hex byte string).\n");
     fprintf(rf, RECENT_GUI_GEOMETRY "%s.qt_geometry: %s\n", geom->key,
@@ -253,9 +266,9 @@ write_recent_geom(gpointer key _U_, gpointer value, gpointer rfh)
 
 /* the geometry hashtable for all known window classes,
  * the window name is the key, and the geometry struct is the value */
-static GHashTable *window_geom_hash = NULL;
+static GHashTable *window_geom_hash;
 
-static GHashTable *window_splitter_hash = NULL;
+static GHashTable *window_splitter_hash;
 
 void
 window_geom_free(void *data)
@@ -268,9 +281,9 @@ window_geom_free(void *data)
 
 /* save the window and its current geometry into the geometry hashtable */
 void
-window_geom_save(const gchar *name, window_geometry_t *geom)
+window_geom_save(const char *name, window_geometry_t *geom)
 {
-    gchar *key;
+    char *key;
     window_geometry_t *work;
 
     /* init hashtable, if not already done */
@@ -287,8 +300,8 @@ window_geom_save(const gchar *name, window_geometry_t *geom)
 }
 
 /* load the desired geometry for this window from the geometry hashtable */
-gboolean
-window_geom_load(const gchar       *name,
+bool
+window_geom_load(const char        *name,
                  window_geometry_t *geom)
 {
     window_geometry_t *p;
@@ -301,9 +314,9 @@ window_geom_load(const gchar       *name,
     p = (window_geometry_t *)g_hash_table_lookup(window_geom_hash, name);
     if (p) {
         *geom = *p;
-        return TRUE;
+        return true;
     } else {
-        return FALSE;
+        return false;
     }
 }
 
@@ -321,7 +334,7 @@ window_splitter_save(const char *name, const char *splitter_state)
 
 /* save the window and its splitter state into the geometry hashtable */
 const char*
-window_splitter_load(const gchar *name)
+window_splitter_load(const char *name)
 {
     /* init hashtable, if not already done */
     if (!window_splitter_hash) {
@@ -334,13 +347,13 @@ window_splitter_load(const gchar *name)
 
 /* parse values of particular types */
 static void
-parse_recent_boolean(const gchar *val_str, gboolean *valuep)
+parse_recent_boolean(const char *val_str, bool *valuep)
 {
     if (g_ascii_strcasecmp(val_str, "true") == 0) {
-        *valuep = TRUE;
+        *valuep = true;
     }
     else {
-        *valuep = FALSE;
+        *valuep = false;
     }
 }
 
@@ -366,30 +379,30 @@ window_geom_recent_read_pair(const char *name,
     if (!window_geom_load(name, &geom)) {
         /* not in table, init geom with "basic" values */
         geom.key        = NULL;    /* Will be set in window_geom_save() */
-        geom.set_pos    = FALSE;
+        geom.set_pos    = false;
         geom.x          = -1;
         geom.y          = -1;
-        geom.set_size   = FALSE;
+        geom.set_size   = false;
         geom.width      = -1;
         geom.height     = -1;
         geom.qt_geom    = NULL;
     }
 
     if (strcmp(key, "x") == 0) {
-        geom.x = (gint)strtol(value, NULL, 10);
-        geom.set_pos = TRUE;
+        geom.x = (int)strtol(value, NULL, 10);
+        geom.set_pos = true;
     } else if (strcmp(key, "y") == 0) {
-        geom.y = (gint)strtol(value, NULL, 10);
-        geom.set_pos = TRUE;
+        geom.y = (int)strtol(value, NULL, 10);
+        geom.set_pos = true;
     } else if (strcmp(key, "width") == 0) {
-        geom.width = (gint)strtol(value, NULL, 10);
-        geom.set_size = TRUE;
+        geom.width = (int)strtol(value, NULL, 10);
+        geom.set_size = true;
     } else if (strcmp(key, "height") == 0) {
-        geom.height = (gint)strtol(value, NULL, 10);
-        geom.set_size = TRUE;
+        geom.height = (int)strtol(value, NULL, 10);
+        geom.set_size = true;
     } else if (strcmp(key, "maximized") == 0) {
         parse_recent_boolean(value, &geom.maximized);
-        geom.set_maximized = TRUE;
+        geom.set_maximized = true;
     } else if (strcmp(key, "qt_geometry") == 0) {
         geom.qt_geom = g_strdup(value);
     } else {
@@ -435,7 +448,7 @@ window_splitter_recent_write_all(FILE *rf)
     }
 
     GHashTableIter iter;
-    gpointer key, value;
+    void *key, *value;
     g_hash_table_iter_init(&iter, window_splitter_hash);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         fprintf(rf, "\n# Splitter state of %s window.\n", (char*)key);
@@ -459,7 +472,7 @@ static GHashTable *per_interface_cfilter_lists_hash;
  * before the pref, so don't truncate the list when reading
  * (see the similar #16782 for the recent files.)
  */
-static guint cfilter_combo_max_recent = 20;
+static unsigned cfilter_combo_max_recent = 20;
 
 /**
  * Returns a list of recent capture filters.
@@ -467,7 +480,7 @@ static guint cfilter_combo_max_recent = 20;
  * @param ifname interface name; NULL refers to the global list.
  */
 GList *
-recent_get_cfilter_list(const gchar *ifname)
+recent_get_cfilter_list(const char *ifname)
 {
     if (ifname == NULL)
         return recent_cfilter_list;
@@ -486,11 +499,11 @@ recent_get_cfilter_list(const gchar *ifname)
  * @param s text of capture filter
  */
 void
-recent_add_cfilter(const gchar *ifname, const gchar *s)
+recent_add_cfilter(const char *ifname, const char *s)
 {
     GList     *cfilter_list;
     GList     *li;
-    gchar     *li_filter, *newfilter = NULL;
+    char      *li_filter, *newfilter = NULL;
 
     /* Don't add empty filters to the list. */
     if (s[0] == '\0')
@@ -538,8 +551,8 @@ recent_add_cfilter(const gchar *ifname, const gchar *s)
  * before the pref, so don't truncate the list when reading
  * (see the similar #16782 for the recent files.)
  */
-static guint remote_host_max_recent = 20;
-static GList *remote_host_list = NULL;
+static unsigned remote_host_max_recent = 20;
+static GList *remote_host_list;
 
 int recent_get_remote_host_list_size(void)
 {
@@ -551,7 +564,7 @@ int recent_get_remote_host_list_size(void)
 }
 
 static void
-free_remote_host(gpointer value)
+free_remote_host(void *value)
 {
     struct remote_host* rh = (struct remote_host*)value;
 
@@ -563,7 +576,7 @@ free_remote_host(gpointer value)
 }
 
 static int
-remote_host_compare(gconstpointer a, gconstpointer b)
+remote_host_compare(const void *a, const void *b)
 {
     const struct remote_host* rh_a = (const struct remote_host*)a;
     const struct remote_host* rh_b = (const struct remote_host*)b;
@@ -580,7 +593,7 @@ remote_host_reverse(void)
     }
 }
 
-void recent_add_remote_host(gchar *host _U_, struct remote_host *rh)
+void recent_add_remote_host(char *host _U_, struct remote_host *rh)
 {
     GList* li = NULL;
     if (remote_host_list) {
@@ -594,7 +607,7 @@ void recent_add_remote_host(gchar *host _U_, struct remote_host *rh)
 }
 
 void
-recent_remote_host_list_foreach(GFunc func, gpointer user_data)
+recent_remote_host_list_foreach(GFunc func, void *user_data)
 {
     if (remote_host_list != NULL) {
         g_list_foreach(remote_host_list, func, user_data);
@@ -602,7 +615,7 @@ recent_remote_host_list_foreach(GFunc func, gpointer user_data)
 }
 
 static void
-recent_print_remote_host(gpointer value, gpointer user)
+recent_print_remote_host(void *value, void *user)
 {
     FILE *rf = (FILE *)user;
     struct remote_host_info *ri = (struct remote_host_info *)value;
@@ -636,7 +649,7 @@ void recent_free_remote_host_list(void)
 }
 
 struct remote_host *
-recent_get_remote_host(const gchar *host)
+recent_get_remote_host(const char *host)
 {
     if (host == NULL)
         return NULL;
@@ -655,8 +668,8 @@ recent_get_remote_host(const gchar *host)
  * @param s String to be filled from the 'recent' file.
  * @return True, if the list was written successfully, False otherwise.
  */
-static gboolean
-capture_remote_combo_add_recent(const gchar *s)
+static bool
+capture_remote_combo_add_recent(const char *s)
 {
     GList *vals = prefs_get_string_list (s);
     GList *valp = vals;
@@ -665,22 +678,22 @@ capture_remote_combo_add_recent(const gchar *s)
     struct remote_host *rh;
 
     if (valp == NULL)
-        return FALSE;
+        return false;
 
     /* First value is the host */
     if (recent_get_remote_host(valp->data)) {
         /* Don't add it, it's already in the list (shouldn't happen). */
-        return FALSE; // Should this be TRUE or FALSE?
+        return false; // Should this be true or false?
     }
     rh = (struct remote_host *) g_malloc (sizeof (*rh));
 
     /* First value is the host */
-    rh->r_host = (gchar *)g_strdup ((const gchar *)valp->data);
+    rh->r_host = (char *)g_strdup ((const char *)valp->data);
     if (strlen(rh->r_host) == 0) {
         /* Empty remote host */
         g_free(rh->r_host);
         g_free(rh);
-        return FALSE;
+        return false;
     }
     rh->auth_type = CAPTURE_AUTH_NULL;
     valp = valp->next;
@@ -689,9 +702,9 @@ capture_remote_combo_add_recent(const gchar *s)
         /* Found value 2, this is the port number */
         if (!strcmp((const char*)valp->data, "0")) {
             /* Port 0 isn't valid, so leave port blank */
-            rh->remote_port = (gchar *)g_strdup ("");
+            rh->remote_port = (char *)g_strdup ("");
         } else {
-            rh->remote_port = (gchar *)g_strdup ((const gchar *)valp->data);
+            rh->remote_port = (char *)g_strdup ((const char *)valp->data);
         }
         valp = valp->next;
     } else {
@@ -701,7 +714,7 @@ capture_remote_combo_add_recent(const gchar *s)
 
     if (valp) {
         /* Found value 3, this is the authentication type */
-        auth_type = (capture_auth)strtol((const gchar *)valp->data, &p, 0);
+        auth_type = (capture_auth)strtol((const char *)valp->data, &p, 0);
         if (p != valp->data && *p == '\0') {
             rh->auth_type = auth_type;
         }
@@ -714,33 +727,36 @@ capture_remote_combo_add_recent(const gchar *s)
     prefs_clear_string_list(vals);
 
     remote_host_list = g_list_prepend(remote_host_list, rh);
-    return TRUE;
+    return true;
 }
 #endif
 
 static void
-cfilter_recent_write_all_list(FILE *rf, const gchar *ifname, GList *cfilter_list)
+cfilter_recent_write_all_list(FILE *rf, const char *ifname, GList *cfilter_list)
 {
-    guint      max_count = 0;
+    unsigned   max_count = 0;
     GList     *li;
+    char      *sanitized;
 
     /* write all non empty capture filter strings to the recent file (until max count) */
     li = g_list_first(cfilter_list);
     while (li && (max_count++ <= cfilter_combo_max_recent) ) {
         if (li->data && strlen((const char *)li->data)) {
+            sanitized = prefs_sanitize_string((char *)li->data);
             if (ifname == NULL)
-                fprintf (rf, RECENT_KEY_CAPTURE_FILTER ": %s\n", (char *)li->data);
+                fprintf (rf, RECENT_KEY_CAPTURE_FILTER ": %s\n", sanitized);
             else
-                fprintf (rf, RECENT_KEY_CAPTURE_FILTER ".%s: %s\n", ifname, (char *)li->data);
+                fprintf (rf, RECENT_KEY_CAPTURE_FILTER ".%s: %s\n", ifname, sanitized);
+            g_free(sanitized);
         }
         li = li->next;
     }
 }
 
 static void
-cfilter_recent_write_all_hash_callback(gpointer key, gpointer value, gpointer user_data)
+cfilter_recent_write_all_hash_callback(void *key, void *value, void *user_data)
 {
-    cfilter_recent_write_all_list((FILE *)user_data, (const gchar *)key, (GList *)value);
+    cfilter_recent_write_all_list((FILE *)user_data, (const char *)key, (GList *)value);
 }
 
 /** Write all capture filter values to the recent file.
@@ -755,7 +771,7 @@ cfilter_recent_write_all(FILE *rf)
 
     /* Write out all the per-interface lists. */
     if (per_interface_cfilter_lists_hash != NULL) {
-        g_hash_table_foreach(per_interface_cfilter_lists_hash, cfilter_recent_write_all_hash_callback, (gpointer)rf);
+        g_hash_table_foreach(per_interface_cfilter_lists_hash, cfilter_recent_write_all_hash_callback, (void *)rf);
     }
 }
 
@@ -772,7 +788,7 @@ cfilter_recent_reverse_all(void)
     /* Reverse all the per-interface lists. */
     if (per_interface_cfilter_lists_hash != NULL) {
         GHashTableIter iter;
-        gpointer key, value;
+        void *key, *value;
         g_hash_table_iter_init(&iter, per_interface_cfilter_lists_hash);
         GList *li;
         while (g_hash_table_iter_next(&iter, &key, &value)) {
@@ -789,20 +805,29 @@ cfilter_recent_reverse_all(void)
 /* Write out recent settings of particular types. */
 static void
 write_recent_boolean(FILE *rf, const char *description, const char *name,
-                     gboolean value)
+                     bool value)
 {
     fprintf(rf, "\n# %s.\n", description);
-    fprintf(rf, "# TRUE or FALSE (case-insensitive).\n");
-    fprintf(rf, "%s: %s\n", name, value == TRUE ? "TRUE" : "FALSE");
+    fprintf(rf, "# true or false (case-insensitive).\n");
+    fprintf(rf, "%s: %s\n", name, value == true ? "true" : "false");
+}
+
+static void
+write_recent_double(FILE *rf, const char *description, const char *name,
+                    double value)
+{
+    fprintf(rf, "\n# %s.\n", description);
+    char buf[G_ASCII_DTOSTR_BUF_SIZE];
+    fprintf(rf, "%s: %s\n", name, g_ascii_dtostr(buf, sizeof(buf), value));
 }
 
 static void
 write_recent_enum(FILE *rf, const char *description, const char *name,
-                  const value_string *values, guint value)
+                  const value_string *values, unsigned value)
 {
     const char *if_invalid = NULL;
     const value_string *valp;
-    const gchar *str_value;
+    const char *str_value;
 
     fprintf(rf, "\n# %s.\n", description);
     fprintf(rf, "# One of: ");
@@ -824,9 +849,9 @@ write_recent_enum(FILE *rf, const char *description, const char *name,
 }
 
 /* Attempt to write out "recent common" to the user's recent_common file.
-   If we got an error report it with a dialog box and return FALSE,
-   otherwise return TRUE. */
-gboolean
+   If we got an error report it with a dialog box and return false,
+   otherwise return true. */
+bool
 write_recent(void)
 {
     char        *pf_dir_path;
@@ -842,21 +867,21 @@ write_recent(void)
 
     /* Create the directory that holds personal configuration files, if
        necessary.  */
-    if (create_persconffile_dir(&pf_dir_path) == -1) {
+    if (create_persconffile_dir(application_configuration_environment_prefix(), &pf_dir_path) == -1) {
         simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                 "Can't create directory\n\"%s\"\nfor recent file: %s.", pf_dir_path,
                 g_strerror(errno));
         g_free(pf_dir_path);
-        return FALSE;
+        return false;
     }
 
-    rf_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, FALSE);
+    rf_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, false, application_configuration_environment_prefix());
     if ((rf = ws_fopen(rf_path, "w")) == NULL) {
         simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                 "Can't open recent file\n\"%s\": %s.", rf_path,
                 g_strerror(errno));
         g_free(rf_path);
-        return FALSE;
+        return false;
     }
     g_free(rf_path);
 
@@ -868,7 +893,7 @@ write_recent(void)
             "\n"
             "######## Recent capture files (latest last), cannot be altered through command line ########\n"
             "\n",
-            get_configuration_namespace(), get_configuration_namespace());
+            application_flavor_name_proper(), application_flavor_name_proper());
 
 
     menu_recent_file_write_all(rf);
@@ -920,6 +945,12 @@ write_recent(void)
     fprintf(rf, "\n# Last used Configuration Profile.\n");
     fprintf(rf, RECENT_LAST_USED_PROFILE ": %s\n", get_profile_name());
 
+    fprintf(rf, "\n# Number of packets or events to check for automatic profile switching.\n");
+    fprintf(rf, "# Decimal number. Zero disables switching.\n");
+    const char * def_prefix = recent.gui_profile_switch_check_count == 1000 ? "#" : "";
+    fprintf(rf, "%s" RECENT_PROFILE_SWITCH_CHECK_COUNT ": %d\n", def_prefix,
+            recent.gui_profile_switch_check_count);
+
     write_recent_boolean(rf, "Warn if running with elevated permissions (e.g. as root)",
             RECENT_KEY_PRIVS_WARN_IF_ELEVATED,
             recent.privs_warn_if_elevated);
@@ -958,14 +989,14 @@ write_recent(void)
        an error indication, or maybe write to a new recent file and
        rename that file on top of the old one only if there are not I/O
        errors. */
-    return TRUE;
+    return true;
 }
 
 
 /* Attempt to Write out profile "recent" to the user's profile recent file.
-   If we got an error report it with a dialog box and return FALSE,
-   otherwise return TRUE. */
-gboolean
+   If we got an error report it with a dialog box and return false,
+   otherwise return true. */
+bool
 write_profile_recent(void)
 {
     char        *pf_dir_path;
@@ -981,21 +1012,21 @@ write_profile_recent(void)
 
     /* Create the directory that holds personal configuration files, if
        necessary.  */
-    if (create_persconffile_dir(&pf_dir_path) == -1) {
+    if (create_persconffile_dir(application_configuration_environment_prefix(), &pf_dir_path) == -1) {
         simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                 "Can't create directory\n\"%s\"\nfor recent file: %s.", pf_dir_path,
                 g_strerror(errno));
         g_free(pf_dir_path);
-        return FALSE;
+        return false;
     }
 
-    rf_path = get_persconffile_path(RECENT_FILE_NAME, TRUE);
+    rf_path = get_persconffile_path(RECENT_FILE_NAME, true, application_configuration_environment_prefix());
     if ((rf = ws_fopen(rf_path, "w")) == NULL) {
         simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
                 "Can't open recent file\n\"%s\": %s.", rf_path,
                 g_strerror(errno));
         g_free(rf_path);
-        return FALSE;
+        return false;
     }
     g_free(rf_path);
 
@@ -1005,7 +1036,7 @@ write_profile_recent(void)
             "# and when changing configuration profile.\n"
             "# So be careful, if you want to make manual changes here.\n"
             "\n",
-            get_configuration_namespace(), get_configuration_namespace());
+            application_flavor_name_proper(), application_flavor_name_proper());
 
     write_recent_boolean(rf, "Main Toolbar show (hide)",
             RECENT_KEY_MAIN_TOOLBAR_SHOW,
@@ -1047,6 +1078,10 @@ write_profile_recent(void)
             RECENT_KEY_CAPTURE_AUTO_SCROLL,
             recent.capture_auto_scroll);
 
+    write_recent_boolean(rf, "use as aggragation view",
+        RECENT_KEY_AGGREGATION_VIEW,
+        recent.aggregation_view);
+
     write_recent_enum(rf, "Timestamp display format",
             RECENT_GUI_TIME_FORMAT, ts_type_values,
             recent.gui_time_format);
@@ -1069,7 +1104,7 @@ write_profile_recent(void)
     {
         const char *if_invalid = NULL;
         const value_string *valp;
-        const gchar *str_value;
+        const char *str_value;
 
         fprintf(rf, "\n# %s.\n", "Timestamp display precision");
         fprintf(rf, "# One of: ");
@@ -1214,20 +1249,54 @@ write_profile_recent(void)
     fprintf(rf, RECENT_GUI_INTERFACE_TOOLBAR_SHOW ": %s\n", string_list);
     g_free(string_list);
 
+    write_recent_double(rf, "TCP Stream Graphs Moving Average Window Size",
+            RECENT_GUI_TSD_MA_WINDOW_SIZE,
+            recent.gui_tsgd_ma_window_size);
+    write_recent_boolean(rf, "TCP Stream Graphs Dialog Throughput show (hide)",
+            RECENT_GUI_TSD_THROUGHPUT_SHOW,
+            recent.gui_tsgd_throughput_show);
+    write_recent_boolean(rf, "TCP Stream Graphs Dialog Goodput show (hide)",
+            RECENT_GUI_TSD_GOODPUT_SHOW,
+            recent.gui_tsgd_goodput_show);
+
+    write_recent_boolean(rf, "Welcome page sidebar Learn section visible",
+            RECENT_KEY_SIDEBAR_LEARN_VISIBLE,
+            recent.gui_welcome_page_sidebar_learn_visible);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips section visible",
+            RECENT_KEY_SIDEBAR_TIPS_VISIBLE,
+            recent.gui_welcome_page_sidebar_tips_visible);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips event slides",
+            RECENT_KEY_SIDEBAR_TIPS_EVENTS,
+            recent.gui_welcome_page_sidebar_tips_events);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips sponsorship slides",
+            RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP,
+            recent.gui_welcome_page_sidebar_tips_sponsorship);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips tip-of-the-day slides",
+            RECENT_KEY_SIDEBAR_TIPS_TIPS,
+            recent.gui_welcome_page_sidebar_tips_tips);
+
+    fprintf(rf, "\n# Welcome page sidebar Tips slide auto-advance interval in seconds.\n");
+    fprintf(rf, RECENT_KEY_SIDEBAR_TIPS_INTERVAL ": %u\n",
+            recent.gui_welcome_page_sidebar_tips_interval);
+
     fclose(rf);
 
     /* XXX - catch I/O errors (e.g. "ran out of disk space") and return
        an error indication, or maybe write to a new recent file and
        rename that file on top of the old one only if there are not I/O
        errors. */
-    return TRUE;
+    return true;
 }
 
 /* set one user's recent common file key/value pair */
 static prefs_set_pref_e
-read_set_recent_common_pair_static(gchar *key, const gchar *value,
+read_set_recent_common_pair_static(char *key, const char *value,
                                    void *private_data _U_,
-                                   gboolean return_range_errors _U_)
+                                   bool return_range_errors _U_)
 {
     long num;
     char *p;
@@ -1240,33 +1309,40 @@ read_set_recent_common_pair_static(gchar *key, const gchar *value,
         num = strtol(value, &p, 0);
         if (p == value || *p != '\0')
             return PREFS_SET_SYNTAX_ERR;      /* number was bad */
-        recent.gui_geometry_main_x = (gint)num;
+        recent.gui_geometry_main_x = (int)num;
     } else if (strcmp(key, RECENT_GUI_GEOMETRY_MAIN_Y) == 0) {
         num = strtol(value, &p, 0);
         if (p == value || *p != '\0')
             return PREFS_SET_SYNTAX_ERR;      /* number was bad */
-        recent.gui_geometry_main_y = (gint)num;
+        recent.gui_geometry_main_y = (int)num;
     } else if (strcmp(key, RECENT_GUI_GEOMETRY_MAIN_WIDTH) == 0) {
         num = strtol(value, &p, 0);
         if (p == value || *p != '\0')
             return PREFS_SET_SYNTAX_ERR;      /* number was bad */
         if (num <= 0)
             return PREFS_SET_SYNTAX_ERR;      /* number must be positive */
-        recent.gui_geometry_main_width = (gint)num;
+        recent.gui_geometry_main_width = (int)num;
     } else if (strcmp(key, RECENT_GUI_GEOMETRY_MAIN_HEIGHT) == 0) {
         num = strtol(value, &p, 0);
         if (p == value || *p != '\0')
             return PREFS_SET_SYNTAX_ERR;      /* number was bad */
         if (num <= 0)
             return PREFS_SET_SYNTAX_ERR;      /* number must be positive */
-        recent.gui_geometry_main_height = (gint)num;
+        recent.gui_geometry_main_height = (int)num;
     } else if (strcmp(key, RECENT_GUI_GEOMETRY_MAIN) == 0) {
         g_free(recent.gui_geometry_main);
         recent.gui_geometry_main = g_strdup(value);
     } else if (strcmp(key, RECENT_LAST_USED_PROFILE) == 0) {
-        if ((strcmp(value, DEFAULT_PROFILE) != 0) && profile_exists (value, FALSE)) {
+        if ((strcmp(value, DEFAULT_PROFILE) != 0) && profile_exists(application_configuration_environment_prefix(), value, false)) {
             set_profile_name (value);
         }
+    } else if (strcmp(key, RECENT_PROFILE_SWITCH_CHECK_COUNT) == 0) {
+        num = strtol(value, &p, 0);
+        if (p == value || *p != '\0')
+            return PREFS_SET_SYNTAX_ERR;      /* number was bad */
+        if (num <= 0)
+            return PREFS_SET_SYNTAX_ERR;      /* number must be positive */
+        recent.gui_profile_switch_check_count = (int)num;
     } else if (strncmp(key, RECENT_GUI_GEOMETRY, sizeof(RECENT_GUI_GEOMETRY)-1) == 0) {
         /* now have something like "gui.geom.main.x", split it into win and sub_key */
         char *win = &key[sizeof(RECENT_GUI_GEOMETRY)-1];
@@ -1301,12 +1377,13 @@ read_set_recent_common_pair_static(gchar *key, const gchar *value,
 
 /* set one user's recent file key/value pair */
 static prefs_set_pref_e
-read_set_recent_pair_static(gchar *key, const gchar *value,
+read_set_recent_pair_static(char *key, const char *value,
                             void *private_data _U_,
-                            gboolean return_range_errors _U_)
+                            bool return_range_errors _U_)
 {
     long num;
-    gint32 num_int32;
+    int32_t num_int32;
+    double val_as_dbl;
     char *p;
     GList *col_l, *col_l_elt;
     col_width_data *cfmt;
@@ -1332,9 +1409,11 @@ read_set_recent_pair_static(gchar *key, const gchar *value,
         parse_recent_boolean(value, &recent.packet_list_colorize);
     } else if (strcmp(key, RECENT_KEY_CAPTURE_AUTO_SCROLL) == 0) {
         parse_recent_boolean(value, &recent.capture_auto_scroll);
+    } else if (strcmp(key, RECENT_KEY_AGGREGATION_VIEW) == 0) {
+        parse_recent_boolean(value, &recent.aggregation_view);
     } else if (strcmp(key, RECENT_GUI_TIME_FORMAT) == 0) {
         recent.gui_time_format = (ts_type)str_to_val(value, ts_type_values,
-            is_packet_configuration_namespace() ? TS_RELATIVE : TS_ABSOLUTE);
+            application_flavor_is_wireshark() ? TS_RELATIVE : TS_ABSOLUTE);
     } else if (strcmp(key, RECENT_GUI_TIME_PRECISION) == 0) {
         /*
          * The value of this item is either TS_PREC_AUTO, which is a
@@ -1365,7 +1444,7 @@ read_set_recent_pair_static(gchar *key, const gchar *value,
         num = strtol(value, &p, 0);
         if (p == value || *p != '\0')
             return PREFS_SET_SYNTAX_ERR;      /* number was bad */
-        recent.gui_zoom_level = (gint)num;
+        recent.gui_zoom_level = (int)num;
     } else if (strcmp(key, RECENT_GUI_BYTES_VIEW) == 0) {
         recent.gui_bytes_view =
             (bytes_view_type)str_to_val(value, bytes_view_type_values, BYTES_HEX);
@@ -1390,14 +1469,14 @@ read_set_recent_pair_static(gchar *key, const gchar *value,
             return PREFS_SET_SYNTAX_ERR;      /* number was bad */
         if (num <= 0)
             return PREFS_SET_SYNTAX_ERR;      /* number must be positive */
-        recent.gui_geometry_main_upper_pane = (gint)num;
+        recent.gui_geometry_main_upper_pane = (int)num;
     } else if (strcmp(key, RECENT_GUI_GEOMETRY_MAIN_LOWER_PANE) == 0) {
         num = strtol(value, &p, 0);
         if (p == value || *p != '\0')
             return PREFS_SET_SYNTAX_ERR;      /* number was bad */
         if (num <= 0)
             return PREFS_SET_SYNTAX_ERR;      /* number must be positive */
-        recent.gui_geometry_main_lower_pane = (gint)num;
+        recent.gui_geometry_main_lower_pane = (int)num;
     } else if (strcmp(key, RECENT_GUI_GEOMETRY_MAIN_MASTER_SPLIT) == 0) {
         g_free(recent.gui_geometry_main_master_split);
         recent.gui_geometry_main_master_split = g_strdup(value);
@@ -1446,7 +1525,7 @@ read_set_recent_pair_static(gchar *key, const gchar *value,
              * still written for backwards compatibility.
              */
             col_l_elt      = col_l_elt->next;
-            cfmt->width    = (gint)strtol((const char *)col_l_elt->data, &p, 0);
+            cfmt->width    = (int)strtol((const char *)col_l_elt->data, &p, 0);
             if (p == col_l_elt->data || (*p != '\0' && *p != ':')) {
                 g_free(cfmt);
                 return PREFS_SET_SYNTAX_ERR;    /* number was bad */
@@ -1469,6 +1548,36 @@ read_set_recent_pair_static(gchar *key, const gchar *value,
         recent.gui_additional_toolbars = prefs_get_string_list(value);
     } else if (strcmp(key, RECENT_GUI_INTERFACE_TOOLBAR_SHOW) == 0) {
         recent.interface_toolbars = prefs_get_string_list(value);
+    } else if (strcmp(key, RECENT_GUI_TSD_THROUGHPUT_SHOW) == 0) {
+        parse_recent_boolean(value, &recent.gui_tsgd_throughput_show);
+    } else if (strcmp(key, RECENT_GUI_TSD_GOODPUT_SHOW) == 0) {
+        parse_recent_boolean(value, &recent.gui_tsgd_goodput_show);
+    } else if (strcmp(key, RECENT_GUI_TSD_MA_WINDOW_SIZE) == 0) {
+        val_as_dbl = g_ascii_strtod(value, &p);
+        if (p == value || *p != '\0') {
+            return PREFS_SET_SYNTAX_ERR;      /* number was bad */
+        }
+        if (val_as_dbl <= 0) {
+            return PREFS_SET_SYNTAX_ERR;      /* number must be positive */
+        }
+        recent.gui_tsgd_ma_window_size = val_as_dbl;
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_LEARN_VISIBLE) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_learn_visible);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_VISIBLE) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_visible);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_EVENTS) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_events);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_sponsorship);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_TIPS) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_tips);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_INTERVAL) == 0) {
+        num = strtol(value, &p, 0);
+        if (p == value || *p != '\0')
+            return PREFS_SET_SYNTAX_ERR;
+        if (num < 1)
+            num = 1;
+        recent.gui_welcome_page_sidebar_tips_interval = (unsigned)num;
     } else {
         return PREFS_SET_NO_SUCH_PREF;
     }
@@ -1479,16 +1588,14 @@ read_set_recent_pair_static(gchar *key, const gchar *value,
 
 /* set one user's recent file key/value pair */
 static prefs_set_pref_e
-read_set_recent_pair_dynamic(gchar *key, const gchar *value,
+read_set_recent_pair_dynamic(char *key, const char *value,
                              void *private_data _U_,
-                             gboolean return_range_errors _U_)
+                             bool return_range_errors _U_)
 {
     if (!g_utf8_validate(value, -1, NULL)) {
         return PREFS_SET_SYNTAX_ERR;
     }
-    if (strcmp(key, RECENT_KEY_CAPTURE_FILE) == 0) {
-        add_menu_recent_capture_file(value, true);
-    } else if (strcmp(key, RECENT_KEY_DISPLAY_FILTER) == 0) {
+    if (strcmp(key, RECENT_KEY_DISPLAY_FILTER) == 0) {
         dfilter_combo_add_recent(value);
     } else if (strcmp(key, RECENT_KEY_CAPTURE_FILTER) == 0) {
         recent_add_cfilter(NULL, value);
@@ -1514,7 +1621,7 @@ read_set_recent_pair_dynamic(gchar *key, const gchar *value,
 int
 recent_set_arg(char *prefarg)
 {
-    gchar *p, *colonp;
+    char *p, *colonp;
     int ret;
 
     colonp = strchr(prefarg, ':');
@@ -1541,14 +1648,14 @@ recent_set_arg(char *prefarg)
         return PREFS_SET_SYNTAX_ERR;
     }
 
-    ret = read_set_recent_pair_static(prefarg, p, NULL, TRUE);
+    ret = read_set_recent_pair_static(prefarg, p, NULL, true);
     *colonp = ':';     /* put the colon back */
     return ret;
 }
 
 
 /* opens the user's recent common file and read the first part */
-gboolean
+bool
 recent_read_static(char **rf_path_return, int *rf_errno_return)
 {
     char       *rf_path;
@@ -1559,21 +1666,22 @@ recent_read_static(char **rf_path_return, int *rf_errno_return)
     recent.gui_geometry_main_y        =        20;
     recent.gui_geometry_main_width    = DEF_WIDTH;
     recent.gui_geometry_main_height   = DEF_HEIGHT;
-    recent.gui_geometry_main_maximized=     FALSE;
+    recent.gui_geometry_main_maximized=     false;
 
-    recent.gui_geometry_leftalign_actions = FALSE;
+    recent.gui_geometry_leftalign_actions = false;
 
-    recent.privs_warn_if_elevated = TRUE;
-    recent.sys_warn_if_no_capture = TRUE;
+    recent.privs_warn_if_elevated = true;
+    recent.sys_warn_if_no_capture = true;
 
     recent.col_width_list = NULL;
     recent.gui_geometry_main = NULL;
     recent.gui_geometry_main_master_split = NULL;
     recent.gui_geometry_main_extra_split = NULL;
+    recent.gui_profile_switch_check_count = 1000;
     recent.gui_fileopen_remembered_dir = NULL;
 
     /* Construct the pathname of the user's recent common file. */
-    rf_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, FALSE);
+    rf_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, false, application_configuration_environment_prefix());
 
     /* Read the user's recent common file, if it exists. */
     *rf_path_return = NULL;
@@ -1589,44 +1697,57 @@ recent_read_static(char **rf_path_return, int *rf_errno_return)
         if (errno != ENOENT) {
             *rf_errno_return = errno;
             *rf_path_return = rf_path;
-            return FALSE;
+            return false;
         }
     }
     g_free(rf_path);
-    return TRUE;
+    return true;
 }
 
 
 
 /* opens the user's recent file and read the first part */
-gboolean
+bool
 recent_read_profile_static(char **rf_path_return, int *rf_errno_return)
 {
     char       *rf_path, *rf_common_path;
     FILE       *rf;
 
     /* set defaults */
-    recent.main_toolbar_show         = TRUE;
-    recent.filter_toolbar_show       = TRUE;
-    recent.wireless_toolbar_show     = FALSE;
-    recent.packet_list_show          = TRUE;
-    recent.tree_view_show            = TRUE;
-    recent.byte_view_show            = TRUE;
-    recent.packet_diagram_show       = TRUE;
-    recent.statusbar_show            = TRUE;
-    recent.packet_list_colorize      = TRUE;
-    recent.capture_auto_scroll       = TRUE;
+    recent.main_toolbar_show         = true;
+    recent.filter_toolbar_show       = true;
+    recent.wireless_toolbar_show     = false;
+    recent.packet_list_show          = true;
+    recent.tree_view_show            = true;
+    recent.byte_view_show            = true;
+    recent.packet_diagram_show       = true;
+    recent.statusbar_show            = true;
+    recent.packet_list_colorize      = true;
+    recent.capture_auto_scroll       = true;
     recent.gui_time_format           = TS_RELATIVE;
     recent.gui_time_precision        = TS_PREC_AUTO;
     recent.gui_seconds_format        = TS_SECONDS_DEFAULT;
     recent.gui_zoom_level            = 0;
     recent.gui_bytes_view            = BYTES_HEX;
     recent.gui_bytes_encoding        = BYTES_ENC_FROM_PACKET;
-    recent.gui_allow_hover_selection = TRUE;
+    recent.gui_allow_hover_selection = true;
     recent.gui_follow_show           = SHOW_ASCII;
     recent.gui_follow_delta          = FOLLOW_DELTA_NONE;
     recent.gui_show_bytes_decode     = DecodeAsNone;
     recent.gui_show_bytes_show       = SHOW_ASCII;
+
+    /* defaults for the TCP Stream Graph Dialog */
+    recent.gui_tsgd_ma_window_size = 1.0;
+    recent.gui_tsgd_throughput_show = true;
+    recent.gui_tsgd_goodput_show = false;
+
+    /* defaults for the welcome page sidebar */
+    recent.gui_welcome_page_sidebar_learn_visible = true;
+    recent.gui_welcome_page_sidebar_tips_visible = true;
+    recent.gui_welcome_page_sidebar_tips_events = true;
+    recent.gui_welcome_page_sidebar_tips_sponsorship = true;
+    recent.gui_welcome_page_sidebar_tips_tips = true;
+    recent.gui_welcome_page_sidebar_tips_interval = 8;
 
     /* pane size of zero will autodetect */
     recent.gui_geometry_main_upper_pane   = 0;
@@ -1666,7 +1787,7 @@ recent_read_profile_static(char **rf_path_return, int *rf_errno_return)
     }
 
     /* Construct the pathname of the user's profile recent file. */
-    rf_path = get_persconffile_path(RECENT_FILE_NAME, TRUE);
+    rf_path = get_persconffile_path(RECENT_FILE_NAME, true, application_configuration_environment_prefix());
 
     /* Read the user's recent file, if it exists. */
     *rf_path_return = NULL;
@@ -1683,7 +1804,7 @@ recent_read_profile_static(char **rf_path_return, int *rf_errno_return)
          *  know what's supposed to happen at this point.
          *  ToDo: Determine if the "recent common file" should be read at this point
          */
-        rf_common_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, FALSE);
+        rf_common_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, false, application_configuration_environment_prefix());
         if (!file_exists(rf_common_path)) {
             /* Read older common settings from recent file */
             rf = ws_fopen(rf_path, "r");
@@ -1698,15 +1819,15 @@ recent_read_profile_static(char **rf_path_return, int *rf_errno_return)
         if (errno != ENOENT) {
             *rf_errno_return = errno;
             *rf_path_return = rf_path;
-            return FALSE;
+            return false;
         }
     }
     g_free(rf_path);
-    return TRUE;
+    return true;
 }
 
 /* opens the user's recent file and read it out */
-gboolean
+bool
 recent_read_dynamic(char **rf_path_return, int *rf_errno_return)
 {
     char       *rf_path;
@@ -1714,11 +1835,11 @@ recent_read_dynamic(char **rf_path_return, int *rf_errno_return)
 
 
     /* Construct the pathname of the user's recent common file. */
-    rf_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, FALSE);
+    rf_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, false, application_configuration_environment_prefix());
     if (!file_exists (rf_path)) {
         /* Recent common file does not exist, read from default recent */
         g_free (rf_path);
-        rf_path = get_persconffile_path(RECENT_FILE_NAME, FALSE);
+        rf_path = get_persconffile_path(RECENT_FILE_NAME, false, application_configuration_environment_prefix());
     }
 
     /* Read the user's recent file, if it exists. */
@@ -1745,11 +1866,11 @@ recent_read_dynamic(char **rf_path_return, int *rf_errno_return)
         if (errno != ENOENT) {
             *rf_errno_return = errno;
             *rf_path_return = rf_path;
-            return FALSE;
+            return false;
         }
     }
     g_free(rf_path);
-    return TRUE;
+    return true;
 }
 
 void
@@ -1780,51 +1901,87 @@ recent_remove_column(int col)
     recent.col_width_list = g_list_delete_link(recent.col_width_list, col_l);
 }
 
-gint
-recent_get_column_width(gint col)
+int
+recent_get_column_width(int col)
 {
     col_width_data *col_w;
 
     col_w = g_list_nth_data(recent.col_width_list, col);
     if (col_w) {
         return col_w->width;
+    } else {
+        /* Make sure the recent column list isn't out of sync with the
+         * number of columns (e.g., for a brand new profile.)
+         */
+        for (unsigned colnr = g_list_length(recent.col_width_list); colnr < g_list_length(prefs.col_list); colnr++) {
+            recent_insert_column(colnr);
+        }
     }
 
     return -1;
 }
 
 void
-recent_set_column_width(gint col, gint width)
+recent_set_column_width(int col, int width)
 {
     col_width_data *col_w;
 
     col_w = g_list_nth_data(recent.col_width_list, col);
     if (col_w) {
         col_w->width = width;
+    } else {
+        /* Make sure the recent column list isn't out of sync with the
+         * number of columns (e.g., for a brand new profile.)
+         */
+        for (unsigned colnr = g_list_length(recent.col_width_list); colnr < g_list_length(prefs.col_list); colnr++) {
+            recent_insert_column(colnr);
+        }
+        col_w = g_list_nth_data(recent.col_width_list, col);
+        if (col_w) {
+            col_w->width = width;
+        }
     }
 }
 
-gchar
-recent_get_column_xalign(gint col)
+char
+recent_get_column_xalign(int col)
 {
     col_width_data *col_w;
 
     col_w = g_list_nth_data(recent.col_width_list, col);
     if (col_w) {
         return col_w->xalign;
+    } else {
+        /* Make sure the recent column list isn't out of sync with the
+         * number of columns (e.g., for a brand new profile.)
+         */
+        for (unsigned colnr = g_list_length(recent.col_width_list); colnr < g_list_length(prefs.col_list); colnr++) {
+            recent_insert_column(colnr);
+        }
     }
 
     return COLUMN_XALIGN_DEFAULT;
 }
 
 void
-recent_set_column_xalign(gint col, gchar xalign)
+recent_set_column_xalign(int col, char xalign)
 {
     col_width_data *col_w;
 
     col_w = g_list_nth_data(recent.col_width_list, col);
     if (col_w) {
         col_w->xalign = xalign;
+    } else {
+        /* Make sure the recent column list isn't out of sync with the
+         * number of columns (e.g., for a brand new profile.)
+         */
+        for (unsigned colnr = g_list_length(recent.col_width_list); colnr < g_list_length(prefs.col_list); colnr++) {
+            recent_insert_column(colnr);
+        }
+        col_w = g_list_nth_data(recent.col_width_list, col);
+        if (col_w) {
+            col_w->xalign = xalign;
+        }
     }
 }
 

@@ -13,14 +13,11 @@
 
 #include <epan/packet.h>
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 /* #include "packet-mudurl.h" */ // At the moment we are not exporting.
 #include "packet-x509af.h"
-
-#define PNAME  "MUDURL"
-#define PSNAME "MUDURL"
-#define PFNAME "mudurl"
 
 void proto_register_mudurl(void);
 void proto_reg_handoff_mudurl(void);
@@ -47,12 +44,12 @@ void proto_register_mudurl(void) {
   };
 
   /* List of subtrees */
-  /*  static gint *ett[] = {
+  /*  static int *ett[] = {
 #include "packet-mudurl-ettarr.c"
   }; */
 
   /* Register protocol */
-  proto_mudurl = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_mudurl = proto_register_protocol("MUDURL", "MUDURL", "mudurl");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_mudurl, hf, array_length(hf));

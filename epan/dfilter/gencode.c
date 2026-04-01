@@ -88,7 +88,7 @@ dfw_append_stack_pop(dfwork_t *dfw, unsigned count)
 	dfvm_value_t	*val;
 
 	insn = dfvm_insn_new(DFVM_STACK_POP);
-	val = dfvm_value_new_guint(count);
+	val = dfvm_value_new_uint(count);
 	insn->arg1 = dfvm_value_ref(val);
 	dfw_append_insn(dfw, insn);
 }
@@ -131,7 +131,7 @@ dfw_append_jump(dfwork_t *dfw)
 static dfvm_value_t *
 dfw_append_read_tree(dfwork_t *dfw, header_field_info *hfinfo,
 						drange_t *range,
-						bool raw)
+						bool raw, bool val_str)
 {
 	dfvm_insn_t	*insn;
 	int		reg = -1;
@@ -145,7 +145,9 @@ dfw_append_read_tree(dfwork_t *dfw, header_field_info *hfinfo,
 		hfinfo = proto_registrar_get_nth(hfinfo->same_name_prev_id);
 	}
 
-	if (raw)
+	if (val_str)
+		loaded_fields = dfw->loaded_vs_fields;
+	else if (raw)
 		loaded_fields = dfw->loaded_raw_fields;
 	else
 		loaded_fields = dfw->loaded_fields;
@@ -177,7 +179,7 @@ dfw_append_read_tree(dfwork_t *dfw, header_field_info *hfinfo,
 		added_new_hfinfo = true;
 	}
 
-	val1 = dfvm_value_new_hfinfo(hfinfo, raw);
+	val1 = dfvm_value_new_hfinfo(hfinfo, raw, val_str);
 	reg_val = dfvm_value_new_register(reg);
 	if (range) {
 		val3 = dfvm_value_new_drange(range);
@@ -207,7 +209,7 @@ dfw_append_read_tree(dfwork_t *dfw, header_field_info *hfinfo,
 static dfvm_value_t *
 dfw_append_read_reference(dfwork_t *dfw, header_field_info *hfinfo,
 						drange_t *range,
-						bool raw)
+						bool raw, bool val_str)
 {
 	dfvm_insn_t	*insn;
 	dfvm_value_t	*reg_val, *val1, *val3;
@@ -220,7 +222,7 @@ dfw_append_read_reference(dfwork_t *dfw, header_field_info *hfinfo,
 
 	/* We can't reuse registers with a filter so just skip
 	 * that optimization and don't reuse them at all. */
-	val1 = dfvm_value_new_hfinfo(hfinfo, raw);
+	val1 = dfvm_value_new_hfinfo(hfinfo, raw, val_str);
 	reg_val = dfvm_value_new_register(dfw->next_register++);
 	if (range) {
 		val3 = dfvm_value_new_drange(range);
@@ -274,25 +276,6 @@ dfw_append_mk_slice(dfwork_t *dfw, stnode_t *node, GSList **jumps_ptr)
 	return reg_val;
 }
 
-/* Returns register number. This applies the value string in hfinfo to the
- * contents of the src register. */
-static dfvm_value_t *
-dfw_append_mk_value_string(dfwork_t *dfw, stnode_t *node, dfvm_value_t *src)
-{
-	dfvm_insn_t		*insn;
-	dfvm_value_t		*reg_val, *val1;
-
-	insn = dfvm_insn_new(DFVM_VALUE_STRING);
-	val1 = dfvm_value_new_hfinfo(sttype_field_hfinfo(node), false);
-	insn->arg1 = dfvm_value_ref(val1);
-	insn->arg2 = dfvm_value_ref(src);
-	reg_val = dfvm_value_new_register(dfw->next_register++);
-	insn->arg3 = dfvm_value_ref(reg_val);
-	dfw_append_insn(dfw, insn);
-
-	return reg_val;
-}
-
 /* returns register number */
 _U_ static dfvm_value_t *
 dfw_append_put_fvalue(dfwork_t *dfw, fvalue_t *fv)
@@ -334,6 +317,18 @@ dfw_append_length(dfwork_t *dfw, stnode_t *node, GSList **jumps_ptr)
 	return reg_val;
 }
 
+/* returns register number that the value string result will be in. */
+static dfvm_value_t *
+dfw_append_value_string(dfwork_t *dfw, stnode_t *node, GSList **jumps_ptr)
+{
+	GSList *params;
+
+	params = sttype_function_params(node);
+	ws_assert(params);
+	ws_assert(g_slist_length(params) == 1);
+	return gen_entity(dfw, params->data, jumps_ptr);
+}
+
 /* returns register number that the functions's result will be in. */
 static dfvm_value_t *
 dfw_append_function(dfwork_t *dfw, stnode_t *node, GSList **jumps_ptr)
@@ -351,6 +346,13 @@ dfw_append_function(dfwork_t *dfw, stnode_t *node, GSList **jumps_ptr)
 	if (strcmp(func->name, "len") == 0) {
 		/* Replace len() function call with DFVM_LENGTH instruction. */
 		return dfw_append_length(dfw, node, jumps_ptr);
+	}
+
+	if (strcmp(func->name, "vals") == 0) {
+		/* Replace vals() function call with the field node.
+		 * settype_field_set_value_string was already called
+		 * in ul_semcheck_value_string. */
+		return dfw_append_value_string(dfw, node, jumps_ptr);
 	}
 
 	/* Create the new DFVM instruction */
@@ -375,7 +377,7 @@ dfw_append_function(dfwork_t *dfw, stnode_t *node, GSList **jumps_ptr)
 		count++;
 		params = params->next;
 	}
-	val3 = dfvm_value_new_guint(count);
+	val3 = dfvm_value_new_uint(count);
 	insn->arg3 = dfvm_value_ref(val3);
 	dfw_append_insn(dfw, insn);
 	dfw_append_stack_pop(dfw, count);
@@ -420,7 +422,7 @@ gen_relation(dfwork_t *dfw, dfvm_opcode_t op, stmatch_t how,
 	val1 = gen_entity(dfw, st_arg1, &jumps);
 	val2 = gen_entity(dfw, st_arg2, &jumps);
 
-	/* Then combine them in a DFVM insruction */
+	/* Then combine them in a DFVM instruction */
 	op = select_opcode(op, how);
 	gen_relation_insn(dfw, op, val1, val2, NULL);
 
@@ -563,37 +565,27 @@ gen_entity(dfwork_t *dfw, stnode_t *st_arg, GSList **jumps_ptr)
 	dfvm_value_t      *val;
 	header_field_info *hfinfo;
 	drange_t *range = NULL;
-	bool raw;
+	bool raw, val_str;
 	e_type = stnode_type_id(st_arg);
 
 	if (e_type == STTYPE_FIELD) {
 		hfinfo = sttype_field_hfinfo(st_arg);
 		range = sttype_field_drange_steal(st_arg);
 		raw = sttype_field_raw(st_arg);
-		val = dfw_append_read_tree(dfw, hfinfo, range, raw);
+		val_str = sttype_field_value_string(st_arg);
+		val = dfw_append_read_tree(dfw, hfinfo, range, raw, val_str);
 		if (jumps_ptr != NULL) {
 			*jumps_ptr = g_slist_prepend(*jumps_ptr, dfw_append_jump(dfw));
-		}
-		if (sttype_field_value_string(st_arg)) {
-			val = dfw_append_mk_value_string(dfw, st_arg, val);
-			if (jumps_ptr != NULL) {
-				*jumps_ptr = g_slist_prepend(*jumps_ptr, dfw_append_jump(dfw));
-			}
 		}
 	}
 	else if (e_type == STTYPE_REFERENCE) {
 		hfinfo = sttype_field_hfinfo(st_arg);
 		range = sttype_field_drange_steal(st_arg);
 		raw = sttype_field_raw(st_arg);
-		val = dfw_append_read_reference(dfw, hfinfo, range, raw);
+		val_str = sttype_field_value_string(st_arg);
+		val = dfw_append_read_reference(dfw, hfinfo, range, raw, val_str);
 		if (jumps_ptr != NULL) {
 			*jumps_ptr = g_slist_prepend(*jumps_ptr, dfw_append_jump(dfw));
-		}
-		if (sttype_field_value_string(st_arg)) {
-			val = dfw_append_mk_value_string(dfw, st_arg, val);
-			if (jumps_ptr != NULL) {
-				*jumps_ptr = g_slist_prepend(*jumps_ptr, dfw_append_jump(dfw));
-			}
 		}
 	}
 	else if (e_type == STTYPE_FVALUE) {
@@ -634,7 +626,11 @@ gen_exists(dfwork_t *dfw, stnode_t *st_node)
 	}
 
 	/* Ignore "rawness" for existence tests. */
-	val1 = dfvm_value_new_hfinfo(hfinfo, false);
+	/* (We don't get here with vals() because the node is
+	 * initially STTYPE_FUNCTION. Other methods of setting
+	 * val_str to true don't lead to an existence test either,
+	 * because they involve a binary operator.) */
+	val1 = dfvm_value_new_hfinfo(hfinfo, false, false);
 	if (range) {
 		val2 = dfvm_value_new_drange(range);
 	}
@@ -907,6 +903,7 @@ dfw_gencode(dfwork_t *dfw)
 	dfw->insns = g_ptr_array_new();
 	dfw->loaded_fields = g_hash_table_new(g_direct_hash, g_direct_equal);
 	dfw->loaded_raw_fields = g_hash_table_new(g_direct_hash, g_direct_equal);
+	dfw->loaded_vs_fields = g_hash_table_new(g_direct_hash, g_direct_equal);
 	dfw->interesting_fields = g_hash_table_new(g_int_hash, g_int_equal);
 	dfvm_insn_t *insn = dfvm_insn_new(DFVM_RETURN);
 	insn->arg1 = dfvm_value_ref(gencode(dfw, dfw->st_root));

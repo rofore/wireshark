@@ -14,15 +14,11 @@
 #include <epan/packet.h>
 
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 #include "packet-ber.h"
-#include "packet-pkixtsp.h"
 #include "packet-pkix1explicit.h"
 #include "packet-pkix1implicit.h"
 #include "packet-cms.h"
-
-#define PNAME  "PKIX Time Stamp Protocol"
-#define PSNAME "PKIXTSP"
-#define PFNAME "pkixtsp"
 
 void proto_register_pkixtsp(void);
 void proto_reg_handoff_pkixtsp(void);
@@ -35,7 +31,7 @@ static int proto_pkixtsp;
 #include "packet-pkixtsp-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_pkixtsp;
+static int ett_pkixtsp;
 #include "packet-pkixtsp-ett.c"
 
 
@@ -48,7 +44,7 @@ dissect_timestamp_reply(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tr
 	proto_item *item=NULL;
 	proto_tree *tree=NULL;
 	asn1_ctx_t asn1_ctx;
-	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
+	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
 
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "PKIXTSP");
 
@@ -60,7 +56,7 @@ dissect_timestamp_reply(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tr
 		tree = proto_item_add_subtree(item, ett_pkixtsp);
 	}
 
-	return dissect_pkixtsp_TimeStampResp(FALSE, tvb, 0, &asn1_ctx, tree, -1);
+	return dissect_pkixtsp_TimeStampResp(false, tvb, 0, &asn1_ctx, tree, -1);
 }
 
 static int
@@ -69,7 +65,7 @@ dissect_timestamp_query(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tr
 	proto_item *item=NULL;
 	proto_tree *tree=NULL;
 	asn1_ctx_t asn1_ctx;
-	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
+	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
 
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "PKIXTSP");
 
@@ -81,7 +77,7 @@ dissect_timestamp_query(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tr
 		tree = proto_item_add_subtree(item, ett_pkixtsp);
 	}
 
-	return dissect_pkixtsp_TimeStampReq(FALSE, tvb, 0, &asn1_ctx, tree, -1);
+	return dissect_pkixtsp_TimeStampReq(false, tvb, 0, &asn1_ctx, tree, -1);
 }
 
 
@@ -94,20 +90,20 @@ void proto_register_pkixtsp(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 	&ett_pkixtsp,
 #include "packet-pkixtsp-ettarr.c"
   };
 
   /* Register protocol */
-  proto_pkixtsp = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_pkixtsp = proto_register_protocol("PKIX Time Stamp Protocol", "PKIXTSP", "pkixtsp");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_pkixtsp, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
 
-  timestamp_reply_handle = register_dissector(PFNAME "_reply", dissect_timestamp_reply, proto_pkixtsp);
-  timestamp_query_handle = register_dissector(PFNAME "_query", dissect_timestamp_query, proto_pkixtsp);
+  timestamp_reply_handle = register_dissector_with_description("pkixtsp_reply", "PKIXTSP Response", dissect_timestamp_reply, proto_pkixtsp);
+  timestamp_query_handle = register_dissector_with_description("pkixtsp_query", "PKIXTSP Request", dissect_timestamp_query, proto_pkixtsp);
 
   register_ber_syntax_dissector("TimeStampReq", proto_pkixtsp, dissect_TimeStampReq_PDU);
   register_ber_syntax_dissector("TimeStampResp", proto_pkixtsp, dissect_TimeStampResp_PDU);

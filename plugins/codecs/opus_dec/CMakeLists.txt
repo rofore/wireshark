@@ -16,40 +16,9 @@ set(CODEC_SRC
 	opusdecode.c
 )
 
-set(PLUGIN_FILES
-	plugin.c
-	${CODEC_SRC}
-)
-
-set_source_files_properties(
-	${PLUGIN_FILES}
-	PROPERTIES
-	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
-)
-
-register_codec_files(plugin.c 1
-	"Opus audio"
-	${CODEC_SRC}
-)
-
-add_wireshark_codec_plugin_library(opus_dec)
-
-target_include_directories(opus_dec PRIVATE ${CMAKE_SOURCE_DIR}/codecs)
-
-target_link_libraries(opus_dec wsutil ${OPUS_LIBRARIES})
-
-target_include_directories(opus_dec SYSTEM PRIVATE ${OPUS_INCLUDE_DIRS})
-
-install_plugin(opus_dec codecs)
-
-file(GLOB CODEC_HEADERS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "*.h")
-CHECKAPI(
-	NAME
-	  opus
-	SWITCHES
-	SOURCES
-	  ${CODEC_SRC}
-	  ${CODEC_HEADERS}
+add_wireshark_codec_plugin_library(opus_dec
+	PLUGIN_LIBS ${OPUS_LIBRARIES}
+	PLUGIN_INCS ${OPUS_INCLUDE_DIRS}
 )
 
 #

@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include <epan/packet.h>
+#include <wsutil/array.h>
 
 void proto_register_17221(void);
 void proto_reg_handoff_17221(void);
@@ -34,7 +35,7 @@ static dissector_handle_t avb17221_handle;
 #define ADP_CD_OFFSET                       0
 #define ADP_VERSION_OFFSET                  1
 #define ADP_VALID_TIME_OFFSET               2
-#define ADP_CD_LENGTH_OFFSET                3
+#define ADP_CD_LENGTH_OFFSET                2
 #define ADP_ENTITY_ID_OFFSET                4
 #define ADP_ENTITY_MODEL_ID_OFFSET          P1722_HEADER_OFFSET+0
 #define ADP_ENTITY_CAP_OFFSET               P1722_HEADER_OFFSET+8
@@ -369,8 +370,7 @@ static dissector_handle_t avb17221_handle;
 #define AECP_OFFSET_COUNTERS_STREAM_INPUT_UNSUPPORTED_FORMAT   64
 #define AECP_OFFSET_COUNTERS_STREAM_INPUT_LATE_TIMESTAMP       68
 #define AECP_OFFSET_COUNTERS_STREAM_INPUT_EARLY_TIMESTAMP      72
-#define AECP_OFFSET_COUNTERS_STREAM_INPUT_PACKETS_TX           76
-#define AECP_OFFSET_COUNTERS_STREAM_INPUT_PACKETS_RX           80
+#define AECP_OFFSET_COUNTERS_STREAM_INPUT_PACKETS_RX           76
 #define AECP_OFFSET_COUNTERS_ENTITY_SPECIFIC_8                 128
 #define AECP_OFFSET_COUNTERS_ENTITY_SPECIFIC_7                 132
 #define AECP_OFFSET_COUNTERS_ENTITY_SPECIFIC_6                 136
@@ -1297,7 +1297,7 @@ static dissector_handle_t avb17221_handle;
 #define AECP_SIGNATURE_ID_MASK                  0x0fff
 #define AECP_SIGNATURE_INFO_MASK                0x00f0
 #define AECP_SIGNATURE_LENGTH_MASK              0x3ff
-#define AECP_UNLOCK_FLAG_MASK                   0x00000001
+#define AECP_UNLOCK_FLAG_MASK                   0x01
 #define AECP_U_FLAG_MASK                        0x80
 #define AECP_MSRP_MAPPINGS_COUNT_MASK           0x00
 #define AECP_AS_CAPABLE_FLAG_MASK               0x01
@@ -1365,14 +1365,14 @@ static dissector_handle_t avb17221_handle;
 #define AECP_COUNTERS_VALID_ENTITY_SPECIFIC_2      0x40000000
 #define AECP_COUNTERS_VALID_ENTITY_SPECIFIC_1      0x80000000
 
-#define AEM_CLOCK_SYNC_SOURCE_FLAG_MASK         0x00000001
-#define AEM_ASYNC_SAMPLE_RATE_CONV_FLAG_MASK    0x00000002
-#define AEM_SYNC_SAMPLE_RATE_CONV_FLAG_MASK     0x00000004
+#define AEM_CLOCK_SYNC_SOURCE_FLAG_MASK         0x0001
+#define AEM_ASYNC_SAMPLE_RATE_CONV_FLAG_MASK    0x0002
+#define AEM_SYNC_SAMPLE_RATE_CONV_FLAG_MASK     0x0004
 
 #define AEM_BASE_FREQUENCY_MASK                 0x1fffffff
-#define AEM_CAPTIVE_FLAG_MASK                   0x00000002
-#define AEM_CLASS_A_FLAG_MASK                   0x00000002
-#define AEM_CLASS_B_FLAG_MASK                   0x00000004
+#define AEM_CAPTIVE_FLAG_MASK                   0x0002
+#define AEM_CLASS_A_FLAG_MASK                   0x0002
+#define AEM_CLASS_B_FLAG_MASK                   0x0004
 
 #define AEM_MASK_B                              0x80
 #define AEM_MASK_BPP                            0x3F
@@ -1888,7 +1888,7 @@ static int hf_adp_gptp_gm_id;
 static int hf_adp_assoc_id;
 /* static int hf_adp_entity_type; */
 
-/* Entity Capabilties Flags */
+/* Entity Capabilities Flags */
 static int hf_adp_entity_cap_efu_mode;
 static int hf_adp_entity_cap_address_access_supported;
 static int hf_adp_entity_cap_gateway_entity;
@@ -2103,8 +2103,6 @@ static int hf_aecp_stream_input_media_reset_valid;
 static int hf_aecp_stream_input_media_reset;
 static int hf_aecp_stream_input_packets_rx_valid;
 static int hf_aecp_stream_input_packets_rx;
-static int hf_aecp_stream_input_packets_tx_valid;
-static int hf_aecp_stream_input_packets_tx;
 static int hf_aecp_stream_input_seq_num_mismatch_valid;
 static int hf_aecp_stream_input_seq_num_mismatch;
 static int hf_aecp_stream_input_stream_reset_valid;
@@ -2435,12 +2433,12 @@ static int ett_aecp_flags_32;
 
 typedef struct {
    int hf;
-   guint16 size;
+   uint16_t size;
 } ctrl_ref_vals;
 
 /* convenience function */
 static inline ctrl_ref_vals
-get_ctrl_ref_vals(guint16 ctrl_val_type)
+get_ctrl_ref_vals(uint16_t ctrl_val_type)
 {
    ctrl_ref_vals ret;
 
@@ -2522,11 +2520,11 @@ dissect_17221_stream_format(tvbuff_t *tvb, proto_tree *tree)
 {
    proto_item *stream_tree;
    proto_item *stream_ti;
-   guint8 version;
-   guint8 subtype;
-   guint8 sf;
-   guint8 fmt;
-   guint8 fdf_evt;
+   uint8_t version;
+   uint8_t subtype;
+   uint8_t sf;
+   uint8_t fmt;
+   uint8_t fdf_evt;
 
    /* subtree */
    stream_ti = proto_tree_add_item(tree, hf_aem_stream_format, tvb,
@@ -2534,7 +2532,7 @@ dissect_17221_stream_format(tvbuff_t *tvb, proto_tree *tree)
    stream_tree = proto_item_add_subtree(stream_ti, ett_aem_stream_format);
 
    /* get version */
-   version = tvb_get_guint8(tvb, 0) & AEM_MASK_SF_VERSION;
+   version = tvb_get_uint8(tvb, 0) & AEM_MASK_SF_VERSION;
 
    /* add the version to the tree */
    proto_tree_add_item(stream_tree, hf_aem_sf_version, tvb,
@@ -2542,7 +2540,7 @@ dissect_17221_stream_format(tvbuff_t *tvb, proto_tree *tree)
 
    if (version == 0) {       /* stream format version 0 */
 
-      subtype = tvb_get_guint8(tvb, AEM_OFFSET_SF_SUBTYPE) & AEM_MASK_SF_SUBTYPE;
+      subtype = tvb_get_uint8(tvb, AEM_OFFSET_SF_SUBTYPE) & AEM_MASK_SF_SUBTYPE;
 
       proto_tree_add_item(stream_tree, hf_aem_sf_subtype, tvb,
             AEM_OFFSET_SF_SUBTYPE, 1, ENC_BIG_ENDIAN);
@@ -2550,7 +2548,7 @@ dissect_17221_stream_format(tvbuff_t *tvb, proto_tree *tree)
       switch(subtype) {
          case IEC_61883_IIDC_SUBTYPE:
             /* get sf */
-            sf = tvb_get_guint8(tvb, 1) & AEM_MASK_SF;
+            sf = tvb_get_uint8(tvb, 1) & AEM_MASK_SF;
             proto_tree_add_item(stream_tree, hf_aem_sf, tvb,
                   AEM_OFFSET_SF, 1, ENC_BIG_ENDIAN);
 
@@ -2565,7 +2563,7 @@ dissect_17221_stream_format(tvbuff_t *tvb, proto_tree *tree)
             } else { /* 61883 Stream Format */
                proto_tree_add_item(stream_tree, hf_aem_fmt, tvb,
                      AEM_OFFSET_FMT, 1, ENC_BIG_ENDIAN);
-               fmt = tvb_get_guint8(tvb, AEM_OFFSET_FMT) & 0x7F;
+               fmt = tvb_get_uint8(tvb, AEM_OFFSET_FMT) & 0x7F;
                if (fmt == 0x20) {       /* 61883-6 Stream Format */
                   proto_tree_add_item(stream_tree, hf_aem_fdf_evt, tvb,
                         AEM_OFFSET_FDF_EVT, 1, ENC_BIG_ENDIAN);
@@ -2574,7 +2572,7 @@ dissect_17221_stream_format(tvbuff_t *tvb, proto_tree *tree)
                   proto_tree_add_item(stream_tree, hf_aem_dbs, tvb,
                         AEM_OFFSET_DBS, 1, ENC_BIG_ENDIAN);
 
-                  fdf_evt = tvb_get_guint8(tvb, AEM_OFFSET_FDF_EVT) & AEM_MASK_FDF_EVT;
+                  fdf_evt = tvb_get_uint8(tvb, AEM_OFFSET_FDF_EVT) & AEM_MASK_FDF_EVT;
 
                   proto_tree_add_item(stream_tree, hf_aem_b_flag, tvb,
                         AEM_OFFSET_B, 1, ENC_BIG_ENDIAN);
@@ -2659,12 +2657,12 @@ dissect_17221_media_format(tvbuff_t *tvb, proto_tree *tree)
 {
    proto_item *media_tree;
    proto_item *media_ti;
-   guint32 oui24;
-   guint8  mfd_type;
+   uint32_t oui24;
+   uint8_t mfd_type;
 
    /* grab the oui24 and mfd_type */
    oui24 = tvb_get_ntoh24(tvb, 0);
-   mfd_type = tvb_get_guint8(tvb, 3);
+   mfd_type = tvb_get_uint8(tvb, 3);
 
    /* subtree */
    media_ti = proto_tree_add_item(tree, hf_aecp_media_format, tvb,
@@ -2735,13 +2733,13 @@ dissect_17221_media_format(tvbuff_t *tvb, proto_tree *tree)
 
 /* TODO following updates in Draft 18 and the pending Draft 19 this section will require major overhaul */
 static void
-dissect_17221_ctrl_val(tvbuff_t *tvb, proto_tree *tree, guint16 num_ctrl_vals, guint16 ctrl_val_type,
-                       guint16 ctrl_offset)
+dissect_17221_ctrl_val(tvbuff_t *tvb, proto_tree *tree, uint16_t num_ctrl_vals, uint16_t ctrl_val_type,
+                       uint16_t ctrl_offset)
 {
    proto_item *ctrl_item;
    proto_item *ctrl_subtree;
    int i;
-   guint32 bin_blob_size;
+   uint32_t bin_blob_size;
    ctrl_ref_vals ref;
 
    /* set up control values tree */
@@ -2835,9 +2833,9 @@ dissect_17221_ctrl_val(tvbuff_t *tvb, proto_tree *tree, guint16 num_ctrl_vals, g
 static void
 dissect_17221_aem(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
 {
-   guint16 desc_type;
-   guint16 ctrl_val_type;
-   guint16 num_ctrl_vals;
+   uint16_t desc_type;
+   uint16_t ctrl_val_type;
+   uint16_t num_ctrl_vals;
    tvbuff_t *next_tvb;
    int i;
 
@@ -2848,12 +2846,12 @@ dissect_17221_aem(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
     */
    proto_item *mr_subtree;
    proto_item *mr_item;
-   guint32 mr_offset;
-   guint16 mr_counter;
+   uint32_t mr_offset;
+   uint16_t mr_counter;
 
-   gfloat frequency;
-   gint freq_mult;
-   gint base_freq;
+   float frequency;
+   int freq_mult;
+   int base_freq;
 
    proto_item *aem_tree;
    /* used in creation of descriptor subtree */
@@ -3107,8 +3105,8 @@ dissect_17221_aem(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
             base_freq &= 0x1fffffff;
             /* replace this with something not horrible */
             frequency = freq_mult == 0 ? 1 :
-               freq_mult == 1 ? 1 / (gfloat)1.001 :
-               freq_mult == 2 ? (gfloat)1.001 :
+               freq_mult == 1 ? 1 / (float)1.001 :
+               freq_mult == 2 ? (float)1.001 :
                freq_mult == 3 ? 24 / 25 :
                freq_mult == 4 ? 54 / 24 : 0;
 
@@ -3793,18 +3791,18 @@ dissect_17221_aem(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
 static void
 dissect_17221_aecp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *aecp_tree)
 {
-   guint16 c_type;
-   /*guint16 addr_type;*/
-   /*guint16 ctrl_data_len;*/
-   guint16 mess_status;
-   guint16 mess_type;
-   guint16 mr_counter;
-   guint32 mr_offset;
+   uint16_t c_type;
+   /*uint16_t addr_type;*/
+   /*uint16_t ctrl_data_len;*/
+   uint16_t mess_status;
+   uint16_t mess_type;
+   uint16_t mr_counter;
+   uint32_t mr_offset;
    proto_item *mr_subtree;
    proto_item *mr_item;
    int i;
-   guint64 vendor_unique_protocol_id;
-   gchar *vendor_unique_protocol_id_string;
+   uint64_t vendor_unique_protocol_id;
+   char *vendor_unique_protocol_id_string;
    /* next tvb for use in subdissection */
    tvbuff_t *next_tvb;
    proto_tree *flags_tree;
@@ -4242,8 +4240,6 @@ dissect_17221_aecp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *aecp_tree)
                         AECP_OFFSET_COUNTERS_VALID, 4, ENC_BIG_ENDIAN);
                   proto_tree_add_item(aecp_tree, hf_aecp_stream_input_early_timestamp_valid, tvb,
                         AECP_OFFSET_COUNTERS_VALID, 4, ENC_BIG_ENDIAN);
-                  proto_tree_add_item(aecp_tree, hf_aecp_stream_input_packets_tx_valid, tvb,
-                        AECP_OFFSET_COUNTERS_VALID, 4, ENC_BIG_ENDIAN);
                   proto_tree_add_item(aecp_tree, hf_aecp_stream_input_packets_rx_valid, tvb,
                         AECP_OFFSET_COUNTERS_VALID, 4, ENC_BIG_ENDIAN);
                   break;
@@ -4318,8 +4314,6 @@ dissect_17221_aecp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *aecp_tree)
                         AECP_OFFSET_COUNTERS_STREAM_INPUT_LATE_TIMESTAMP, 4, ENC_BIG_ENDIAN);
                   proto_tree_add_item(aecp_tree, hf_aecp_stream_input_early_timestamp, tvb,
                         AECP_OFFSET_COUNTERS_STREAM_INPUT_EARLY_TIMESTAMP, 4, ENC_BIG_ENDIAN);
-                  proto_tree_add_item(aecp_tree, hf_aecp_stream_input_packets_tx, tvb,
-                        AECP_OFFSET_COUNTERS_STREAM_INPUT_PACKETS_TX, 4, ENC_BIG_ENDIAN);
                   proto_tree_add_item(aecp_tree, hf_aecp_stream_input_packets_rx, tvb,
                         AECP_OFFSET_COUNTERS_STREAM_INPUT_PACKETS_RX, 4, ENC_BIG_ENDIAN);
                   break;
@@ -4460,7 +4454,7 @@ dissect_17221_aecp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *aecp_tree)
             break;
          case AECP_COMMAND_AUTH_ADD_TOKEN:
             if (mess_type == AECP_AEM_COMMAND_MESSAGE) {
-               guint32 token_length = tvb_get_ntohl(tvb, AECP_OFFSET_AUTH_TOKEN_TOKEN_LENGTH);
+               uint32_t token_length = tvb_get_ntohl(tvb, AECP_OFFSET_AUTH_TOKEN_TOKEN_LENGTH);
                proto_tree_add_item(aecp_tree, hf_aecp_key_length, tvb,
                      AECP_OFFSET_AUTH_TOKEN_TOKEN_LENGTH, 2, ENC_BIG_ENDIAN);
                proto_tree_add_item(aecp_tree, hf_aecp_key_signature, tvb,
@@ -4552,9 +4546,9 @@ dissect_17221_aecp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *aecp_tree)
 
       /* attempt to dissect the payload specific data */
       next_tvb = tvb_new_subset_remaining(tvb, AECP_VUC_OFFSET_PROTOCOL_ID);
-      vendor_unique_protocol_id = tvb_get_guint48(tvb, AECP_VUC_OFFSET_PROTOCOL_ID, ENC_BIG_ENDIAN);
+      vendor_unique_protocol_id = tvb_get_uint48(tvb, AECP_VUC_OFFSET_PROTOCOL_ID, ENC_BIG_ENDIAN);
       vendor_unique_protocol_id_string = wmem_strdup_printf(pinfo->pool, "%012" PRIx64, vendor_unique_protocol_id);
-      dissector_try_string(vendor_unique_protocol_dissector_table, vendor_unique_protocol_id_string, next_tvb, pinfo, aecp_tree, NULL);
+      dissector_try_string_with_data(vendor_unique_protocol_dissector_table, vendor_unique_protocol_id_string, next_tvb, pinfo, aecp_tree, true, NULL);
     }
 }
 
@@ -4574,7 +4568,7 @@ dissect_17221_adp(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *adp_tree)
 
    proto_tree_add_item(adp_tree, hf_adp_message_type, tvb, ADP_VERSION_OFFSET, 1, ENC_BIG_ENDIAN);
    proto_tree_add_item(adp_tree, hf_adp_valid_time, tvb, ADP_VALID_TIME_OFFSET, 1, ENC_BIG_ENDIAN);
-   proto_tree_add_item(adp_tree, hf_adp_cd_length, tvb, ADP_CD_LENGTH_OFFSET, 1, ENC_BIG_ENDIAN);
+   proto_tree_add_item(adp_tree, hf_adp_cd_length, tvb, ADP_CD_LENGTH_OFFSET, 2, ENC_BIG_ENDIAN);
    proto_tree_add_item(adp_tree, hf_adp_entity_id, tvb, ADP_ENTITY_ID_OFFSET, 8, ENC_BIG_ENDIAN);
    proto_tree_add_item(adp_tree, hf_adp_entity_model_id, tvb, ADP_ENTITY_MODEL_ID_OFFSET, 8, ENC_BIG_ENDIAN);
 
@@ -4700,10 +4694,10 @@ dissect_17221_acmp(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *acmp_tree)
 static int
 dissect_17221(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
-   guint8 subtype = 0;
+   uint8_t subtype = 0;
    proto_item *ieee17221_item;
    proto_tree *ieee17221_tree;
-   subtype = tvb_get_guint8(tvb, 0);
+   subtype = tvb_get_uint8(tvb, 0);
    subtype &= 0x7F;
 
    /* Make entries in Protocol column and Info column on summary display */
@@ -5670,10 +5664,6 @@ proto_register_17221(void)
          {"Early Timestamp Valid", "ieee17221.flags.early_timestamp_valid",
             FT_BOOLEAN, 32, NULL, AECP_COUNTERS_VALID_EARLY_TIMESTAMP, NULL, HFILL }
       },
-      { &hf_aecp_stream_input_packets_tx_valid,
-         {"Stream Packets TX Valid", "ieee17221.flags.stream_packets_tx_valid",
-            FT_BOOLEAN, 32, NULL, AECP_COUNTERS_VALID_STREAM_PACKETS_TX, NULL, HFILL }
-      },
       { &hf_aecp_stream_input_packets_rx_valid,
          {"Stream Packets RX Valid", "ieee17221.flags.stream_packets_rx_valid",
             FT_BOOLEAN, 32, NULL, AECP_COUNTERS_VALID_STREAM_PACKETS_RX, NULL, HFILL }
@@ -5789,10 +5779,6 @@ proto_register_17221(void)
       },
       { &hf_aecp_stream_input_early_timestamp,
          {"Early Timestamp", "ieee17221.early_timestamp",
-            FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }
-      },
-      { &hf_aecp_stream_input_packets_tx,
-         {"Stream Packets TX", "ieee17221.stream_packets_tx",
             FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL }
       },
       { &hf_aecp_stream_input_packets_rx,
@@ -6983,7 +6969,7 @@ proto_register_17221(void)
    };
 
    /* Setup protocol subtree array */
-   static gint *ett[] = {
+   static int *ett[] = {
       &ett_17221,
       &ett_adp_ent_cap,
       &ett_adp_talk_cap,

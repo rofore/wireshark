@@ -14,13 +14,13 @@
  */
 
 #include "config.h"
-
-#ifdef DEBUG
-#include <stdio.h>
-#endif
+#define WS_LOG_DOMAIN "packet-wtp"
+#include <wireshark.h>
 
 #include <epan/packet.h>
 #include <epan/reassemble.h>
+#include <epan/tfs.h>
+#include <wsutil/array.h>
 #include "packet-wap.h"
 #include "packet-wtp.h"
 #include "packet-wsp.h"
@@ -177,12 +177,12 @@ static int hf_wtp_reassembled_in;
 static int hf_wtp_reassembled_length;
 
 /* Initialize the subtree pointers */
-static gint ett_wtp;
-static gint ett_wtp_sub_pdu_tree;
-static gint ett_header;
-static gint ett_tpilist;
-static gint ett_wsp_fragments;
-static gint ett_wtp_fragment;
+static int ett_wtp;
+static int ett_wtp_sub_pdu_tree;
+static int ett_header;
+static int ett_tpilist;
+static int ett_wsp_fragments;
+static int ett_wtp_fragment;
 
 static const fragment_items wtp_frag_items = {
     &ett_wtp_fragment,
@@ -246,10 +246,10 @@ wtp_handle_tpi(proto_tree *tree, tvbuff_t *tvb)
     proto_tree    *subTree = NULL;
     proto_item    *pi;
 
-    tByte = tvb_get_guint8(tvb, offset++);
+    tByte = tvb_get_uint8(tvb, offset++);
     tType = (tByte & 0x78) >> 3;
     if (tByte & 0x04)                /* Long TPI    */
-        tLen = tvb_get_guint8(tvb, offset++);
+        tLen = tvb_get_uint8(tvb, offset++);
     else
         tLen = tByte & 0x03;
     pi = proto_tree_add_uint(tree, hf_wtp_tpi_type,
@@ -287,11 +287,11 @@ wtp_handle_tpi(proto_tree *tree, tvbuff_t *tvb)
 
 /* Code to actually dissect the packets */
 static void
+// NOLINTNEXTLINE(misc-no-recursion)
 dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
-    char          *szInfo;
+    wmem_strbuf_t *szInfo;
     int            offCur        = 0;   /* current offset from start of WTP data */
-    gint           returned_length, str_index = 0;
 
     unsigned char  b0;
 
@@ -299,8 +299,8 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     unsigned char  fCon;            /* Continue flag    */
     unsigned char  fRID;            /* Re-transmission indicator*/
     unsigned char  fTTR = '\0';        /* Transmission trailer    */
-    guint          cbHeader       = 0;    /* Fixed header length    */
-    guint          vHeader       = 0;    /* Variable header length*/
+    unsigned       cbHeader       = 0;    /* Fixed header length    */
+    unsigned       vHeader       = 0;    /* Variable header length*/
     int            abortType      = 0;
 
     /* Set up structures we'll need to add the protocol subtree and manage it */
@@ -312,19 +312,16 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     int            numMissing = 0;        /* Number of missing packets in a negative ack */
     int            i;
     tvbuff_t      *wsp_tvb = NULL;
-    guint8         psn = 0;        /* Packet sequence number*/
-    guint16        TID = 0;        /* Transaction-Id    */
+    uint8_t        psn = 0;        /* Packet sequence number*/
+    uint16_t       TID = 0;        /* Transaction-Id    */
     int            dataOffset;
-    gint           dataLen;
+    int            dataLen;
 
-#define SZINFO_SIZE 256
-    szInfo=(char *)wmem_alloc(pinfo->pool, SZINFO_SIZE);
-
-    b0 = tvb_get_guint8 (tvb, offCur + 0);
+    b0 = tvb_get_uint8 (tvb, offCur + 0);
     /* Discover Concatenated PDUs */
     if (b0 == 0) {
-        guint    c_fieldlen = 0;        /* Length of length-field    */
-        guint    c_pdulen = 0;        /* Length of conc. PDU    */
+        unsigned c_fieldlen = 0;        /* Length of length-field    */
+        unsigned c_pdulen = 0;        /* Length of conc. PDU    */
 
         if (tree) {
             ti = proto_tree_add_item(tree, proto_wtp,
@@ -342,10 +339,10 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
              *      if the 1st octet has its highest bit == 1.
              * This means that this is NOT encoded as an uintvar-integer!!!
              */
-            b0 = tvb_get_guint8(tvb, offCur + 0);
+            b0 = tvb_get_uint8(tvb, offCur + 0);
             if (b0 & 0x80) {
                 c_fieldlen = 2;
-                c_pdulen = ((b0 & 0x7f) << 8) | tvb_get_guint8(tvb, offCur + 1);
+                c_pdulen = ((b0 & 0x7f) << 8) | tvb_get_uint8(tvb, offCur + 1);
             } else {
                 c_fieldlen = 1;
                 c_pdulen = b0;
@@ -359,6 +356,7 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
             }
             /* Skip the length field for the WTP sub-tvb */
             wtp_tvb = tvb_new_subset_length(tvb, offCur + c_fieldlen, c_pdulen);
+            // We recurse here, but we'll run out of packet before we run out of stack.
             dissect_wtp_common(wtp_tvb, pinfo, wtp_tree);
             offCur += c_fieldlen + c_pdulen;
             i++;
@@ -373,27 +371,24 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     fRID = retransmission_indicator(b0);
     pdut = pdu_type(b0);
 
-#ifdef DEBUG
-    proto_tree_add_debug_text(tree, "WTP packet %u: tree = %p, pdu = %s (%u) length: %u\n",
+    ws_debug("WTP packet %u: tree = %p, pdu = %s (%u) length: %u\n",
             pinfo->num, tree,
-            val_to_str(pdut, vals_wtp_pdu_type, "Unknown PDU type 0x%x"),
+            val_to_str(pinfo->pool,pdut, vals_wtp_pdu_type, "Unknown PDU type 0x%x"),
             pdut, tvb_captured_length(tvb));
-#endif
+
+    szInfo = wmem_strbuf_new(pinfo->pool, "");
 
     /* Develop the string to put in the Info column */
-    returned_length =  snprintf(szInfo, SZINFO_SIZE, "WTP %s",
-            val_to_str(pdut, vals_wtp_pdu_type, "Unknown PDU type 0x%x"));
-    str_index += MIN(returned_length, SZINFO_SIZE-str_index);
+    wmem_strbuf_append_printf(szInfo, "WTP %s",
+            val_to_str(pinfo->pool,pdut, vals_wtp_pdu_type, "Unknown PDU type 0x%x"));
 
     switch (pdut) {
         case INVOKE:
             fTTR = transmission_trailer(b0);
             TID = tvb_get_ntohs(tvb, offCur + 1);
             psn = 0;
-            clsTransaction = transaction_class(tvb_get_guint8(tvb, offCur + 3));
-            returned_length = snprintf(&szInfo[str_index], SZINFO_SIZE-str_index,
-                    " Class %d", clsTransaction);
-            str_index += MIN(returned_length, SZINFO_SIZE-str_index);
+            clsTransaction = transaction_class(tvb_get_uint8(tvb, offCur + 3));
+            wmem_strbuf_append_printf(szInfo, " Class %d", clsTransaction);
             cbHeader = 4;
             break;
 
@@ -401,11 +396,9 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
         case SEGMENTED_RESULT:
             fTTR = transmission_trailer(b0);
             TID = tvb_get_ntohs(tvb, offCur + 1);
-            psn = tvb_get_guint8(tvb, offCur + 3);
+            psn = tvb_get_uint8(tvb, offCur + 3);
             if (psn != 0) {
-                returned_length = snprintf(&szInfo[str_index], SZINFO_SIZE-str_index,
-                        " (%u)", psn);
-                str_index += MIN(returned_length, SZINFO_SIZE-str_index);
+                wmem_strbuf_append_printf(szInfo, " (%u)", psn);
             }
             cbHeader = 4;
             break;
@@ -427,7 +420,7 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 
         case NEGATIVE_ACK:
             /* Variable number of missing packets */
-            numMissing = tvb_get_guint8(tvb, offCur + 3);
+            numMissing = tvb_get_uint8(tvb, offCur + 3);
             cbHeader = numMissing + 4;
             break;
 
@@ -435,27 +428,20 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
             break;
     };
     if (fRID) {
-        /*returned_length =*/ snprintf(&szInfo[str_index], SZINFO_SIZE-str_index, " R" );
+        wmem_strbuf_append(szInfo, " R" );
         /*str_index += MIN(returned_length, SZINFO_SIZE-str_index);*/
     };
     /* In the interest of speed, if "tree" is NULL, don't do any work not
        necessary to generate protocol tree items. */
     if (tree) {
-#ifdef DEBUG
-        fprintf(stderr, "dissect_wtp: cbHeader = %d\n", cbHeader);
-#endif
+        ws_debug("cbHeader = %d", cbHeader);
         /* NOTE - Length will be set when we process the TPI */
         ti = proto_tree_add_item(tree, proto_wtp, tvb, offCur, -1, ENC_NA);
-#ifdef DEBUG
-        fprintf(stderr, "dissect_wtp: (7) Returned from proto_tree_add_item\n");
-#endif
+        ws_debug("(7) Returned from proto_tree_add_item");
         wtp_tree = proto_item_add_subtree(ti, ett_wtp);
 
         /* Code to process the packet goes here */
-#ifdef DEBUG
-        fprintf(stderr, "dissect_wtp: cbHeader = %d\n", cbHeader);
-        fprintf(stderr, "dissect_wtp: offCur = %d\n", offCur);
-#endif
+        ws_debug("cbHeader=%d offCur=%d", cbHeader, offCur);
         /* Add common items: only CON and PDU Type */
         proto_tree_add_item(
                 wtp_tree,             /* tree */
@@ -505,13 +491,13 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
                 break;
 
             case ABORT:
-                abortType = tvb_get_guint8 (tvb, offCur) & 0x07;
+                abortType = tvb_get_uint8 (tvb, offCur) & 0x07;
                 proto_tree_add_item(wtp_tree, hf_wtp_header_Abort_type , tvb, offCur , 1, ENC_LITTLE_ENDIAN);
                 proto_tree_add_item(wtp_tree, hf_wtp_header_flag_TID_response, tvb, offCur + 1, 2, ENC_BIG_ENDIAN);
                 proto_tree_add_item(wtp_tree, hf_wtp_header_flag_TID, tvb, offCur + 1, 2, ENC_BIG_ENDIAN);
 
                 if (abortType == PROVIDER) {
-                    guint8 reason = tvb_get_guint8(tvb, offCur + 3);
+                    uint8_t reason = tvb_get_uint8(tvb, offCur + 3);
                     proto_tree_add_item( wtp_tree, hf_wtp_header_Abort_reason_provider , tvb, offCur + 3 , 1, ENC_LITTLE_ENDIAN);
                     proto_item_append_text(ti,
                             ", PDU: Abort (%u)"
@@ -523,7 +509,7 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
                             reason);
                 }
                 else if (abortType == USER) {
-                    guint8 reason = tvb_get_guint8(tvb, offCur + 3);
+                    uint8_t reason = tvb_get_uint8(tvb, offCur + 3);
                     proto_tree_add_item(wtp_tree, hf_wtp_header_Abort_reason_user , tvb, offCur + 3 , 1, ENC_LITTLE_ENDIAN);
                     proto_item_append_text(ti,
                             ", PDU: Abort (%u)"
@@ -586,24 +572,22 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
             proto_item_append_text(ti, ", Retransmission");
         }
     } else { /* tree is NULL */
-#ifdef DEBUG
-        fprintf(stderr, "dissect_wtp: (4) tree was %p\n", tree);
-#endif
+        ws_debug("(4) tree was %p", tree);
     }
     /* Process the variable part */
     if (fCon) {            /* Now, analyze variable part    */
-        guint8    tCon;
-        guint8    tByte;
-        guint     tpiLen;
+        uint8_t   tCon;
+        uint8_t   tByte;
+        unsigned  tpiLen;
         tvbuff_t *tmp_tvb;
 
         vHeader = 0;        /* Start scan all over    */
 
         do {
-            tByte = tvb_get_guint8(tvb, offCur + cbHeader + vHeader);
+            tByte = tvb_get_uint8(tvb, offCur + cbHeader + vHeader);
             tCon = tByte & 0x80;
             if (tByte & 0x04)    /* Long TPI    */
-                tpiLen = 2 + tvb_get_guint8(tvb, offCur + cbHeader + vHeader + 1);
+                tpiLen = 2 + tvb_get_uint8(tvb, offCur + cbHeader + vHeader + 1);
             else
                 tpiLen = 1 + (tByte & 0x03);
             if (tree)
@@ -622,9 +606,7 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     if (tree)
         proto_item_set_len(ti, cbHeader + vHeader);
 
-#ifdef DEBUG
-    fprintf( stderr, "dissect_wtp: cbHeader = %d\n", cbHeader );
-#endif
+    ws_debug("cbHeader = %d", cbHeader);
 
     /*
      * Any remaining data ought to be WSP data (if not WTP ACK, NACK
@@ -637,7 +619,7 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
      * for packets other than the last packet?)
      *
      * Try calling a subdissector only if:
-     *    - The WTP payload is ressembled in this very packet,
+     *    - The WTP payload is resembled in this very packet,
      *    - The WTP payload is not fragmented across packets.
      */
     dataOffset = offCur + cbHeader + vHeader;
@@ -658,10 +640,10 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
         {
             /* Try reassembling fragments */
             fragment_head *fd_wtp = NULL;
-            guint32 reassembled_in = 0;
-            gboolean save_fragmented = pinfo->fragmented;
+            uint32_t reassembled_in = 0;
+            bool save_fragmented = pinfo->fragmented;
 
-            pinfo->fragmented = TRUE;
+            pinfo->fragmented = true;
             fd_wtp = fragment_add_seq(&wtp_reassembly_table, tvb, dataOffset,
                     pinfo, TID, NULL, psn, dataLen, !fTTR, 0);
             /* XXX - fragment_add_seq() yields NULL unless Wireshark knows
@@ -691,15 +673,13 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
             wsp_tvb = process_reassembled_data(tvb, dataOffset, pinfo,
                     "Reassembled WTP", fd_wtp, &wtp_frag_items,
                     NULL, wtp_tree);
-#ifdef DEBUG
-            proto_tree_add_debug_text(tree, "WTP: Packet %u %s -> %d: wsp_tvb = %p, fd_wtp = %p, frame = %u\n",
+            ws_debug("WTP: Packet %u %s -> %d: wsp_tvb = %p, fd_wtp = %p",
                     pinfo->num,
                     fd_wtp ? "Reassembled" : "Not reassembled",
-                    fd_wtp ? fd_wtp->reassembled_in : -1,
+                    fd_wtp ? fd_wtp->reassembled_in : 0,
                     wsp_tvb,
                     fd_wtp
                   );
-#endif
             if (fd_wtp) {
                 /* Reassembled */
                 reassembled_in = fd_wtp->reassembled_in;
@@ -711,7 +691,7 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
                     /* Not reassembled in this packet */
                     col_append_fstr(pinfo->cinfo, COL_INFO,
                             "%s (WTP payload reassembled in packet %u)",
-                            szInfo, fd_wtp->reassembled_in);
+                            wmem_strbuf_get_str(szInfo), fd_wtp->reassembled_in);
 
                     proto_tree_add_item(wtp_tree, hf_wtp_payload, tvb, dataOffset, -1, ENC_NA);
                 }
@@ -719,7 +699,7 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
                 /* Not reassembled yet, or not reassembled at all */
                 col_append_fstr(pinfo->cinfo, COL_INFO,
                         "%s (Unreassembled fragment %u)",
-                        szInfo, psn);
+                        wmem_strbuf_get_str(szInfo), psn);
                 proto_tree_add_item(wtp_tree, hf_wtp_payload, tvb, dataOffset, -1, ENC_NA);
             }
             /* Now reset fragmentation information in pinfo */
@@ -735,13 +715,13 @@ dissect_wtp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
         else
         {
             /* Nothing to hand to subdissector */
-            col_append_str(pinfo->cinfo, COL_INFO, szInfo);
+            col_append_str(pinfo->cinfo, COL_INFO, wmem_strbuf_get_str(szInfo));
         }
     }
     else
     {
         /* Nothing to hand to subdissector */
-        col_append_str(pinfo->cinfo, COL_INFO, szInfo);
+        col_append_str(pinfo->cinfo, COL_INFO, wmem_strbuf_get_str(szInfo));
     }
 }
 
@@ -1009,7 +989,7 @@ proto_register_wtp(void)
     };
 
     /* Setup protocol subtree array */
-    static gint *ett[] = {
+    static int *ett[] = {
         &ett_wtp,
         &ett_wtp_sub_pdu_tree,
         &ett_header,

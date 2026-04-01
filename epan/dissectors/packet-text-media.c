@@ -30,13 +30,15 @@
  * TODO - character set and chunked transfer-coding
  */
 void proto_register_text_lines(void);
+void event_register_text_lines(void);
 void proto_reg_handoff_text_lines(void);
+void event_reg_handoff_text_lines(void);
 
 /* Filterable header fields */
-static gint proto_text_lines;
+static int proto_text_lines;
 
 /* Subtrees */
-static gint ett_text_lines;
+static int ett_text_lines;
 
 /* Dissector handles */
 static dissector_handle_t xml_handle;
@@ -46,8 +48,8 @@ dissect_text_lines(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
 {
 	proto_tree	*subtree;
 	proto_item	*ti;
-	gint		offset = 0, next_offset;
-	gint		len;
+	unsigned	offset = 0, next_offset;
+	unsigned	len;
 	media_content_info_t *content_info;
 	const char	*data_name;
 	int length = tvb_captured_length(tvb);
@@ -90,7 +92,7 @@ dissect_text_lines(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
 				data_name);
 
 	if (tree) {
-		guint lines_read = 0;
+		unsigned lines_read = 0;
 		ti = proto_tree_add_item(tree, proto_text_lines,
 				tvb, 0, -1, ENC_NA);
 		if (data_name)
@@ -107,9 +109,7 @@ dissect_text_lines(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
 			 * as "iso-10646-ucs-2", or might require other
 			 * special processing.
 			 */
-			len = tvb_find_line_end(tvb, offset, -1, &next_offset, FALSE);
-			if (len == -1)
-				break;
+			tvb_find_line_end_remaining(tvb, offset, &len, &next_offset);
 
 			/* We use next_offset - offset instead of len in the
 			 * call to proto_tree_add_format_text() so it will include the
@@ -125,10 +125,10 @@ dissect_text_lines(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
 	return length;
 }
 
-void
-proto_register_text_lines(void)
+static void
+common_register_text_lines(void)
 {
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_text_lines,
 	};
 
@@ -139,7 +139,18 @@ proto_register_text_lines(void)
 }
 
 void
-proto_reg_handoff_text_lines(void)
+proto_register_text_lines(void)
+{
+	common_register_text_lines();
+}
+
+void
+event_register_text_lines(void)
+{
+	common_register_text_lines();
+}
+
+static void common_reg_handoff_text_lines(void)
 {
 	dissector_handle_t text_lines_handle;
 
@@ -167,6 +178,18 @@ proto_reg_handoff_text_lines(void)
 	dissector_add_string("media_type", "application/x-wms-logplaystats", text_lines_handle);
 	dissector_add_string("media_type", "application/x-rtsp-udp-packetpair", text_lines_handle);
 	xml_handle = find_dissector_add_dependency("xml", proto_text_lines);
+}
+
+void
+proto_reg_handoff_text_lines(void)
+{
+	common_reg_handoff_text_lines();
+}
+
+void
+event_reg_handoff_text_lines(void)
+{
+	common_reg_handoff_text_lines();
 }
 
 /*

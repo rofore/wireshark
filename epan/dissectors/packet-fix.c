@@ -30,24 +30,24 @@ void proto_register_fix(void);
 void proto_reg_handoff_fix(void);
 
 typedef struct _fix_parameter {
-    int field_len;
-    int tag_len;
-    int value_offset;
-    int value_len;
-    int ctrla_offset;
+    unsigned field_len;
+    unsigned tag_len;
+    unsigned value_offset;
+    unsigned value_len;
+    unsigned ctrla_offset;
 } fix_parameter;
 
 /* Initialize the protocol and registered fields */
 static int proto_fix;
 
 /* desegmentation of fix */
-static gboolean fix_desegment = TRUE;
+static bool fix_desegment = true;
 
 /* Initialize the subtree pointers */
-static gint ett_fix;
-static gint ett_unknown;
-static gint ett_badfield;
-static gint ett_checksum;
+static int ett_fix;
+static int ett_unknown;
+static int ett_badfield;
+static int ett_checksum;
 
 static expert_field ei_fix_checksum_bad;
 static expert_field ei_fix_missing_field;
@@ -66,7 +66,7 @@ static dissector_handle_t fix_handle;
 #define MARKER_TAG "8=FIX"
 #define MARKER_LEN 5
 
-static int fix_marker(tvbuff_t *tvb, int offset)
+static int fix_marker(tvbuff_t *tvb, unsigned offset)
 {
     return tvb_strneql(tvb, offset, MARKER_TAG, MARKER_LEN);
 }
@@ -83,33 +83,23 @@ static void dissect_fix_init(void) {
 }
 
 static int
-tag_search(int key)
+fix_field_tag_compar(const void *v_needle, const void *v_entry)
 {
-    int lower = 0, upper = array_length(fix_fields) -1;
-    while (lower <= upper) {
-        int middle = (lower + upper) / 2;
-        int res = fix_fields[middle].tag;
-        if (res < key) {
-            lower = middle + 1;
-        } else if (res == key) {
-            return middle;
-        } else {
-            upper = middle - 1;
-        }
-    }
-    return -1;
+    int key = *(const int *)v_needle;
+    int entry_tag = ((const fix_field *)v_entry)->tag;
+    return key > entry_tag ? 1 : (key < entry_tag ? -1 : 0);
 }
 
 /* Code to actually dissect the packets */
-static int fix_next_header(tvbuff_t *tvb, int offset)
+static int fix_next_header(tvbuff_t *tvb, packet_info* pinfo, unsigned offset)
 {
     /* try to resync to the next start */
-    guint         min_len = tvb_captured_length_remaining(tvb, offset);
-    const guint8 *data    = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, min_len, ENC_ASCII);
-    const guint8 *start   = data;
+    unsigned      min_len = tvb_captured_length_remaining(tvb, offset);
+    const char *data    = (char*)tvb_get_string_enc(pinfo->pool, tvb, offset, min_len, ENC_ASCII);
+    const char *start   = data;
 
     while ((start = strstr(start, "\0018"))) {
-        min_len = (guint) (start +1 -data);
+        min_len = (unsigned) (start +1 -data);
         /*  if remaining length < 6 return and let the next desegment round
             test for 8=FIX
         */
@@ -125,19 +115,17 @@ static int fix_next_header(tvbuff_t *tvb, int offset)
 /* ----------------------------------------------
   Format: name=value\001
 */
-static fix_parameter *fix_param(tvbuff_t *tvb, int offset)
+static fix_parameter *fix_param(tvbuff_t *tvb, unsigned offset)
 {
-    static fix_parameter ret;
-    int                  equals;
+    static   fix_parameter ret;
+    unsigned equals;
 
-    ret.ctrla_offset = tvb_find_guint8(tvb, offset, -1, 0x01);
-    if (ret.ctrla_offset == -1) {
+    if (!tvb_find_uint8_remaining(tvb, offset, 0x01, &ret.ctrla_offset)) {
         return NULL;
     }
 
     ret.field_len = ret.ctrla_offset - offset + 1;
-    equals = tvb_find_guint8(tvb, offset, ret.field_len, '=');
-    if (equals == -1) {
+    if (!tvb_find_uint8_length(tvb, offset, ret.field_len, '=', &equals)) {
         return NULL;
     }
 
@@ -148,40 +136,40 @@ static fix_parameter *fix_param(tvbuff_t *tvb, int offset)
 }
 
 /* ---------------------------------------------- */
-static int fix_header_len(tvbuff_t *tvb, int offset)
+static unsigned
+fix_header_len(tvbuff_t *tvb, packet_info* pinfo, unsigned offset)
 {
-    int            base_offset, ctrla_offset;
-    gint32         value;
-    int            size;
+    unsigned       base_offset, ctrla_offset;
+    int32_t        value;
+    unsigned       size;
     fix_parameter *tag;
 
     base_offset = offset;
 
     /* get at least the fix version: 8=FIX.x.x */
     if (fix_marker(tvb, offset) != 0) {
-        return fix_next_header(tvb, offset);
+        return fix_next_header(tvb, pinfo, offset);
     }
 
     /* begin string */
-    ctrla_offset = tvb_find_guint8(tvb, offset, -1, 0x01);
-    if (ctrla_offset == -1) {
+    if (!tvb_find_uint8_length(tvb, offset, -1, 0x01, &ctrla_offset)) {
         /* it should be there, (minimum size is big enough)
          * if not maybe it's not really
          * a FIX packet but it's too late to bail out.
         */
-        return fix_next_header(tvb, offset +MARKER_LEN) +MARKER_LEN;
+        return fix_next_header(tvb, pinfo, offset +MARKER_LEN) +MARKER_LEN;
     }
     offset = ctrla_offset + 1;
 
     /* msg length */
     if (!(tag = fix_param(tvb, offset)) || tvb_strneql(tvb, offset, "9=", 2)) {
         /* not a tag or not the BodyLength tag, give up */
-        return fix_next_header(tvb, offset);
+        return fix_next_header(tvb, pinfo, offset);
     }
 
-    if (!ws_strtoi32(tvb_get_string_enc(wmem_packet_scope(), tvb, tag->value_offset,
+    if (!ws_strtoi32((char*)tvb_get_string_enc(pinfo->pool, tvb, tag->value_offset,
             tag->value_len, ENC_ASCII), NULL, &value))
-        return fix_next_header(tvb, base_offset +MARKER_LEN)  +MARKER_LEN;
+        return fix_next_header(tvb, pinfo, base_offset +MARKER_LEN)  +MARKER_LEN;
     /* Fix version, msg type, length and checksum aren't in body length.
      * If the packet is big enough find the checksum
     */
@@ -191,10 +179,9 @@ static int fix_header_len(tvbuff_t *tvb, int offset)
         offset = base_offset +size;
         if (tvb_strneql(tvb, offset, "10=", 3) != 0) {
             /* No? bogus packet, try to find the next header */
-            return fix_next_header(tvb, base_offset +MARKER_LEN)  +MARKER_LEN;
+            return fix_next_header(tvb, pinfo, base_offset +MARKER_LEN)  +MARKER_LEN;
         }
-        ctrla_offset = tvb_find_guint8(tvb, offset, -1, 0x01);
-        if (ctrla_offset == -1) {
+        if (!tvb_find_uint8_remaining(tvb, offset, 0x01, &ctrla_offset)) {
             /* assume checksum is 7 bytes 10=xxx\01 */
             return size+7;
         }
@@ -213,13 +200,13 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
     /* Set up structures needed to add the protocol subtree and manage it */
     proto_item    *ti;
     proto_tree    *fix_tree;
-    int            pdu_len;
-    int            offset = 0;
-    int            field_offset, ctrla_offset;
-    int            tag_value;
+    unsigned       pdu_len;
+    unsigned       offset = 0;
+    unsigned       field_offset, ctrla_offset;
+    uint32_t       tag_value;
     char          *value;
-    guint32        ivalue;
-    gboolean       ivalue_valid;
+    int32_t        ivalue;
+    bool           ivalue_valid;
     proto_item*    pi;
     fix_parameter *tag;
     const char *msg_type;
@@ -243,16 +230,14 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
     fix_tree = proto_item_add_subtree(ti, ett_fix);
 
     /* begin string */
-    ctrla_offset = tvb_find_guint8(tvb, offset, -1, 0x01);
-    if (ctrla_offset == -1) {
+    if (!tvb_find_uint8_remaining(tvb, offset, 0x01, &ctrla_offset)) {
         expert_add_info_format(pinfo, ti, &ei_fix_missing_field, "Missing BeginString field");
         return tvb_captured_length(tvb);
     }
     offset = ctrla_offset + 1;
 
     /* msg length */
-    ctrla_offset = tvb_find_guint8(tvb, offset, -1, 0x01);
-    if (ctrla_offset == -1) {
+    if (!!tvb_find_uint8_remaining(tvb, offset, 0x01, &ctrla_offset)) {
         expert_add_info_format(pinfo, ti, &ei_fix_missing_field, "Missing BodyLength field");
         return tvb_captured_length(tvb);
     }
@@ -270,14 +255,14 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
     field_offset = 0;
 
     while(field_offset < pdu_len && (tag = fix_param(tvb, field_offset)) ) {
-        int i, found;
+        const fix_field *field;
 
         if (tag->tag_len < 1) {
             field_offset = tag->ctrla_offset + 1;
             continue;
         }
 
-        if (!ws_strtou32(tvb_get_string_enc(pinfo->pool, tvb, field_offset, tag->tag_len, ENC_ASCII),
+        if (!ws_strtou32((char*)tvb_get_string_enc(pinfo->pool, tvb, field_offset, tag->tag_len, ENC_ASCII),
                 NULL, &tag_value)) {
             proto_tree_add_expert(fix_tree, pinfo, &ei_fix_tag_invalid, tvb, field_offset, tag->tag_len);
             break;
@@ -285,7 +270,7 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
         if (tag->value_len < 1) {
             proto_tree *field_tree;
             /* XXX - put an error indication here.  It's too late
-               to return FALSE; we've already started dissecting,
+               to return false; we've already started dissecting,
                and if a heuristic dissector starts dissecting
                (either updating the columns or creating a protocol
                tree) and then gives up, it leaves crud behind that
@@ -298,38 +283,37 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
         }
 
         /* fix_fields array is sorted by tag_value */
-        found = 0;
-        if ((i = tag_search(tag_value)) >= 0) {
-            found = 1;
-        }
+        field = bsearch(&tag_value, fix_fields, array_length(fix_fields), sizeof *fix_fields, fix_field_tag_compar);
 
-        value = tvb_get_string_enc(pinfo->pool, tvb, tag->value_offset, tag->value_len, ENC_ASCII);
+        value = (char*)tvb_get_string_enc(pinfo->pool, tvb, tag->value_offset, tag->value_len, ENC_ASCII);
         ivalue_valid = ws_strtoi32(value, NULL, &ivalue);
-        if (found) {
-            if (fix_fields[i].table) {
+        if (field) {
+            int hf = fix_hf[field - fix_fields];
+
+            if (field->table) {
                 if (tree) {
-                    switch (fix_fields[i].type) {
+                    switch (field->type) {
                     case 1: /* strings */
-                        proto_tree_add_string_format_value(fix_tree, fix_fields[i].hf_id, tvb, field_offset, tag->field_len, value,
-                            "%s (%s)", value, str_to_str(value, (const string_string *)fix_fields[i].table, "unknown %s"));
+                        proto_tree_add_string_format_value(fix_tree, hf, tvb, field_offset, tag->field_len, value,
+                            "%s (%s)", value, str_to_str_wmem(pinfo->pool, value, (const string_string *)field->table, "unknown %s"));
                         if (tag_value == 35) {
                             /* Make message type part of the Info column */
-                            msg_type = str_to_str(value, messages_val, "FIX Message (%s)");
+                            msg_type = str_to_str_wmem(pinfo->pool, value, messages_val, "FIX Message (%s)");
                             col_append_sep_str(pinfo->cinfo, COL_INFO, ", ", msg_type);
                             col_set_fence(pinfo->cinfo, COL_INFO);
                         }
                         break;
                     case 2: /* char */
-                        proto_tree_add_string_format_value(fix_tree, fix_fields[i].hf_id, tvb, field_offset, tag->field_len, value,
-                            "%s (%s)", value, val_to_str(*value, (const value_string *)fix_fields[i].table, "unknown %d"));
+                        proto_tree_add_string_format_value(fix_tree, hf, tvb, field_offset, tag->field_len, value,
+                            "%s (%s)", value, val_to_str(pinfo->pool, *value, (const value_string *)field->table, "unknown %d"));
                         break;
                     default:
                         if (ivalue_valid)
-                            proto_tree_add_string_format_value(fix_tree, fix_fields[i].hf_id, tvb, field_offset, tag->field_len, value,
-                                "%s (%s)", value, val_to_str(ivalue, (const value_string *)fix_fields[i].table, "unknown %d"));
+                            proto_tree_add_string_format_value(fix_tree, hf, tvb, field_offset, tag->field_len, value,
+                                "%s (%s)", value, val_to_str(pinfo->pool, ivalue, (const value_string *)field->table, "unknown %d"));
                         else {
-                            pi = proto_tree_add_string(fix_tree, fix_fields[i].hf_id, tvb, field_offset, tag->field_len, value);
-                            expert_add_info_format(pinfo, pi, &ei_fix_field_invalid, "Invalid string %s for fix field %u", value, i);
+                            pi = proto_tree_add_string(fix_tree, hf, tvb, field_offset, tag->field_len, value);
+                            expert_add_info_format(pinfo, pi, &ei_fix_field_invalid, "Invalid string %s for fix field tag %i", value, field->tag);
                         }
                         break;
                     }
@@ -343,21 +327,21 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
               case 10:
                 {
                     proto_tree *checksum_tree;
-                    guint8 sum = 0;
-                    const guint8 *sum_data = tvb_get_ptr(tvb, 0, field_offset);
-                    gboolean sum_ok;
-                    int j;
+                    uint8_t sum = 0;
+                    const uint8_t *sum_data = tvb_get_ptr(tvb, 0, field_offset);
+                    bool sum_ok;
+                    unsigned j;
 
                     for (j = 0; j < field_offset; j++, sum_data++) {
                          sum += *sum_data;
                     }
                     sum_ok = (ivalue == sum);
                     if (sum_ok) {
-                        item = proto_tree_add_string_format_value(fix_tree, fix_fields[i].hf_id, tvb, field_offset, tag->field_len,
+                        item = proto_tree_add_string_format_value(fix_tree, hf, tvb, field_offset, tag->field_len,
                                 value, "%s [correct]", value);
                     }
                     else {
-                        item = proto_tree_add_string_format_value(fix_tree, fix_fields[i].hf_id, tvb, field_offset, tag->field_len,
+                        item = proto_tree_add_string_format_value(fix_tree, hf, tvb, field_offset, tag->field_len,
                                 value, "%s [incorrect should be %d]", value, sum);
                     }
                     checksum_tree = proto_item_add_subtree(item, ett_checksum);
@@ -370,7 +354,7 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
                 }
                 break;
               default:
-                proto_tree_add_string(fix_tree, fix_fields[i].hf_id, tvb, field_offset, tag->field_len, value);
+                proto_tree_add_string(fix_tree, hf, tvb, field_offset, tag->field_len, value);
                 break;
               }
             }
@@ -390,12 +374,12 @@ dissect_fix_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
     return tvb_captured_length(tvb);
 }
 
-static guint
-get_fix_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *data _U_)
+static unsigned
+get_fix_pdu_len(packet_info *pinfo, tvbuff_t *tvb, int offset, void *data _U_)
 {
-    int fix_len;
+    unsigned fix_len;
 
-    fix_len = fix_header_len(tvb, offset);
+    fix_len = fix_header_len(tvb, pinfo, offset);
     return fix_len;
 }
 
@@ -427,7 +411,7 @@ dissect_fix(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 }
 
 /* Code to actually dissect the packets */
-static gboolean
+static bool
 dissect_fix_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
     conversation_t *conv;
@@ -435,29 +419,29 @@ dissect_fix_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
     /* get at least the fix version: 8=FIX.x.x */
     if (fix_marker(tvb, 0) != 0) {
         /* not a fix packet */
-        return FALSE;
+        return false;
     }
 
     conv = find_or_create_conversation(pinfo);
     conversation_set_dissector(conv, fix_handle);
 
     dissect_fix_pdus(tvb, pinfo, tree, data);
-    return TRUE;
+    return true;
 }
 
-static gboolean
+static bool
 dissect_fix_heur_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
     struct tlsinfo *tlsinfo = (struct tlsinfo *)data;
     /* get at least the fix version: 8=FIX.x.x */
     if (fix_marker(tvb, 0) != 0) {
         /* not a fix packet */
-        return FALSE;
+        return false;
     }
 
     dissect_fix_pdus(tvb, pinfo, tree, data);
     *(tlsinfo->app_handle) = fix_handle;
-    return TRUE;
+    return true;
 }
 
 /* this format is require because a script is used to build the C function
@@ -491,7 +475,7 @@ proto_register_fix(void)
     };
 
 /* Setup protocol subtree array */
-    static gint *ett[] = {
+    static int *ett[] = {
         &ett_fix,
         &ett_unknown,
         &ett_badfield,

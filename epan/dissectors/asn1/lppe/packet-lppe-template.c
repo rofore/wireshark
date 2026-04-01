@@ -16,18 +16,10 @@
 
 #include <epan/packet.h>
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-per.h"
 #include "packet-lpp.h"
-
-#define PNAME  "LTE Positioning Protocol Extensions (LLPe)"
-#define PSNAME "LPPe"
-#define PFNAME "lppe"
-
-#ifdef _MSC_VER
-/* disable: "warning C4146: unary minus operator applied to unsigned type, result still unsigned" */
-#pragma warning(disable:4146)
-#endif
 
 void proto_register_lppe(void);
 void proto_reg_handoff_lppe(void);
@@ -40,8 +32,8 @@ static dissector_handle_t xml_handle;
 #include "packet-lppe-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_lppe;
-static gint ett_lppe_civicLocation;
+static int ett_lppe;
+static int ett_lppe_civicLocation;
 #include "packet-lppe-ett.c"
 
 /* Include constants */
@@ -61,7 +53,7 @@ void proto_register_lppe(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 	  &ett_lppe,
       &ett_lppe_civicLocation,
 #include "packet-lppe-ettarr.c"
@@ -69,7 +61,7 @@ void proto_register_lppe(void) {
 
 
   /* Register protocol */
-  proto_lppe = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_lppe = proto_register_protocol("LTE Positioning Protocol Extensions (LLPe)", "LPPe", "lppe");
   register_dissector("lppe", dissect_OMA_LPPe_MessageExtension_PDU, proto_lppe);
 
   /* Register fields and subtrees */

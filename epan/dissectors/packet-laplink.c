@@ -34,7 +34,7 @@ static int hf_laplink_tcp_length;
 static int hf_laplink_tcp_data;
 
 /* Initialize the subtree pointers */
-static gint ett_laplink;
+static int ett_laplink;
 
 static const value_string laplink_udp_magic[] = {
 	{ 0x0f010000, "Name Solicitation" },
@@ -57,17 +57,17 @@ static const value_string laplink_tcp_magic[] = {
 	{ 0, NULL }
 };
 
-static gboolean laplink_desegment = TRUE;
+static bool laplink_desegment = true;
 
 /* Code to actually dissect the packets - UDP */
-static gint
+static int
 dissect_laplink_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
 	int offset = 0;
 	proto_item *ti;
 	proto_tree *laplink_tree;
-	guint32 udp_ident;
-	const gchar *udp_ident_string;
+	uint32_t udp_ident;
+	const char *udp_ident_string;
 
 	/*
 	 * Make sure the identifier is reasonable.
@@ -101,17 +101,17 @@ static int
 dissect_laplink_tcp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
 	int offset = 0;
-	int length = 0;
+	unsigned length = 0;
 	proto_item *ti;
 	proto_tree *laplink_tree;
-	guint32 tcp_ident;
+	uint32_t tcp_ident;
 
 /* Make entries in Protocol column and Info column on summary display */
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "Laplink");
 
 	tcp_ident = tvb_get_ntohl(tvb, offset);
 	col_add_str(pinfo->cinfo, COL_INFO,
-			    val_to_str(tcp_ident, laplink_tcp_magic, "TCP TBA (%u)"));
+			    val_to_str(pinfo->pool, tcp_ident, laplink_tcp_magic, "TCP TBA (%u)"));
 
 	if (tree){
 		ti = proto_tree_add_item(tree, proto_laplink, tvb, 0, -1, ENC_NA);
@@ -122,8 +122,7 @@ dissect_laplink_tcp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
 		proto_tree_add_item(laplink_tree, hf_laplink_tcp_ident, tvb, offset, 4, ENC_BIG_ENDIAN);
 		offset += 4;
 
-		length = tvb_get_ntohs(tvb, offset);
-		proto_tree_add_item(laplink_tree, hf_laplink_tcp_length, tvb, offset, 2, ENC_BIG_ENDIAN);
+		proto_tree_add_item_ret_uint(laplink_tree, hf_laplink_tcp_length, tvb, offset, 2, ENC_BIG_ENDIAN, &length);
 		offset += 2;
 
 		proto_tree_add_item(laplink_tree, hf_laplink_tcp_data, tvb, offset, length, ENC_NA);
@@ -136,10 +135,10 @@ dissect_laplink_tcp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
 /* If this protocol has a sub-dissector call it here, see section 1.8 */
 }
 
-static guint
+static unsigned
 get_laplink_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *data _U_)
 {
-	guint plen;
+	unsigned plen;
 	/*
 	 * The length doesn't include the length or ident fields; add those in.
 	 */
@@ -188,12 +187,12 @@ proto_register_laplink(void)
 		{ &hf_laplink_tcp_data,
 			{ "Unknown TCP data", "laplink.tcp_data",
 			FT_BYTES, BASE_NONE, NULL, 0x0,
-			"TCP data", HFILL }
+			NULL, HFILL }
 		},
 	};
 
 /* Setup protocol subtree array */
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_laplink,
 	};
 

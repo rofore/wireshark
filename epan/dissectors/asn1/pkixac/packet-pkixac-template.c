@@ -14,17 +14,13 @@
 #include "config.h"
 
 #include <epan/packet.h>
+#include <wsutil/array.h>
 
 #include <epan/asn1.h>
 #include "packet-ber.h"
-#include "packet-pkixac.h"
 #include "packet-pkix1explicit.h"
 #include "packet-pkix1implicit.h"
 #include "packet-x509ce.h"
-
-#define PNAME  "PKIX Attribute Certificate"
-#define PSNAME "PKIXAC"
-#define PFNAME "pkixac"
 
 void proto_register_pkixac(void);
 void proto_reg_handoff_pkixac(void);
@@ -34,7 +30,7 @@ static int proto_pkixac;
 #include "packet-pkixac-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_pkixac;
+static int ett_pkixac;
 #include "packet-pkixac-ett.c"
 
 static const char *object_identifier_id;
@@ -50,13 +46,13 @@ void proto_register_pkixac(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 	&ett_pkixac,
 #include "packet-pkixac-ettarr.c"
   };
 
   /* Register protocol */
-  proto_pkixac = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_pkixac = proto_register_protocol("PKIX Attribute Certificate", "PKIXAC", "pkixac");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_pkixac, hf, array_length(hf));

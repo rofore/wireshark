@@ -16,15 +16,12 @@
 #include <epan/asn1.h>
 #include <epan/proto_data.h>
 #include <epan/strutil.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-p1.h"
 #include "packet-x509sat.h"
 #include "packet-x509if.h"
-
-#define PNAME  "X.509 Selected Attribute Types"
-#define PSNAME "X509SAT"
-#define PFNAME "x509sat"
 
 void proto_register_x509sat(void);
 void proto_reg_handoff_x509sat(void);
@@ -48,12 +45,12 @@ void proto_register_x509sat(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 #include "packet-x509sat-ettarr.c"
   };
 
   /* Register protocol */
-  proto_x509sat = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_x509sat = proto_register_protocol("X.509 Selected Attribute Types", "X509SAT", "x509sat");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_x509sat, hf, array_length(hf));

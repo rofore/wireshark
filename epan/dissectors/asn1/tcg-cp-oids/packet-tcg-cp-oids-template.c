@@ -12,15 +12,12 @@
 #include <epan/packet.h>
 #include <epan/oids.h>
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-tcg-cp-oids.h"
 #include "packet-ber.h"
 #include "packet-pkix1explicit.h"
 #include "packet-pkix1implicit.h"
-
-#define PNAME  "TCG_CP_OIDS"
-#define PSNAME "TCG_CP_OIDS"
-#define PFNAME "tcg_cp_oids"
 
 void proto_register_tcg_cp_oids(void);
 void proto_reg_handoff_tcg_cp_oids(void);
@@ -48,12 +45,12 @@ void proto_register_tcg_cp_oids(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 #include "packet-tcg-cp-oids-ettarr.c"
   };
 
   /* Register protocol */
-  proto_tcg_cp_oids = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_tcg_cp_oids = proto_register_protocol("TCG_CP_OIDS", "TCG_CP_OIDS", "tcg_cp_oids");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_tcg_cp_oids, hf, array_length(hf));
@@ -65,8 +62,8 @@ static int
 dissect_tcg_cp_oids_UTF8String_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
     int offset = 0;
     asn1_ctx_t actx;
-    asn1_ctx_init(&actx, ASN1_ENC_BER, TRUE, pinfo);
-    offset = dissect_ber_restricted_string(FALSE, BER_UNI_TAG_UTF8String, &actx, tree, tvb, offset, hf_tcg_cp_oids_UTF8String_PDU, NULL);
+    asn1_ctx_init(&actx, ASN1_ENC_BER, true, pinfo);
+    offset = dissect_ber_restricted_string(false, BER_UNI_TAG_UTF8String, &actx, tree, tvb, offset, hf_tcg_cp_oids_UTF8String_PDU, NULL);
     return offset;
 }
 

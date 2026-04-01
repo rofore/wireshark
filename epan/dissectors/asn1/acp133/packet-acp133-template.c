@@ -14,6 +14,7 @@
 #include <epan/packet.h>
 #include <epan/asn1.h>
 #include <epan/oids.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 
@@ -22,12 +23,6 @@
 #include "packet-x509ce.h"
 #include "packet-x509if.h"
 #include "packet-x509sat.h"
-
-#include "packet-acp133.h"
-
-#define PNAME  "ACP133 Attribute Syntaxes"
-#define PSNAME "ACP133"
-#define PFNAME "acp133"
 
 void proto_register_acp133(void);
 void proto_reg_handoff_acp133(void);
@@ -39,7 +34,7 @@ static int proto_acp133;
 #include "packet-acp133-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_acp133;
+static int ett_acp133;
 #include "packet-acp133-ett.c"
 
 #include "packet-acp133-fn.c"
@@ -55,13 +50,13 @@ void proto_register_acp133(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_acp133,
 #include "packet-acp133-ettarr.c"
   };
 
   /* Register protocol */
-  proto_acp133 = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_acp133 = proto_register_protocol("ACP133 Attribute Syntaxes", "ACP133", "acp133");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_acp133, hf, array_length(hf));

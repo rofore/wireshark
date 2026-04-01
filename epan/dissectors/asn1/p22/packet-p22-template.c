@@ -15,6 +15,7 @@
 #include <epan/oids.h>
 #include <epan/asn1.h>
 #include <epan/proto_data.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-acse.h"
@@ -28,9 +29,8 @@
 
 #include "packet-p22.h"
 
-#define PNAME  "X.420 Information Object"
-#define PSNAME "P22"
-#define PFNAME "p22"
+void proto_reg_handoff_p22(void);
+void proto_register_p22(void);
 
 /* Initialize the protocol and registered fields */
 static int proto_p22;
@@ -69,7 +69,7 @@ static const value_string charsetreg_vals [] = {
 #include "packet-p22-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_p22;
+static int ett_p22;
 #include "packet-p22-ett.c"
 
 #include "packet-p22-fn.c"
@@ -84,7 +84,7 @@ dissect_p22(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* da
 	proto_item *item=NULL;
 	proto_tree *tree=NULL;
 	asn1_ctx_t asn1_ctx;
-	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
+	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
 
 	if (parent_tree) {
 		item = proto_tree_add_item(parent_tree, proto_p22, tvb, 0, -1, ENC_NA);
@@ -94,7 +94,7 @@ dissect_p22(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* da
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "P22");
 	col_set_str(pinfo->cinfo, COL_INFO, "InterPersonal");
 
-	dissect_p22_InformationObject(TRUE, tvb, offset, &asn1_ctx , tree, -1);
+	dissect_p22_InformationObject(true, tvb, offset, &asn1_ctx , tree, -1);
 	return tvb_captured_length(tvb);
 }
 
@@ -109,13 +109,13 @@ void proto_register_p22(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_p22,
 #include "packet-p22-ettarr.c"
   };
 
   /* Register protocol */
-  proto_p22 = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_p22 = proto_register_protocol("X.420 Information Object", "P22", "p22");
   register_dissector("p22", dissect_p22, proto_p22);
   /* Register fields and subtrees */
   proto_register_field_array(proto_p22, hf, array_length(hf));

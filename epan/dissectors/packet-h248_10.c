@@ -21,17 +21,13 @@
 
 void proto_register_h248_dot10(void);
 
-#define PNAME  "H.248.10"
-#define PSNAME "H248CHP"
-#define PFNAME "h248.chp"
-
 static int proto_h248_CHP;
 
 static int hf_h248_CHP_mgcon;
 static int hf_h248_CHP_mgcon_reduction;
 
-static gint ett_h248_CHP;
-static gint ett_h248_CHP_mgcon;
+static int ett_h248_CHP;
+static int ett_h248_CHP_mgcon;
 
 static const value_string h248_CHP_prop_vals[] = {
 	{ 0, "chp (MG Congestion Handling)" },
@@ -83,12 +79,12 @@ void proto_register_h248_dot10(void) {
 		{ &hf_h248_CHP_mgcon_reduction, { "Reduction", "h248.chp.mgcon.reduction", FT_UINT32, BASE_DEC, NULL, 0, "Percentage of the load that the MGC is requested to block", HFILL }},
 	};
 
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_h248_CHP,
 		&ett_h248_CHP_mgcon,
 	};
 
-	proto_h248_CHP = proto_register_protocol(PNAME, PSNAME, PFNAME);
+	proto_h248_CHP = proto_register_protocol("H.248.10", "H248CHP", "h248.chp");
 
 	proto_register_field_array(proto_h248_CHP, hf, array_length(hf));
 

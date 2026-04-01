@@ -36,27 +36,12 @@ set(PLUGIN_FILES
 	${GENERATED_FILES}
 )
 
-set_source_files_properties(
-	${DISSECTOR_SRC}
-	${DISSECTOR_SUPPORT_SRC}
-	PROPERTIES
-	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
-)
-
-register_plugin_files(plugin.c
-	plugin
-	"Meta Analysis Tracing Engine (MATE)"
-	${DISSECTOR_SRC}
-	${DISSECTOR_SUPPORT_SRC}
-)
+#Define dissector headers here to prevent the "default" CheckAPI macro
+file(GLOB DISSECTOR_HEADERS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "*.h")
 
 add_wireshark_epan_plugin_library(mate)
 
-target_link_libraries(mate epan)
-
-install_plugin(mate epan)
-
-file(GLOB DISSECTOR_HEADERS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "*.h")
+#"Manually" have to call CheckAPI macro because of the extra files (LEMON_FILES, LEX_FILES) that are not included in the add_wireshark_epan_plugin_library() call.
 CHECKAPI(
 	NAME
 	  mate
@@ -71,16 +56,3 @@ CHECKAPI(
 #	  ${LEX_FILES}
 	  ${LEMON_FILES}
 )
-
-#
-# Editor modelines  -  https://www.wireshark.org/tools/modelines.html
-#
-# Local variables:
-# c-basic-offset: 8
-# tab-width: 8
-# indent-tabs-mode: t
-# End:
-#
-# vi: set shiftwidth=8 tabstop=8 noexpandtab:
-# :indentSize=8:tabSize=8:noTabs=false:
-#

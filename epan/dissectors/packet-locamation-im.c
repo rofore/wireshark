@@ -28,7 +28,8 @@
 /* clang-format on */
 
 #include <epan/expert.h>
-#include <string.h>
+#include <epan/tfs.h>
+#include <wsutil/array.h>
 
 #include "packet-llc.h"
 
@@ -122,33 +123,33 @@ static const value_string company_pid_vals[] = {
 
 /*
  * struct _sample_set_t {
- * 	guint16 ranges;
- * 	gint32 sample_1;
- * 	gint32 sample_2;
- * 	gint32 sample_3;
- * 	gint32 sample_4;
- * 	gint32 sample_5;
- * 	gint32 sample_6;
- * 	gint32 sample_7;
- * 	gint32 sample_8;
+ * 	uint16_t ranges;
+ * 	int32_t sample_1;
+ * 	int32_t sample_2;
+ * 	int32_t sample_3;
+ * 	int32_t sample_4;
+ * 	int32_t sample_5;
+ * 	int32_t sample_6;
+ * 	int32_t sample_7;
+ * 	int32_t sample_8;
  * };
  */
 #define SAMPLE_SET_SIZE 34
 
 /*
  * struct _timestamp_t {
- * 	guint8 sync_status;
- * 	guint8 additional_status;
- * 	guint32 sec;
- * 	guint32 nsec;
+ * 	uint8_t sync_status;
+ * 	uint8_t additional_status;
+ * 	uint32_t sec;
+ * 	uint32_t nsec;
  * };
  */
 #define TIMESTAMP_SIZE 10
 
 /*
  * struct _timestamps_t {
- * 	guint8 version;
- * 	guint24 reserved;
+ * 	uint8_t version;
+ * 	uint24_t reserved;
  * 	struct _timestamp_t timestamps[8];
  * };
  */
@@ -162,17 +163,17 @@ static const value_string company_pid_vals[] = {
  * ########################################################################
  */
 
-static void add_split_lines(packet_info *pinfo, tvbuff_t *tvb, int tvb_offset, proto_tree *tree, int hf) {
-	int offset = tvb_offset;
-	int next_offset;
+static void add_split_lines(packet_info *pinfo, tvbuff_t *tvb, unsigned offset, proto_tree *tree, int hf) {
+        unsigned next_offset;
+
 	while (tvb_offset_exists(tvb, offset)) {
-		int len = tvb_find_line_end(tvb, offset, -1, &next_offset, FALSE);
-		if (len == -1) {
+            unsigned len;
+		if (!tvb_find_line_end_remaining(tvb, offset, &len, &next_offset)) {
 			break;
 		}
 
-		char *line = tvb_get_string_enc(pinfo->pool, tvb, offset, len, ENC_UTF_8);
-		proto_tree_add_string_format_value(tree, hf, tvb, offset, (next_offset - offset), line, "%s", line);
+		char *line = (char*)tvb_get_string_enc(pinfo->pool, tvb, offset, len, ENC_UTF_8);
+		proto_tree_add_string(tree, hf, tvb, offset, (next_offset - offset), line);
 		offset = next_offset;
 	}
 }
@@ -236,8 +237,8 @@ static ei_register_info ei_calibration[] = {
 
 static int h_protocol_calibration = -1;
 
-static gint ett_protocol_calibration;
-static gint ett_calibration_lines;
+static int ett_protocol_calibration;
+static int ett_calibration_lines;
 
 static int dissect_calibration(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_) {
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTOCOL_SHORTNAME_CALIBRATION);
@@ -246,50 +247,47 @@ static int dissect_calibration(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
 	proto_item *calibration_item = proto_tree_add_item(tree, h_protocol_calibration, tvb, 0, -1, ENC_NA);
 	proto_tree *calibration_item_subtree = proto_item_add_subtree(calibration_item, ett_protocol_calibration);
 
-	gint tvb_offset = 0;
+	unsigned offset = 0;
 
 	/* Sequence Number */
-	gint item_size = 2;
-	tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-	guint16 sequence_number = tvb_get_guint16(tvb, 0, ENC_BIG_ENDIAN);
+	int item_size = 2;
+	uint16_t sequence_number = tvb_get_uint16(tvb, 0, ENC_BIG_ENDIAN);
 	if (sequence_number == 0) {
 		expert_add_info(pinfo, calibration_item, &ei_calibration_header);
 	}
-	proto_tree_add_item(calibration_item_subtree, hf_calibration_sequence_number, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-	tvb_offset += item_size;
+	proto_tree_add_item(calibration_item_subtree, hf_calibration_sequence_number, tvb, offset, item_size, ENC_BIG_ENDIAN);
+	offset += item_size;
 
 	if (sequence_number == 0) {
 		/* Header Packet */
 
 		/* First Sequence Number */
 		item_size = 2;
-		tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-		proto_tree_add_item(calibration_item_subtree, hf_calibration_first_sequence_number, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-		tvb_offset += item_size;
+		proto_tree_add_item(calibration_item_subtree, hf_calibration_first_sequence_number, tvb, offset, item_size, ENC_BIG_ENDIAN);
+		offset += item_size;
 
 		/* Last Sequence Number */
 		item_size = 2;
-		tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-		proto_tree_add_item(calibration_item_subtree, hf_calibration_last_sequence_number, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-		tvb_offset += item_size;
+		proto_tree_add_item(calibration_item_subtree, hf_calibration_last_sequence_number, tvb, offset, item_size, ENC_BIG_ENDIAN);
+		offset += item_size;
 
 		/* Name */
-		int name_length = tvb_reported_length_remaining(tvb, tvb_offset);
-		proto_item *name_item = proto_tree_add_item(calibration_item_subtree, hf_calibration_name, tvb, tvb_offset, name_length, ENC_UTF_8);
+		int name_length = tvb_reported_length_remaining(tvb, offset);
+		proto_item *name_item = proto_tree_add_item(calibration_item_subtree, hf_calibration_name, tvb, offset, name_length, ENC_UTF_8);
 
 		/* Name - Lines */
 		proto_tree *name_item_subtree = proto_item_add_subtree(name_item, ett_calibration_lines);
-		add_split_lines(pinfo, tvb, tvb_offset, name_item_subtree, hf_calibration_name_line);
+		add_split_lines(pinfo, tvb, offset, name_item_subtree, hf_calibration_name_line);
 	} else {
 		/* Chunk Packet */
 
 		/* Chunk */
-		int chunk_length = tvb_reported_length_remaining(tvb, tvb_offset);
-		proto_item *chunk_item = proto_tree_add_item(calibration_item_subtree, hf_calibration_chunk, tvb, tvb_offset, chunk_length, ENC_UTF_8);
+		int chunk_length = tvb_reported_length_remaining(tvb, offset);
+		proto_item *chunk_item = proto_tree_add_item(calibration_item_subtree, hf_calibration_chunk, tvb, offset, chunk_length, ENC_UTF_8);
 
 		/* Chunk - Lines */
 		proto_tree *chunk_item_subtree = proto_item_add_subtree(chunk_item, ett_calibration_lines);
-		add_split_lines(pinfo, tvb, tvb_offset, chunk_item_subtree, hf_calibration_chunk_line);
+		add_split_lines(pinfo, tvb, offset, chunk_item_subtree, hf_calibration_chunk_line);
 	}
 
 	return tvb_captured_length(tvb);
@@ -320,8 +318,8 @@ static hf_register_info protocol_registration_ident[] = {
 
 static int h_protocol_ident = -1;
 
-static gint ett_protocol_ident;
-static gint ett_ident_lines;
+static int ett_protocol_ident;
+static int ett_ident_lines;
 
 static int dissect_ident(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_) {
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTOCOL_SHORTNAME_IDENT);
@@ -358,8 +356,8 @@ static expert_field ei_samples_ranges_sample_6_invalid;
 static expert_field ei_samples_ranges_sample_7_invalid;
 static expert_field ei_samples_ranges_sample_8_invalid;
 
-static void check_ranges(tvbuff_t *tvb, packet_info *pinfo, gint tvb_offset, proto_item *item) {
-	guint16 ranges = tvb_get_guint16(tvb, tvb_offset, ENC_BIG_ENDIAN);
+static void check_ranges(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_item *item) {
+	uint16_t ranges = tvb_get_uint16(tvb, offset, ENC_BIG_ENDIAN);
 
 	if ((ranges & MASK_RANGES_SAMPLE_8) == MASK_RANGES_SAMPLE_8) {
 		expert_add_info(pinfo, item, &ei_samples_ranges_sample_8_invalid);
@@ -387,7 +385,7 @@ static void check_ranges(tvbuff_t *tvb, packet_info *pinfo, gint tvb_offset, pro
 	}
 }
 
-static gint ett_samples_sample_set_ranges;
+static int ett_samples_sample_set_ranges;
 
 static int hf_samples_sample_set_ranges;
 
@@ -420,19 +418,17 @@ static int hf_samples_sample_set_sample_6;
 static int hf_samples_sample_set_sample_7;
 static int hf_samples_sample_set_sample_8;
 
-static void add_sample_set(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_offset, int hf, proto_tree *tree) {
-	gint item_size = SAMPLE_SET_SIZE;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-	proto_item *sample_set_item = proto_tree_add_item(tree, hf, tvb, *tvb_offset, item_size, ENC_BIG_ENDIAN);
+static void add_sample_set(tvbuff_t *tvb, packet_info *pinfo, unsigned *offset, int hf, proto_tree *tree) {
+	int item_size = SAMPLE_SET_SIZE;
+	proto_item *sample_set_item = proto_tree_add_item(tree, hf, tvb, *offset, item_size, ENC_BIG_ENDIAN);
 
 	proto_tree *sample_set_item_subtree = proto_item_add_subtree(sample_set_item, ett_samples_sample_set_ranges);
 
 	/* Ranges */
 	item_size = 2;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-	proto_item *ranges_item = proto_tree_add_bitmask(sample_set_item_subtree, tvb, *tvb_offset, hf_samples_sample_set_ranges, ett_samples_sample_set_ranges, rangesBits, ENC_BIG_ENDIAN);
-	check_ranges(tvb, pinfo, *tvb_offset, ranges_item);
-	*tvb_offset += item_size;
+	proto_item *ranges_item = proto_tree_add_bitmask(sample_set_item_subtree, tvb, *offset, hf_samples_sample_set_ranges, ett_samples_sample_set_ranges, rangesBits, ENC_BIG_ENDIAN);
+	check_ranges(tvb, pinfo, *offset, ranges_item);
+	*offset += item_size;
 
 	/* Samples */
 	int const hfs[] = {
@@ -446,31 +442,29 @@ static void add_sample_set(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_offset, 
 	    hf_samples_sample_set_sample_8};
 
 	item_size = 4;
-	for (guint index_sample = 0; index_sample < array_length(hfs); index_sample++) {
-		tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-		proto_tree_add_item(sample_set_item_subtree, hfs[index_sample], tvb, *tvb_offset, item_size, ENC_BIG_ENDIAN);
-		*tvb_offset += item_size;
+	for (unsigned index_sample = 0; index_sample < array_length(hfs); index_sample++) {
+		proto_tree_add_item(sample_set_item_subtree, hfs[index_sample], tvb, *offset, item_size, ENC_BIG_ENDIAN);
+		*offset += item_size;
 	}
 }
 
-static void add_sample_sets(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_offset, int *hfs, guint hfs_size, proto_tree *tree) {
-	for (guint index_sample_set = 0; index_sample_set < hfs_size; index_sample_set++) {
-		add_sample_set(tvb, pinfo, tvb_offset, hfs[index_sample_set], tree);
+static void add_sample_sets(tvbuff_t *tvb, packet_info *pinfo, unsigned *offset, int *hfs, unsigned hfs_size, proto_tree *tree) {
+	for (unsigned index_sample_set = 0; index_sample_set < hfs_size; index_sample_set++) {
+		add_sample_set(tvb, pinfo, offset, hfs[index_sample_set], tree);
 	}
 }
 
-static void add_rms_values(tvbuff_t *tvb, gint *tvb_offset, int *hfs, guint hfs_size, proto_tree *tree) {
-	gint item_size = 4;
-	for (guint index_rms_value = 0; index_rms_value < hfs_size; index_rms_value++) {
-		tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-		proto_tree_add_item(tree, hfs[index_rms_value], tvb, *tvb_offset, item_size, ENC_BIG_ENDIAN);
-		*tvb_offset += item_size;
+static void add_rms_values(tvbuff_t *tvb, unsigned *offset, int *hfs, unsigned hfs_size, proto_tree *tree) {
+	int item_size = 4;
+	for (unsigned index_rms_value = 0; index_rms_value < hfs_size; index_rms_value++) {
+		proto_tree_add_item(tree, hfs[index_rms_value], tvb, *offset, item_size, ENC_BIG_ENDIAN);
+		*offset += item_size;
 	}
 }
 
-static gint ett_samples_timestamps_sample;
-static gint ett_samples_timestamps_sample_reserved;
-static gint ett_samples_timestamps_sample_timestamp;
+static int ett_samples_timestamps_sample;
+static int ett_samples_timestamps_sample_reserved;
+static int ett_samples_timestamps_sample_timestamp;
 
 static int hf_samples_timestamps_sample_sync_status;
 static int hf_samples_timestamps_sample_additional_status;
@@ -493,24 +487,22 @@ static int *const timestamp_additional_status_bits[] = {
 
 static expert_field ei_samples_timestamp_sync_status_invalid;
 
-static void add_timestamp_sample(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_offset_previous, gint *tvb_offset, int hf, proto_tree *tree) {
-	gint item_size = TIMESTAMP_SIZE;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-
+static void add_timestamp_sample(tvbuff_t *tvb, packet_info *pinfo, unsigned *previous_offset, unsigned *offset, int hf, proto_tree *tree) {
+	int item_size = TIMESTAMP_SIZE;
 	/* Get the timestamp components */
-	guint8 sync_status = tvb_get_guint8(tvb, *tvb_offset);
-	guint32 seconds = tvb_get_guint32(tvb, *tvb_offset + 2, ENC_BIG_ENDIAN);
-	guint32 nanoseconds = tvb_get_guint32(tvb, *tvb_offset + 6, ENC_BIG_ENDIAN);
+	uint8_t sync_status = tvb_get_uint8(tvb, *offset);
+	uint32_t seconds = tvb_get_uint32(tvb, *offset + 2, ENC_BIG_ENDIAN);
+	uint32_t nanoseconds = tvb_get_uint32(tvb, *offset + 6, ENC_BIG_ENDIAN);
 
 	/* Convert the timestamp seconds to a split time type */
 	time_t sample_time = (time_t)seconds;
 	struct tm *sample_time_split = gmtime(&sample_time);
 
 	/* Construct the readable sync status */
-	const gchar *sync_status_buf = val_to_str(sync_status, samples_timestamps_sample_sync_status, "Unknown (%u)");
+	const char *sync_status_buf = val_to_str(pinfo->pool, sync_status, samples_timestamps_sample_sync_status, "Unknown (%u)");
 
 	/* Construct the readable timestamp */
-	gchar timestamp_buf[ITEM_LABEL_LENGTH];
+	char timestamp_buf[ITEM_LABEL_LENGTH];
 	size_t timestamp_length = 0;
 	if (sample_time_split != NULL) {
 		timestamp_length += strftime(&timestamp_buf[timestamp_length], ITEM_LABEL_LENGTH - timestamp_length, "%Y-%m-%d %H:%M:%S.", sample_time_split);
@@ -523,14 +515,14 @@ static void add_timestamp_sample(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_of
 	char title_buf[ITEM_LABEL_LENGTH];
 	size_t title_length = 0;
 	title_length += snprintf(&title_buf[title_length], ITEM_LABEL_LENGTH - title_length, "%s (Sync: %s", timestamp_buf, sync_status_buf);
-	if (tvb_offset_previous != NULL) {
+	if (previous_offset != NULL) {
 		/* Get the previous timestamp components and calculate the time difference */
-		guint32 seconds_previous = tvb_get_guint32(tvb, *tvb_offset_previous + 2, ENC_BIG_ENDIAN);
-		guint32 nanoseconds_previous = tvb_get_guint32(tvb, *tvb_offset_previous + 6, ENC_BIG_ENDIAN);
-		guint64 time_previous = ((guint64)seconds_previous * 1000000000) + nanoseconds_previous;
-		guint64 time_now = ((guint64)seconds * 1000000000) + nanoseconds;
-		guint64 time_diff = 0;
-		gchar time_difference_sign[2] = {'\0', '\0'};
+		uint32_t seconds_previous = tvb_get_uint32(tvb, *previous_offset + 2, ENC_BIG_ENDIAN);
+		uint32_t nanoseconds_previous = tvb_get_uint32(tvb, *previous_offset + 6, ENC_BIG_ENDIAN);
+		uint64_t time_previous = ((uint64_t)seconds_previous * 1000000000) + nanoseconds_previous;
+		uint64_t time_now = ((uint64_t)seconds * 1000000000) + nanoseconds;
+		uint64_t time_diff = 0;
+		char time_difference_sign[2] = {'\0', '\0'};
 		if (time_now > time_previous) {
 			time_diff = time_now - time_previous;
 			time_difference_sign[0] = '\0';
@@ -542,22 +534,21 @@ static void add_timestamp_sample(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_of
 		if (time_diff != 0) {
 			frequency = 1.0 / ((double)time_diff * 1.0E-09);
 		}
-		title_length += snprintf(&title_buf[title_length], ITEM_LABEL_LENGTH - title_length, ", Time Difference: %s%" G_GINT64_MODIFIER "u nsec", time_difference_sign, time_diff);
+		title_length += snprintf(&title_buf[title_length], ITEM_LABEL_LENGTH - title_length, ", Time Difference: %s%" PRIu64 " nsec", time_difference_sign, time_diff);
 		if (frequency != 0.0) {
 			title_length += snprintf(&title_buf[title_length], ITEM_LABEL_LENGTH - title_length, " = %f Hz", frequency);
 		}
 	}
 	snprintf(&title_buf[title_length], ITEM_LABEL_LENGTH - title_length, ")");
 
-	proto_item *sample_timestamp_item = proto_tree_add_string(tree, hf, tvb, *tvb_offset, item_size, title_buf);
+	proto_item *sample_timestamp_item = proto_tree_add_string(tree, hf, tvb, *offset, item_size, title_buf);
 
 	proto_tree *sample_timestamp_item_subtree = proto_item_add_subtree(sample_timestamp_item, ett_samples_timestamps_sample);
 
 	/* Sync Status */
 	item_size = 1;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-	proto_item *sync_status_item = proto_tree_add_item(sample_timestamp_item_subtree, hf_samples_timestamps_sample_sync_status, tvb, *tvb_offset, item_size, ENC_BIG_ENDIAN);
-	*tvb_offset += item_size;
+	proto_item *sync_status_item = proto_tree_add_item(sample_timestamp_item_subtree, hf_samples_timestamps_sample_sync_status, tvb, *offset, item_size, ENC_BIG_ENDIAN);
+	*offset += item_size;
 
 	if (sync_status > 2) {
 		expert_add_info(pinfo, sync_status_item, &ei_samples_timestamp_sync_status_invalid);
@@ -565,36 +556,32 @@ static void add_timestamp_sample(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_of
 
 	/* Additional Status */
 	item_size = 1;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-	proto_tree_add_bitmask(sample_timestamp_item_subtree, tvb, *tvb_offset, hf_samples_timestamps_sample_additional_status, ett_samples_timestamps_sample_reserved, timestamp_additional_status_bits, ENC_BIG_ENDIAN);
-	*tvb_offset += item_size;
+	proto_tree_add_bitmask(sample_timestamp_item_subtree, tvb, *offset, hf_samples_timestamps_sample_additional_status, ett_samples_timestamps_sample_reserved, timestamp_additional_status_bits, ENC_BIG_ENDIAN);
+	*offset += item_size;
 
 	/* Timestamp */
 	item_size = 8;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-	proto_item *sample_timestamp_timestamp_item = proto_tree_add_string(sample_timestamp_item_subtree, hf_samples_timestamps_sample_timestamp, tvb, *tvb_offset, item_size, timestamp_buf);
+	proto_item *sample_timestamp_timestamp_item = proto_tree_add_string(sample_timestamp_item_subtree, hf_samples_timestamps_sample_timestamp, tvb, *offset, item_size, timestamp_buf);
 
 	proto_tree *sample_timestamp_timestamp_item_subtree = proto_item_add_subtree(sample_timestamp_timestamp_item, ett_samples_timestamps_sample_timestamp);
 
 	/* Seconds */
 	item_size = 4;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-	proto_tree_add_item(sample_timestamp_timestamp_item_subtree, hf_samples_timestamps_sample_timestamp_seconds, tvb, *tvb_offset, item_size, ENC_BIG_ENDIAN);
-	*tvb_offset += item_size;
+	proto_tree_add_item(sample_timestamp_timestamp_item_subtree, hf_samples_timestamps_sample_timestamp_seconds, tvb, *offset, item_size, ENC_BIG_ENDIAN);
+	*offset += item_size;
 
 	/* Nanoseconds */
 	item_size = 4;
-	tvb_ensure_bytes_exist(tvb, *tvb_offset, item_size);
-	proto_tree_add_item(sample_timestamp_timestamp_item_subtree, hf_samples_timestamps_sample_timestamp_nanoseconds, tvb, *tvb_offset, item_size, ENC_BIG_ENDIAN);
-	*tvb_offset += item_size;
+	proto_tree_add_item(sample_timestamp_timestamp_item_subtree, hf_samples_timestamps_sample_timestamp_nanoseconds, tvb, *offset, item_size, ENC_BIG_ENDIAN);
+	*offset += item_size;
 }
 
-static void add_timestamps_set(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_offset, int *hfs, guint hfs_size, proto_tree *tree) {
-	gint tvb_offset_previous = 0;
-	for (guint index_timestamp = 0; index_timestamp < hfs_size; index_timestamp++) {
-		gint tvb_offset_saved = *tvb_offset;
-		add_timestamp_sample(tvb, pinfo, (index_timestamp == 0) ? NULL : &tvb_offset_previous, tvb_offset, hfs[index_timestamp], tree);
-		tvb_offset_previous = tvb_offset_saved;
+static void add_timestamps_set(tvbuff_t *tvb, packet_info *pinfo, unsigned *offset, int *hfs, unsigned hfs_size, proto_tree *tree) {
+    unsigned previous_offset = 0;
+	for (unsigned index_timestamp = 0; index_timestamp < hfs_size; index_timestamp++) {
+            unsigned tvb_offset_saved = *offset;
+		add_timestamp_sample(tvb, pinfo, (index_timestamp == 0) ? NULL : &previous_offset, offset, hfs[index_timestamp], tree);
+		previous_offset = tvb_offset_saved;
 	}
 }
 
@@ -748,14 +735,14 @@ static void add_timestamps_set(tvbuff_t *tvb, packet_info *pinfo, gint *tvb_offs
  *     Nanoseconds  4 bytes, unsigned
  */
 
-static gint ett_protocol_samples;
-static gint ett_samples_control;
-static gint ett_samples_sets;
-static gint ett_samples_sets_set;
-static gint ett_samples_rms;
-static gint ett_samples_rms_values;
-static gint ett_samples_timestamps;
-static gint ett_samples_timestamps_set;
+static int ett_protocol_samples;
+static int ett_samples_control;
+static int ett_samples_sets;
+static int ett_samples_sets_set;
+static int ett_samples_rms;
+static int ett_samples_rms_values;
+static int ett_samples_timestamps;
+static int ett_samples_timestamps_set;
 
 static expert_field ei_samples_im_version_invalid;
 
@@ -809,59 +796,53 @@ static int hf_samples_timestamps_sample_6;
 static int hf_samples_timestamps_sample_7;
 static int hf_samples_timestamps_sample_8;
 
-static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_, int h_protocol_samples) {
+static int dissect_samples_im(bool im1, tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_, int h_protocol_samples) {
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, im1 ? PROTOCOL_SHORTNAME_SAMPLES_IM1 : PROTOCOL_SHORTNAME_SAMPLES_IM2R0);
 	col_set_str(pinfo->cinfo, COL_INFO, im1 ? PROTOCOL_NAME_SAMPLES_IM1 : PROTOCOL_NAME_SAMPLES_IM2R0);
 
 	proto_item *samples_item = proto_tree_add_item(tree, h_protocol_samples, tvb, 0, -1, ENC_NA);
 	proto_tree *samples_item_subtree = proto_item_add_subtree(samples_item, ett_protocol_samples);
 
-	gint tvb_offset = 0;
+	unsigned offset = 0;
 
 	/* Transport Delay */
-	gint item_size = 2;
-	tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-	proto_tree_add_item(samples_item_subtree, hf_samples_transport_delay, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-	tvb_offset += item_size;
+	int item_size = 2;
+	proto_tree_add_item(samples_item_subtree, hf_samples_transport_delay, tvb, offset, item_size, ENC_BIG_ENDIAN);
+	offset += item_size;
 
 	/* Hop Count */
 	item_size = 1;
-	tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-	proto_tree_add_item(samples_item_subtree, hf_samples_hop_count, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-	tvb_offset += item_size;
+	proto_tree_add_item(samples_item_subtree, hf_samples_hop_count, tvb, offset, item_size, ENC_BIG_ENDIAN);
+	offset += item_size;
 
 	/* Get Control */
-	guint8 control = tvb_get_guint8(tvb, tvb_offset);
-	gboolean isIM1 = ((control & MASK_SAMPLES_CONTROL_VERSION) == 0);
-	gboolean isIM2R0 = ((control & MASK_SAMPLES_CONTROL_VERSION) == MASK_SAMPLES_CONTROL_VERSION);
-	gboolean isCIM = ((control & MASK_SAMPLES_CONTROL_TYPE) == 0);
+	uint8_t control = tvb_get_uint8(tvb, offset);
+	bool isIM1 = ((control & MASK_SAMPLES_CONTROL_VERSION) == 0);
+	bool isIM2R0 = ((control & MASK_SAMPLES_CONTROL_VERSION) == MASK_SAMPLES_CONTROL_VERSION);
+	bool isCIM = ((control & MASK_SAMPLES_CONTROL_TYPE) == 0);
 
 	/* Control */
 	item_size = 1;
-	tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-	proto_item *control_item = proto_tree_add_bitmask(samples_item_subtree, tvb, tvb_offset, hf_samples_control, ett_samples_control, controlBits, ENC_BIG_ENDIAN);
-	tvb_offset += item_size;
+	proto_item *control_item = proto_tree_add_bitmask(samples_item_subtree, tvb, offset, hf_samples_control, ett_samples_control, controlBits, ENC_BIG_ENDIAN);
+	offset += item_size;
 	if (!isIM1 && !isIM2R0) {
 		expert_add_info(pinfo, control_item, &ei_samples_im_version_invalid);
 	}
 
 	/* Temperature */
 	item_size = 2;
-	tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-	proto_tree_add_item(samples_item_subtree, hf_samples_temperature, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-	tvb_offset += item_size;
+	proto_tree_add_item(samples_item_subtree, hf_samples_temperature, tvb, offset, item_size, ENC_BIG_ENDIAN);
+	offset += item_size;
 
 	/* Padding */
 	item_size = 1;
-	tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-	proto_tree_add_item(samples_item_subtree, hf_samples_padding, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-	tvb_offset += item_size;
+	proto_tree_add_item(samples_item_subtree, hf_samples_padding, tvb, offset, item_size, ENC_BIG_ENDIAN);
+	offset += item_size;
 
 	/* ADC status */
 	item_size = 1;
-	tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-	proto_tree_add_item(samples_item_subtree, hf_samples_adc_status, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-	tvb_offset += item_size;
+	proto_tree_add_item(samples_item_subtree, hf_samples_adc_status, tvb, offset, item_size, ENC_BIG_ENDIAN);
+	offset += item_size;
 
 	/* Sample Sets */
 	{
@@ -872,8 +853,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 		} else {
 			item_size = SAMPLE_SET_SIZE * 8;
 		}
-		tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-		proto_item *sample_sets_subtree_item = proto_tree_add_item(sample_sets_subtree, hf_samples_sample_set, tvb, tvb_offset, item_size, ENC_NA);
+		proto_item *sample_sets_subtree_item = proto_tree_add_item(sample_sets_subtree, hf_samples_sample_set, tvb, offset, item_size, ENC_NA);
 
 		proto_tree *sample_sets_subtree_item_subtree = proto_item_add_subtree(sample_sets_subtree_item, ett_samples_sets_set);
 
@@ -889,7 +869,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 				    hf_samples_sample_set_protection_channel_2,
 				    hf_samples_sample_set_protection_channel_3};
 
-				add_sample_sets(tvb, pinfo, &tvb_offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
+				add_sample_sets(tvb, pinfo, &offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
 			} else {
 				/* IM1 VIM */
 
@@ -901,7 +881,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 				    hf_samples_sample_set_channel_unused,
 				    hf_samples_sample_set_channel_unused};
 
-				add_sample_sets(tvb, pinfo, &tvb_offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
+				add_sample_sets(tvb, pinfo, &offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
 			}
 		} else if (isIM2R0) {
 			if (isCIM) {
@@ -917,7 +897,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 				    hf_samples_sample_set_measurement_channel_n,
 				    hf_samples_sample_set_protection_channel_n};
 
-				add_sample_sets(tvb, pinfo, &tvb_offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
+				add_sample_sets(tvb, pinfo, &offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
 			} else {
 				/* IM2R0 VIM */
 
@@ -931,7 +911,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 				    hf_samples_sample_set_channel_unused,
 				    hf_samples_sample_set_channel_unused};
 
-				add_sample_sets(tvb, pinfo, &tvb_offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
+				add_sample_sets(tvb, pinfo, &offset, hfs, array_length(hfs), sample_sets_subtree_item_subtree);
 			}
 		}
 	}
@@ -945,8 +925,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 		} else {
 			item_size = 4 * 8;
 		}
-		tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-		proto_item *rms_values_item = proto_tree_add_item(rms_values_subtree, hf_samples_rms_values, tvb, tvb_offset, item_size, ENC_NA);
+		proto_item *rms_values_item = proto_tree_add_item(rms_values_subtree, hf_samples_rms_values, tvb, offset, item_size, ENC_NA);
 
 		proto_tree *rms_values_item_subtree = proto_item_add_subtree(rms_values_item, ett_samples_rms_values);
 
@@ -962,7 +941,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 				    hf_samples_rms_values_protection_channel_2,
 				    hf_samples_rms_values_protection_channel_3};
 
-				add_rms_values(tvb, &tvb_offset, hfs, array_length(hfs), rms_values_item_subtree);
+				add_rms_values(tvb, &offset, hfs, array_length(hfs), rms_values_item_subtree);
 			} else {
 				/* IM1 VIM */
 
@@ -974,7 +953,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 				    hf_samples_rms_values_channel_unused,
 				    hf_samples_rms_values_channel_unused};
 
-				add_rms_values(tvb, &tvb_offset, hfs, array_length(hfs), rms_values_item_subtree);
+				add_rms_values(tvb, &offset, hfs, array_length(hfs), rms_values_item_subtree);
 			}
 		} else if (isIM2R0) {
 			int hfs[] = {
@@ -987,31 +966,28 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 			    hf_samples_rms_values_channel_unused,
 			    hf_samples_rms_values_channel_unused};
 
-			add_rms_values(tvb, &tvb_offset, hfs, array_length(hfs), rms_values_item_subtree);
+			add_rms_values(tvb, &offset, hfs, array_length(hfs), rms_values_item_subtree);
 		}
 	}
 
 	/* Timestamps */
-	if (isIM2R0 && tvb_bytes_exist(tvb, tvb_offset, TIMESTAMPS_SIZE)) {
+	if (isIM2R0 && tvb_bytes_exist(tvb, offset, TIMESTAMPS_SIZE)) {
 		proto_tree *samples_timestamps_subtree = proto_item_add_subtree(samples_item, ett_samples_timestamps);
 
 		item_size = TIMESTAMPS_SIZE;
-		tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-		proto_item *samples_timestamps_subtree_item = proto_tree_add_item(samples_timestamps_subtree, hf_samples_timestamps, tvb, tvb_offset, item_size, ENC_NA);
+		proto_item *samples_timestamps_subtree_item = proto_tree_add_item(samples_timestamps_subtree, hf_samples_timestamps, tvb, offset, item_size, ENC_NA);
 
 		proto_tree *samples_timestamps_subtree_item_subtree = proto_item_add_subtree(samples_timestamps_subtree_item, ett_samples_timestamps_set);
 
 		/* Version */
 		item_size = 1;
-		tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-		proto_tree_add_item(samples_timestamps_subtree_item_subtree, hf_samples_timestamps_version, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-		tvb_offset += item_size;
+		proto_tree_add_item(samples_timestamps_subtree_item_subtree, hf_samples_timestamps_version, tvb, offset, item_size, ENC_BIG_ENDIAN);
+		offset += item_size;
 
 		/* Reserved */
 		item_size = 3;
-		tvb_ensure_bytes_exist(tvb, tvb_offset, item_size);
-		proto_tree_add_item(samples_timestamps_subtree_item_subtree, hf_samples_timestamps_reserved, tvb, tvb_offset, item_size, ENC_BIG_ENDIAN);
-		tvb_offset += item_size;
+		proto_tree_add_item(samples_timestamps_subtree_item_subtree, hf_samples_timestamps_reserved, tvb, offset, item_size, ENC_BIG_ENDIAN);
+		offset += item_size;
 
 		/* Sample Timestamps */
 
@@ -1025,7 +1001,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
 		    hf_samples_timestamps_sample_7,
 		    hf_samples_timestamps_sample_8};
 
-		add_timestamps_set(tvb, pinfo, &tvb_offset, hfs, array_length(hfs), samples_timestamps_subtree_item_subtree);
+		add_timestamps_set(tvb, pinfo, &offset, hfs, array_length(hfs), samples_timestamps_subtree_item_subtree);
 	}
 
 	return tvb_captured_length(tvb);
@@ -1039,7 +1015,7 @@ static int dissect_samples_im(gboolean im1, tvbuff_t *tvb, packet_info *pinfo, p
  * ########################################################################
  */
 
-static void samples_transport_delay(gchar *result, guint16 transport_delay) {
+static void samples_transport_delay(char *result, uint16_t transport_delay) {
 	snprintf(result, ITEM_LABEL_LENGTH, "%u ns", transport_delay * 10);
 }
 
@@ -1060,11 +1036,11 @@ static const value_string samples_control_version_vals[] = {
     {3, "IM2R0"},
     {0, NULL}};
 
-static void samples_sequence_number(gchar *result, guint8 sequence_number) {
+static void samples_sequence_number(char *result, uint8_t sequence_number) {
 	snprintf(result, ITEM_LABEL_LENGTH, "%u", sequence_number);
 }
 
-static void samples_temperature(gchar *result, gint16 temperature) {
+static void samples_temperature(char *result, int16_t temperature) {
 	snprintf(result, ITEM_LABEL_LENGTH, "%.2f C", (0.25f * temperature));
 }
 
@@ -1135,7 +1111,7 @@ static ei_register_info ei_samples_im1[] = {
 static int h_protocol_samples_im1 = -1;
 
 static int dissect_samples_im1(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data) {
-	return dissect_samples_im(TRUE, tvb, pinfo, tree, data, h_protocol_samples_im1);
+	return dissect_samples_im(true, tvb, pinfo, tree, data, h_protocol_samples_im1);
 }
 
 /*
@@ -1173,7 +1149,7 @@ static ei_register_info ei_samples_im2r0[] = {
 static int h_protocol_samples_im2r0 = -1;
 
 static int dissect_samples_im2r0(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data) {
-	return dissect_samples_im(FALSE, tvb, pinfo, tree, data, h_protocol_samples_im2r0);
+	return dissect_samples_im(false, tvb, pinfo, tree, data, h_protocol_samples_im2r0);
 }
 
 /*
@@ -1197,7 +1173,7 @@ static hf_register_info llc_registration[] = {
  * ########################################################################
  */
 
-static gint *protocol_subtree[] = {
+static int *ett[] = {
     &ett_protocol_calibration,
     &ett_calibration_lines,
 
@@ -1215,7 +1191,8 @@ static gint *protocol_subtree[] = {
     &ett_samples_timestamps_set,
     &ett_samples_timestamps_sample,
     &ett_samples_timestamps_sample_timestamp,
-    &ett_samples_timestamps_sample_reserved};
+    &ett_samples_timestamps_sample_reserved
+};
 
 static dissector_handle_t h_calibration;
 static dissector_handle_t h_ident;
@@ -1224,7 +1201,7 @@ static dissector_handle_t h_samples_im2r0;
 
 void proto_register_locamation_im(void) {
 	/* Setup subtrees */
-	proto_register_subtree_array(protocol_subtree, array_length(protocol_subtree));
+	proto_register_subtree_array(ett, array_length(ett));
 
 	/* Register Protocols */
 

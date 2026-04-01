@@ -83,9 +83,31 @@ static void extcap_log(int priority, const char *function, const char *buffer, v
 	 * After the following commit libssh only uses LOG_LEVEL_WARN for
 	 * serious issues:
 	 * https://gitlab.com/libssh/libssh-mirror/-/commit/657d9143d121dfff74f5a63f734d0096c7f37194
+	 *
+	 * In 0.11.4 libssh added a common "ssh_strict_fopen" function that
+	 * is used to open various configuration files. Unfortunately, it
+	 * issues SSH_LOG_WARN (aka RARE) level logs for any errors, including
+	 * a file not existing. Some files, like known_hosts, are optional
+	 * and so it's harmless if they're missing. This was fixed in 0.12.1[1],
+	 * but before then we downgrade just the WARN level log messages from
+	 * ssh_strict_open. Since we only downgrade messages from one function,
+	 * and all the logs in that function are low level in 0.12.1 and later,
+	 * we can lower them even more than the WARN mesages pre 0.11.0, which
+	 * were changed to a wider variety of levels upstream. We don't lower
+	 * all the way to NOISY because the same change added a WARN in the
+	 * parent function for problems opening files recursively included by
+	 * a main config file. Also see #21051.
+	 *
+	 * 1 - https://gitlab.com/libssh/libssh-mirror/-/commit/a7fd80795e21b8c894b54409496ea6b569f7f4a3
 	 */
 #if LIBSSH_VERSION_INT < SSH_VERSION_INT(0,11,0)
 		level = LOG_LEVEL_INFO;
+#elif LIBSSH_VERSION_INT < SSH_VERSION_INT(0,12,1)
+		if (strncmp(function, "ssh_strict_fopen", strlen("ssh_strict_fopen")) == 0) {
+			level = LOG_LEVEL_DEBUG;
+		} else {
+			level = LOG_LEVEL_WARNING;
+		}
 #else
 		level = LOG_LEVEL_WARNING;
 #endif
@@ -128,7 +150,17 @@ ssh_session create_ssh_connection(const ssh_params_t* ssh_params, char** err_inf
 
 	/* Load the configurations already present in the system configuration file. */
 	/* They will be overwritten by the user-provided configurations. */
+#ifdef _WIN32
+	/* libssh < 0.11.4 tries to read C:\etc\ssh\ssh_config by default
+	 * on Windows (i.e., if the second parameter is NULL.), and later
+	 * versions try to read from %PROGRAMDATA%\ssh\ssh_config. Neither
+	 * of those is a good choice for us, since anyone can create them
+	 * if they don't exist. Just look for %HOME%\.ssh\config instead.
+	 */
+	if (ssh_options_parse_config(sshs, "%d/.ssh/config") != 0) {
+#else
 	if (ssh_options_parse_config(sshs, NULL) != 0) {
+#endif
 		*err_info = g_strdup("Unable to load the configuration file");
 		goto failure;
 	}
@@ -168,6 +200,16 @@ ssh_session create_ssh_connection(const ssh_params_t* ssh_params, char** err_inf
 	}
 
 	if (ssh_params->proxycommand) {
+#if defined(_WIN32) && (LIBSSH_VERSION_INT < SSH_VERSION_INT(0,11,0))
+		// ProxyCommand isn't supported on Windows:
+		// https://gitlab.com/libssh/libssh-mirror/-/issues/75
+		// ssh_options_set "succeeds" in setting it, though.
+		// On 0.11.0 and later, ssh_connect will fail.
+		// Before 0.11.0, libssh silently ignores the option.
+		// https://gitlab.com/libssh/libssh-mirror/-/commit/bed4438695df2f4635617fc45f802d782fdd8479
+		*err_info = ws_strdup_printf("Can't set the ProxyCommand: %s (libssh does not support proxy commands on Windows.)", ssh_params->proxycommand);
+		goto failure;
+#endif
 		if (ssh_options_set(sshs, SSH_OPTIONS_PROXYCOMMAND, ssh_params->proxycommand)) {
 			*err_info = ws_strdup_printf("Can't set the ProxyCommand: %s", ssh_params->proxycommand);
 			goto failure;

@@ -15,23 +15,25 @@
 #include <epan/packet.h>
 #include <epan/conversation.h>
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
-
-#define PNAME  "X2 xIRI payload"
-#define PSNAME "xIRI"
-#define PFNAME "xiri"
+#include "packet-e164.h"
+#include "packet-e212.h"
+#include "packet-gsm_a_common.h"
+#include "packet-gtpv2.h"
 
 void proto_reg_handoff_lix2(void);
 void proto_register_lix2(void);
 
 /* Initialize the protocol and registered fields */
 static int proto_lix2;
-static dissector_handle_t lix2_handle = NULL;
+static dissector_handle_t lix2_handle;
 
 
 #include "packet-lix2-hf.c"
 
+static int ett_lix2_eps_indicationflags;
 #include "packet-lix2-ett.c"
 
 #include "packet-lix2-fn.c"
@@ -45,12 +47,13 @@ void proto_register_lix2(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
+    &ett_lix2_eps_indicationflags,
 #include "packet-lix2-ettarr.c"
   };
 
   /* Register protocol */
-  proto_lix2 = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_lix2 = proto_register_protocol("X2 xIRI payload", "xIRI", "xiri");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_lix2, hf, array_length(hf));

@@ -13,10 +13,12 @@
 #include "config.h"
 
 #include <epan/packet.h>
-#include <epan/strutil.h>
 #include <epan/asn1.h>
-#include <epan/sctpppids.h>
 #include <epan/proto_data.h>
+#include <epan/tfs.h>
+#include <epan/unit_strings.h>
+
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-per.h"
@@ -24,10 +26,7 @@
 #include "packet-gsm_map.h"
 #include "packet-s1ap.h"
 #include "packet-lte-rrc.h"
-
-#define PNAME  "SBc Application Part"
-#define PSNAME "SBcAP"
-#define PFNAME "sbcap"
+#include "packet-sctp.h"
 
 void proto_register_sbc_ap(void);
 void proto_reg_handoff_sbc_ap(void);
@@ -36,7 +35,7 @@ void proto_reg_handoff_sbc_ap(void);
  * The registered payload protocol identifier for SBc-AP is 24.
  */
 #define SBC_AP_PORT 29168
-static dissector_handle_t sbc_ap_handle=NULL;
+static dissector_handle_t sbc_ap_handle;
 
 
 #include "packet-sbc-ap-val.h"
@@ -70,14 +69,14 @@ enum{
 };
 
 struct sbc_ap_private_data {
-  guint8 data_coding_scheme;
+  uint8_t data_coding_scheme;
   e212_number_type_t number_type;
 };
 
 /* Global variables */
-static guint32 ProcedureCode;
-static guint32 ProtocolIE_ID;
-static guint32 ProtocolExtensionID;
+static uint32_t ProcedureCode;
+static uint32_t ProtocolIE_ID;
+static uint32_t ProtocolExtensionID;
 static int global_sbc_ap_port = SBC_AP_PORT;
 
 /* Dissector tables */
@@ -151,7 +150,7 @@ dissect_sbc_ap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _
     proto_tree      *sbc_ap_tree = NULL;
 
     /* make entry in the Protocol column on summary display */
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBcAP");
     col_clear(pinfo->cinfo, COL_INFO);
 
     /* create the sbc_ap protocol tree */
@@ -203,7 +202,7 @@ void proto_register_sbc_ap(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
                   &ett_sbc_ap,
                   &ett_sbc_ap_Serial_Number,
                   &ett_sbc_ap_Warning_Type,
@@ -214,13 +213,13 @@ void proto_register_sbc_ap(void) {
 
 
   /* Register protocol */
-  proto_sbc_ap = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_sbc_ap = proto_register_protocol("SBc Application Part", "SBcAP", "sbcap");
   /* Register fields and subtrees */
   proto_register_field_array(proto_sbc_ap, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
 
   /* Register dissector */
-  sbc_ap_handle = register_dissector(PFNAME, dissect_sbc_ap, proto_sbc_ap);
+  sbc_ap_handle = register_dissector("sbcap", dissect_sbc_ap, proto_sbc_ap);
 
   /* Register dissector tables */
   sbc_ap_ies_dissector_table = register_dissector_table("sbc_ap.ies", "SBC-AP-PROTOCOL-IES", proto_sbc_ap, FT_UINT32, BASE_DEC);
@@ -237,12 +236,12 @@ void proto_register_sbc_ap(void) {
 void
 proto_reg_handoff_sbc_ap(void)
 {
-    static gboolean inited = FALSE;
-	static guint SctpPort;
+    static bool inited = false;
+	static unsigned SctpPort;
 
     if( !inited ) {
         dissector_add_uint("sctp.ppi", SBC_AP_PAYLOAD_PROTOCOL_ID,   sbc_ap_handle);
-        inited = TRUE;
+        inited = true;
 #include "packet-sbc-ap-dis-tab.c"
 	} else {
 		if (SctpPort != 0) {

@@ -26,17 +26,20 @@
  */
 
 #include "config.h"
-
-#include <sinsp.h>
-#include <plugin_manager.h>
-
 #define WS_LOG_DOMAIN "falcodump"
+
+#include <libsinsp/sinsp.h>
+#include <libsinsp/plugin_manager.h>
+
+#include <libscap/scap_engines.h>
 
 #include <extcap/extcap-base.h>
 
+#include <app/application_flavor.h>     //Stratoshark only
 #include <wsutil/file_util.h>
 #include <wsutil/filesystem.h>
 #include <wsutil/json_dumper.h>
+#include <wsutil/plugins.h>
 #include <wsutil/privileges.h>
 #include <wsutil/utf8_entities.h>
 #include <wsutil/wsjson.h>
@@ -47,6 +50,9 @@
 #define FALCODUMP_VERSION_RELEASE "0"
 
 #define FALCODUMP_PLUGIN_PLACEHOLDER "<plugin name>"
+
+#define SINSP_CHECK_VERSION(major, minor, micro) \
+    (((SINSP_VERSION_MAJOR << 16) + (SINSP_VERSION_MINOR << 8) + SINSP_VERSION_MICRO) >= ((major << 16) + (minor << 8) + micro))
 
 // We load our plugins and fetch their configs before we set our log level.
 // #define DEBUG_JSON_PARSING
@@ -76,6 +82,7 @@ struct config_properties {
     std::vector<std::string>enum_values;
     std::string current_value;
 };
+
 
 struct plugin_configuration {
     std::vector<struct config_properties> property_list;
@@ -133,14 +140,14 @@ fgetline(char *buf, int size, FILE *fp)
 static const size_t MAX_AWS_LINELEN = 2048;
 void print_cloudtrail_aws_profile_config(int arg_num, const char *display, const char *description) {
     char buf[MAX_AWS_LINELEN];
-    char profile[MAX_AWS_LINELEN];
+    char profile_name[MAX_AWS_LINELEN];
     FILE *aws_fp;
     std::set<std::string>profiles;
 
     // Look in files as specified in https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html
     char *cred_path = g_strdup(g_getenv("AWS_SHARED_CREDENTIALS_FILE"));
     if (cred_path == NULL) {
-        cred_path = g_build_filename(g_get_home_dir(), ".aws", "credentials", (gchar *)NULL);
+        cred_path = g_build_filename(g_get_home_dir(), ".aws", "credentials", (char *)NULL);
     }
 
     aws_fp = ws_fopen(cred_path, "r");
@@ -148,11 +155,11 @@ void print_cloudtrail_aws_profile_config(int arg_num, const char *display, const
 
     if (aws_fp != NULL) {
         while (fgetline(buf, sizeof(buf), aws_fp) >= 0) {
-            if (sscanf(buf, "[%2047[^]]s]", profile) == 1) {
-                if (strcmp(profile, "default") == 0) {
+            if (sscanf(buf, "[%2047[^]]s]", profile_name) == 1) {
+                if (strcmp(profile_name, "default") == 0) {
                     continue;
                 }
-                profiles.insert(profile);
+                profiles.insert(profile_name);
             }
         }
         fclose(aws_fp);
@@ -160,7 +167,7 @@ void print_cloudtrail_aws_profile_config(int arg_num, const char *display, const
 
     char *conf_path = g_strdup(g_getenv("AWS_CONFIG_FILE"));
     if (conf_path == NULL) {
-        conf_path = g_build_filename(g_get_home_dir(), ".aws", "config", (gchar *)NULL);
+        conf_path = g_build_filename(g_get_home_dir(), ".aws", "config", (char *)NULL);
     }
 
     aws_fp = ws_fopen(conf_path, "r");
@@ -168,11 +175,11 @@ void print_cloudtrail_aws_profile_config(int arg_num, const char *display, const
 
     if (aws_fp != NULL) {
         while (fgetline(buf, sizeof(buf), aws_fp) >= 0) {
-            if (sscanf(buf, "[profile %2047[^]]s]", profile) == 1) {
-                if (strcmp(profile, "default") == 0) {
+            if (sscanf(buf, "[profile %2047[^]]s]", profile_name) == 1) {
+                if (strcmp(profile_name, "default") == 0) {
                     continue;
                 }
-                profiles.insert(profile);
+                profiles.insert(profile_name);
             }
         }
         fclose(aws_fp);
@@ -208,7 +215,7 @@ void print_cloudtrail_aws_profile_config(int arg_num, const char *display, const
     }
 }
 
-void print_cloudtrail_aws_region_config(int arg_num, const char *display, const char *description) {
+static void print_cloudtrail_aws_region_config(int arg_num, const char *display, const char *description) {
     // printf '        "%s",\n' $(aws ec2 describe-regions --all-regions --query "Regions[].{Name:RegionName}" --output text) | sort
     std::set<std::string> regions = {
         "af-south-1",
@@ -222,7 +229,10 @@ void print_cloudtrail_aws_region_config(int arg_num, const char *display, const 
         "ap-southeast-2",
         "ap-southeast-3",
         "ap-southeast-4",
+        "ap-southeast-5",
+        "ap-southeast-7",
         "ca-central-1",
+        "ca-west-1",
         "eu-central-1",
         "eu-central-2",
         "eu-north-1",
@@ -231,8 +241,10 @@ void print_cloudtrail_aws_region_config(int arg_num, const char *display, const 
         "eu-west-1",
         "eu-west-2",
         "eu-west-3",
+        "il-central-1",
         "me-central-1",
         "me-south-1",
+        "mx-central-1",
         "sa-east-1",
         "us-east-1",
         "us-east-2",
@@ -271,20 +283,24 @@ void print_cloudtrail_aws_region_config(int arg_num, const char *display, const 
     }
 }
 
-
-// Load our plugins. This should match the behavior of the Falco Bridge dissector.
+// Load our plugins. This should match the behavior of the Falco Events dissector.
 static void load_plugins(sinsp &inspector) {
     WS_DIR *dir;
     WS_DIRENT *file;
     char *plugin_paths[] = {
-        g_build_filename(get_plugins_dir(), "falco", NULL),
-        g_build_filename(get_plugins_pers_dir(), "falco", NULL)
+        // XXX Falco plugins should probably be installed in a path that reflects
+        // the Falco version or its plugin API version.
+        g_build_filename(get_plugins_dir(application_configuration_environment_prefix()), "falco", NULL),
+        g_build_filename(get_plugins_pers_dir(application_configuration_environment_prefix()), "falco", NULL)
     };
 
     for (size_t idx = 0; idx < 2; idx++) {
         char *plugin_path = plugin_paths[idx];
         if ((dir = ws_dir_open(plugin_path, 0, NULL)) != NULL) {
             while ((file = ws_dir_read_name(dir)) != NULL) {
+                if (!is_plugin_filename(file)) {
+                    continue;
+                }
                 char *libname = g_build_filename(plugin_path, ws_dir_get_name(file), NULL);
                 try {
                     auto plugin = inspector.register_plugin(libname);
@@ -302,7 +318,7 @@ static void load_plugins(sinsp &inspector) {
 
 // Given a key, try to find its value in a JSON object.
 // Returns (value, true) on success, or (err_str, false) on failure.
-const std::pair<const std::string,bool> find_json_object_value(const std::string &object_blob, const std::string &key, int value_type) {
+static const std::pair<const std::string,bool> find_json_object_value(const std::string &object_blob, const std::string &key, int value_type) {
     std::vector<jsmntok_t> tokens;
     int num_tokens = json_parse(object_blob.c_str(), NULL, 0);
 
@@ -334,7 +350,7 @@ const std::pair<const std::string,bool> find_json_object_value(const std::string
 
 // Given an RFC 6901-style JSON pointer, try to find its value in a JSON object.
 // Returns (value, true) on success, or (err_str, false) on failure.
-const std::pair<const std::string,bool> find_json_pointer_value(const std::string &object_blob, const std::string &pointer, int value_type) {
+static const std::pair<const std::string,bool> find_json_pointer_value(const std::string &object_blob, const std::string &pointer, int value_type) {
     std::string blob = object_blob;
     std::istringstream ob_stream(pointer);
     std::string token;
@@ -359,7 +375,7 @@ const std::pair<const std::string,bool> find_json_pointer_value(const std::strin
 
 // Convert a JSON array to a string vector.
 // Returns (vector, true) on success, or (err_str, false) on failure.
-const std::pair<std::vector<std::string>,bool> get_json_array(const std::string &array_blob) {
+static const std::pair<std::vector<std::string>,bool> get_json_array(const std::string &array_blob) {
     std::vector<jsmntok_t> tokens;
     int num_tokens = json_parse(array_blob.c_str(), NULL, 0);
 
@@ -390,7 +406,12 @@ const std::pair<std::vector<std::string>,bool> get_json_array(const std::string 
 
 // Given a JSON blob containing a schema properties object, add each property to the
 // given plugin config.
-const std::pair<const std::string,bool> get_schema_properties(const std::string props_blob, int &opt_idx, const std::string option_prefix, const std::string plugin_name, std::vector<struct config_properties> &property_list) {
+// NOLINTNEXTLINE(misc-no-recursion)
+static const std::pair<const std::string,bool> get_schema_properties(const std::string props_blob, int &opt_idx, const std::string option_prefix, const std::string plugin_name, std::vector<struct config_properties> &property_list, int depth) {
+    if (++depth > JSON_DUMPER_MAX_DEPTH) {
+        return std::pair<std::string,bool>("max depth exceeded", false);
+    }
+
     std::vector<jsmntok_t> tokens;
     int num_tokens = json_parse(props_blob.c_str(), NULL, 0);
 
@@ -452,7 +473,7 @@ const std::pair<const std::string,bool> get_schema_properties(const std::string 
                 "",
             };
             property_list.push_back(properties);
-            get_schema_properties(jv.first, opt_idx, option_prefix + "-" + name, plugin_name, property_list);
+            get_schema_properties(jv.first, opt_idx, option_prefix + "-" + name, plugin_name, property_list, depth);
             properties = {
                 name,
                 display,
@@ -522,7 +543,7 @@ const std::pair<const std::string,bool> get_schema_properties(const std::string 
             default_value,
         };
         property_list.push_back(properties);
-        g_free((gpointer)call);
+        g_free((void *)call);
         idx += prop_tokens;
         opt_idx++;
     }
@@ -661,7 +682,7 @@ static bool get_plugin_config_schema(const std::shared_ptr<sinsp_plugin> &plugin
         return false;
     }
     int opt_idx = OPT_SCHEMA_PROPERTIES_START;
-    jv = get_schema_properties(jv.first, opt_idx, "", plugin->name(), plugin_config.property_list);
+    jv = get_schema_properties(jv.first, opt_idx, "", plugin->name(), plugin_config.property_list, 0);
     if (!jv.second) {
         ws_warning("ERROR: Interface \"%s\" has an unsupported or invalid configuration schema: %s", plugin->name().c_str(), jv.first.c_str());
         return false;
@@ -708,8 +729,8 @@ static const std::vector<ws_option> get_longopts(const std::map<std::string, str
         longopts.push_back(base_longopts[idx]);
     }
     for (const auto &it : plugin_configs) {
-        const struct plugin_configuration plugin_configs = it.second;
-        for (const auto &prop : plugin_configs.property_list) {
+        const struct plugin_configuration plugin_config = it.second;
+        for (const auto &prop : plugin_config.property_list) {
             ws_option option = { g_strdup(prop.option.c_str()), ws_required_argument, NULL, prop.option_index };
             longopts.push_back(option);
         }
@@ -719,7 +740,7 @@ static const std::vector<ws_option> get_longopts(const std::map<std::string, str
 }
 
 // Show the configuration for a given plugin/interface.
-static int show_config(const std::string &interface, const struct plugin_configuration &plugin_config)
+static int show_plugin_config(const std::string &interface, const struct plugin_configuration &plugin_config)
 {
     unsigned arg_num = 0;
 //    char* plugin_filter;
@@ -755,7 +776,7 @@ static int show_config(const std::string &interface, const struct plugin_configu
             print_cloudtrail_aws_region_config(arg_num, properties.display.c_str(), properties.description.c_str());
         } else {
             printf(
-                "arg {number=%d}"
+                "arg {number=%u}"
                 "{call=--%s}"
                 "{display=%s}"
                 "{type=%s}"
@@ -767,7 +788,7 @@ static int show_config(const std::string &interface, const struct plugin_configu
             if (properties.enum_values.size() > 0) {
                 for (const auto &enum_val : properties.enum_values) {
                     printf(
-                      "value {arg=%d}"
+                      "value {arg=%u}"
                       "{value=%s}"
                       "{display=%s}"
                       "%s"
@@ -796,8 +817,11 @@ int main(int argc, char **argv)
     sinsp inspector;
     std::string plugin_source;
 
+    /* Set the program name. */
+    g_set_prgname("falcodump");
+
     /* Initialize log handler early so we can have proper logging during startup. */
-    extcap_log_init("falcodump");
+    extcap_log_init();
 
     /*
      * Get credential information for later use.
@@ -808,7 +832,7 @@ int main(int argc, char **argv)
      * Attempt to get the pathname of the directory containing the
      * executable file.
      */
-    configuration_init_error = configuration_init(argv[0], "Logray");
+    configuration_init_error = configuration_init(argv[0], "stratoshark");
     if (configuration_init_error != NULL) {
         ws_warning("Can't get pathname of directory containing the extcap program: %s.",
                 configuration_init_error);
@@ -817,27 +841,37 @@ int main(int argc, char **argv)
 
     load_plugins(inspector);
 
-    if (!get_source_plugins(inspector, plugin_configs)) {
+    if (get_source_plugins(inspector, plugin_configs)) {
+        for (auto iter = plugin_configs.begin(); iter != plugin_configs.end(); ++iter) {
+            // Where we're going we don't need DLTs, so use USER0 (147).
+            // Additional info available via plugin->description() and plugin->event_source().
+            extcap_base_register_interface(extcap_conf, iter->first.c_str(), "Falco plugin", 147, "USER0");
+        }
+    } else {
+        ws_warning("Unable to load plugins.");
+    }
+
+    if (g_list_length(extcap_conf->interfaces) < 1) {
+        ws_debug("No source plugins found.");
+        // This should maybe be WS_EXIT_NO_INTERFACES from ws_exit_codes.h,
+        // if we updated the tests to allow that as a valid exit code.
+        ret = EXIT_SUCCESS;
         goto end;
     }
 
-    for (auto iter = plugin_configs.begin(); iter != plugin_configs.end(); ++iter) {
-        // We don't have a Falco source plugins DLT, so use USER0 (147).
-        // Additional info available via plugin->description() and plugin->event_source().
-        extcap_base_register_interface(extcap_conf, iter->first.c_str(), "Falco plugin", 147, "USER0");
-    }
-
-    help_url = data_file_url("falcodump.html");
+    help_url = data_file_url("falcodump.html", application_configuration_environment_prefix());
     extcap_base_set_util_info(extcap_conf, argv[0], FALCODUMP_VERSION_MAJOR, FALCODUMP_VERSION_MINOR,
             FALCODUMP_VERSION_RELEASE, help_url);
     g_free(help_url);
 
     help_header = ws_strdup_printf(
             " %s --extcap-interfaces\n"
+            " %s --extcap-interface=%s --extcap-capture-filter=<filter>\n"
             " %s --extcap-interface=%s --extcap-dlts\n"
             " %s --extcap-interface=%s --extcap-config\n"
-            " %s --extcap-interface=%s --fifo=<filename> --capture --plugin-source=<source url>\n",
+            " %s --extcap-interface=%s --fifo=<filename> --capture --plugin-source=<source url> [--extcap-capture-filter=<filter>]\n",
             argv[0],
+            argv[0], FALCODUMP_PLUGIN_PLACEHOLDER,
             argv[0], FALCODUMP_PLUGIN_PLACEHOLDER,
             argv[0], FALCODUMP_PLUGIN_PLACEHOLDER,
             argv[0], FALCODUMP_PLUGIN_PLACEHOLDER);
@@ -847,10 +881,12 @@ int main(int argc, char **argv)
     extcap_help_add_option(extcap_conf, "--version", "print the version");
     extcap_help_add_option(extcap_conf, "--plugin-api-version", "print the Falco plugin API version");
     extcap_help_add_option(extcap_conf, "--plugin-source", "plugin source URL");
+    extcap_help_add_option(extcap_conf, "--include-capture-processes", "Include capture processes");
+    extcap_help_add_option(extcap_conf, "--include-switch-calls", "Include \"switch\" calls");
 
     for (const auto &it : plugin_configs) {
-        const struct plugin_configuration plugin_configs = it.second;
-        for (const auto &prop : plugin_configs.property_list) {
+        const struct plugin_configuration plugin_config = it.second;
+        for (const auto &prop : plugin_config.property_list) {
             if (prop.option_index < OPT_SCHEMA_PROPERTIES_START) {
                 continue;
             }
@@ -924,24 +960,36 @@ int main(int argc, char **argv)
 
     extcap_cmdline_debug(argv, argc);
 
-    if (plugin_configs.size() < 1) {
-        ws_warning("No source plugins found.");
-        goto end;
-    }
-
     if (extcap_base_handle_interface(extcap_conf)) {
         ret = EXIT_SUCCESS;
         goto end;
     }
 
     if (extcap_conf->show_config) {
-        ret = show_config(extcap_conf->interface, plugin_configs.at(extcap_conf->interface));
+        if (extcap_conf->interface) {
+            ret = show_plugin_config(extcap_conf->interface, plugin_configs.at(extcap_conf->interface));
+        } else {
+            ws_warning("extcap interface missing");
+            goto end;
+        }
         goto end;
     }
 
-    if (extcap_conf->capture) {
+    if (extcap_conf->capture || extcap_conf->capture_filter) {
+        bool builtin_capture = false;
+
+#ifdef DEBUG_SINSP
+        inspector.set_debug_mode(true);
+        inspector.set_log_stderr();
+#endif
+
         if (plugin_source.empty()) {
-            ws_warning("Missing or invalid parameter: --plugin-source");
+            if (extcap_conf->capture) {
+                ws_warning("Missing or invalid parameter: --plugin-source");
+            } else {
+                // XXX Can we bypass this somehow?
+                fprintf(stdout, "Validating a capture filter requires a plugin source");
+            }
             goto end;
         }
 
@@ -958,11 +1006,6 @@ int main(int argc, char **argv)
             goto end;
         }
 
-        sinsp_dumper dumper;
-#ifdef DEBUG_SINSP
-        inspector.set_debug_mode(true);
-        inspector.set_log_stderr();
-#endif
         try {
             std::string init_err;
             plugin_interface->init(plugin_configs[extcap_conf->interface].json_config().c_str(), init_err);
@@ -970,14 +1013,43 @@ int main(int argc, char **argv)
                 ws_warning("%s", init_err.c_str());
                 goto end;
             }
+#if SINSP_CHECK_VERSION(0, 18, 0)
+            inspector.open_plugin(extcap_conf->interface, plugin_source, sinsp_plugin_platform::SINSP_PLATFORM_HOSTINFO);
+#else
             inspector.open_plugin(extcap_conf->interface, plugin_source);
+#endif
             // scap_dump_open handles "-"
+        } catch (sinsp_exception &e) {
+            ws_warning("%s", e.what());
+            goto end;
+        }
+
+        if (!extcap_conf->capture) {
+            // Check our filter syntax
+            try {
+                sinsp_filter_compiler compiler(&inspector, extcap_conf->capture_filter);
+                compiler.compile();
+            } catch (sinsp_exception &e) {
+                fprintf(stdout, "%s", e.what());
+                goto end;
+            }
+            ret = EXIT_SUCCESS;
+            goto end;
+        }
+
+        sinsp_dumper dumper;
+        try {
             dumper.open(&inspector, extcap_conf->fifo, false);
         } catch (sinsp_exception &e) {
             dumper.close();
             ws_warning("%s", e.what());
             goto end;
         }
+
+        if (builtin_capture) {
+            inspector.start_capture();
+        }
+
         sinsp_evt *evt;
         ws_noisy("Starting capture loop.");
         while (!extcap_end_application) {
@@ -1002,6 +1074,9 @@ int main(int argc, char **argv)
             }
         }
         ws_noisy("Closing dumper and inspector.");
+        if (builtin_capture) {
+            inspector.stop_capture();
+        }
         dumper.close();
         inspector.close();
         ret = EXIT_SUCCESS;

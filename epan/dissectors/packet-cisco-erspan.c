@@ -1,4 +1,4 @@
-/* packet-erspan.c
+/* packet-cisco-erspan.c
  * Routines for the disassembly of Cisco's ERSPAN protocol
  *
  * Copyright 2005 Joerg Mayer (see AUTHORS file)
@@ -30,8 +30,8 @@
 #include "config.h"
 
 #include <epan/packet.h>
-#include <epan/prefs.h>
 #include <epan/expert.h>
+#include <epan/tfs.h>
 #include "packet-gre.h"
 
 void proto_register_erspan(void);
@@ -39,7 +39,7 @@ void proto_reg_handoff_erspan(void);
 
 static int proto_erspan;
 
-static gint ett_erspan;
+static int ett_erspan;
 
 static int hf_erspan_version;
 static int hf_erspan_vlan;
@@ -86,9 +86,6 @@ static int hf_erspan_pid7_timestamp;
 static int hf_erspan_pid_rsvd;
 
 static expert_field ei_erspan_version_unknown;
-
-#define PROTO_SHORT_NAME "ERSPAN"
-#define PROTO_LONG_NAME "Encapsulated Remote Switch Packet ANalysis"
 
 static const true_false_string tfs_direction = { "Egress", "Ingress" };
 
@@ -155,16 +152,16 @@ dissect_erspan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
 	proto_item *ti;
 	proto_tree *erspan_tree = NULL;
 	tvbuff_t *frame_tvb;
-	guint32 offset = 0;
-	guint32 version;
-	guint32 frame_type = ERSPAN_FT_ETHERNET;
+	uint32_t offset = 0;
+	uint32_t version;
+	uint32_t frame_type = ERSPAN_FT_ETHERNET;
 
 	ti = proto_tree_add_item(tree, proto_erspan, tvb, offset, -1,
 	    ENC_NA);
 	erspan_tree = proto_item_add_subtree(ti, ett_erspan);
 
-	col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_SHORT_NAME);
-	col_set_str(pinfo->cinfo, COL_INFO, PROTO_SHORT_NAME ":");
+	col_set_str(pinfo->cinfo, COL_PROTOCOL, "ERSPAN");
+	col_set_str(pinfo->cinfo, COL_INFO, "ERSPAN:");
 
 	/*
 	 * Dissect the version field, which is present in all versions
@@ -181,7 +178,7 @@ dissect_erspan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
 	 */
 	switch (version) {
 	case 1: {
-		guint32 vlan, vlan_encap;
+		uint32_t vlan, vlan_encap;
 
 		proto_tree_add_item_ret_uint(erspan_tree, hf_erspan_vlan, tvb, offset, 2,
 			ENC_BIG_ENDIAN, &vlan);
@@ -208,8 +205,8 @@ dissect_erspan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
 		break;
 		}
 	case 2: {
-		guint32 subheader = 0;
-		guint32 vlan;
+		uint32_t subheader = 0;
+		uint32_t vlan;
 
 		proto_tree_add_item_ret_uint(erspan_tree, hf_erspan_vlan, tvb, offset, 2,
 			ENC_BIG_ENDIAN, &vlan);
@@ -255,7 +252,7 @@ dissect_erspan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
 
 		/* Platform Specific SubHeader, 8 octets, optional */
 		if (subheader) {
-			gint32 platform_id = tvb_get_ntohl(tvb, offset) >> 26;
+			int32_t platform_id = tvb_get_ntohl(tvb, offset) >> 26;
 
 			proto_tree_add_item(erspan_tree, hf_erspan_platid, tvb,
 					offset, 4, ENC_BIG_ENDIAN);
@@ -360,7 +357,7 @@ dissect_erspan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _
 static int
 dissect_erspan_88BE(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
-	gboolean has_erspan_header;
+	bool has_erspan_header;
 
 	/*
 	 * Frames with a GRE type of 0x88BE have an ERSPAN header iff
@@ -376,7 +373,7 @@ dissect_erspan_88BE(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *d
 		 * For now, we just assume this is Type I, with no
 		 * header.
 		 */
-		has_erspan_header = FALSE;
+		has_erspan_header = false;
 	} else {
 		gre_hdr_info_t *gre_hdr_info = (gre_hdr_info_t *)data;
 
@@ -385,12 +382,12 @@ dissect_erspan_88BE(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *d
 			 * "sequence number present" set, so it has a
 			 * header.
 			 */
-			has_erspan_header = TRUE;
+			has_erspan_header = true;
 		} else {
 			/*
 			 * Not present, so no header.
 			 */
-			has_erspan_header = FALSE;
+			has_erspan_header = false;
 		}
 	}
 
@@ -412,8 +409,8 @@ dissect_erspan_88BE(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *d
 		    ENC_NA);
 		proto_item_append_text(ti, " Type I");
 
-		col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_SHORT_NAME);
-		col_set_str(pinfo->cinfo, COL_INFO, PROTO_SHORT_NAME ":");
+		col_set_str(pinfo->cinfo, COL_PROTOCOL, "ERSPAN");
+		col_set_str(pinfo->cinfo, COL_INFO, "ERSPAN:");
 
 		call_dissector(ethnofcs_handle, tvb, pinfo, tree);
 		return tvb_captured_length(tvb);
@@ -476,12 +473,12 @@ proto_register_erspan(void)
 
 		{ &hf_erspan_timestamp,
 		{ "Timestamp",	"erspan.timestamp", FT_UINT32, BASE_DEC, NULL,
-			0xffffffff, NULL, HFILL }},
+			0x0, NULL, HFILL }},
 
 
 		{ &hf_erspan_sgt,
 		{ "Security Group Tag",	"erspan.sgt", FT_UINT16, BASE_DEC, NULL,
-			0xffff, NULL, HFILL }},
+			0x0, NULL, HFILL }},
 
 		{ &hf_erspan_p,
 		{ "Has Ethernet PDU",	"erspan.p", FT_UINT16, BASE_DEC, NULL,
@@ -524,7 +521,7 @@ proto_register_erspan(void)
 
 		{ &hf_erspan_pid1_port_index,
 		{ "Port ID/Index", "erspan.pid1.port_index", FT_UINT32, BASE_DEC, NULL,
-			0xffffffff, NULL, HFILL }},
+			0x0, NULL, HFILL }},
 
 		/* ID = 3 */
 		{ &hf_erspan_pid3_rsvd1,
@@ -537,7 +534,7 @@ proto_register_erspan(void)
 
 		{ &hf_erspan_pid3_timestamp,
 		{ "Upper 32-bit Timestamp", "erspan.pid3.timestamp", FT_UINT32, BASE_DEC, NULL,
-			0xffffffff, NULL, HFILL }},
+			0x0, NULL, HFILL }},
 
 		/* ID = 4 */
 		{ &hf_erspan_pid4_rsvd1,
@@ -563,7 +560,7 @@ proto_register_erspan(void)
 
 		{ &hf_erspan_pid5_timestamp,
 		{ "Timestamp (seconds)", "erspan.pid5.timestamp", FT_UINT32, BASE_DEC, NULL,
-			0xffffffff, NULL, HFILL }},
+			0x0, NULL, HFILL }},
 
 		/* ID = 7 (or 0) */
 		{ &hf_erspan_pid7_rsvd1,
@@ -576,7 +573,7 @@ proto_register_erspan(void)
 
 		{ &hf_erspan_pid7_timestamp,
 		{ "Upper 32-bit Timestamp", "erspan.pid7.timestamp", FT_UINT32, BASE_DEC, NULL,
-			0xffffffff, NULL, HFILL }},
+			0x0, NULL, HFILL }},
 
 		/* Reserved */
 		{ &hf_erspan_pid_rsvd,
@@ -585,7 +582,7 @@ proto_register_erspan(void)
 
 	};
 
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_erspan,
 	};
 
@@ -593,7 +590,7 @@ proto_register_erspan(void)
 		{ &ei_erspan_version_unknown, { "erspan.version.unknown", PI_UNDECODED, PI_WARN, "Unknown version, please report or test to use fake ERSPAN preference", EXPFILL }},
 	};
 
-	proto_erspan = proto_register_protocol(PROTO_LONG_NAME, PROTO_SHORT_NAME, "erspan");
+	proto_erspan = proto_register_protocol("Encapsulated Remote Switch Packet ANalysis", "ERSPAN", "erspan");
 	proto_register_field_array(proto_erspan, hf, array_length(hf));
 	proto_register_subtree_array(ett, array_length(ett));
 	expert_erspan = expert_register_protocol(proto_erspan);

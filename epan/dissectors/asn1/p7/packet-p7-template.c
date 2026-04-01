@@ -16,6 +16,7 @@
 #include <epan/oids.h>
 #include <epan/asn1.h>
 #include <epan/proto_data.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-acse.h"
@@ -26,14 +27,10 @@
 #include "packet-p1.h"
 #include <epan/strutil.h>
 
-#define PNAME  "X.413 Message Store Service"
-#define PSNAME "P7"
-#define PFNAME "p7"
-
 void proto_register_p7(void);
 void proto_reg_handoff_p7(void);
 
-static int seqno = 0;
+static uint32_t seqno;
 
 /* Initialize the protocol and registered fields */
 static int proto_p7;
@@ -43,7 +40,7 @@ static int proto_p7;
 #include "packet-p7-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_p7;
+static int ett_p7;
 #include "packet-p7-ett.c"
 
 #include "packet-p7-table.c"   /* operation and error codes */
@@ -74,14 +71,14 @@ void proto_register_p7(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_p7,
 #include "packet-p7-ettarr.c"
   };
   module_t *p7_module;
 
   /* Register protocol */
-  proto_p7 = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_p7 = proto_register_protocol("X.413 Message Store Service", "P7", "p7");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_p7, hf, array_length(hf));
@@ -112,7 +109,7 @@ void proto_reg_handoff_p7(void) {
   /* ABSTRACT SYNTAXES */
 
   /* Register P7 with ROS (with no use of RTSE) */
-  register_ros_protocol_info("2.6.0.2.9", &p7_ros_info, 0, "id-as-ms", FALSE);
-  register_ros_protocol_info("2.6.0.2.5", &p7_ros_info, 0, "id-as-mrse", FALSE);
-  register_ros_protocol_info("2.6.0.2.1", &p7_ros_info, 0, "id-as-msse", FALSE);
+  register_ros_protocol_info("2.6.0.2.9", &p7_ros_info, 0, "id-as-ms", false);
+  register_ros_protocol_info("2.6.0.2.5", &p7_ros_info, 0, "id-as-mrse", false);
+  register_ros_protocol_info("2.6.0.2.1", &p7_ros_info, 0, "id-as-msse", false);
 }

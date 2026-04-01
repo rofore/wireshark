@@ -20,10 +20,6 @@
 void proto_register_r09(void);
 void proto_reg_handoff_r09(void);
 
-#define PNAME  "R09.x"
-#define PSNAME "R09"
-#define PFNAME "r09"
-
 static int proto_r09;
 static int hf_r09_modus;
 static int hf_r09_ty;
@@ -41,7 +37,7 @@ static int hf_r09_zl;
 static int hf_r09_fn;
 static int hf_r09_un;
 
-static gint ett_r09;
+static int ett_r09;
 
 static dissector_handle_t r09_handle;
 
@@ -63,19 +59,19 @@ static int
 dissect_r09(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_) {
     proto_item *ti= NULL;
     proto_tree *r09_tree = NULL;
-    guint8 ib1, ib2;
-    guint8 ty, tl;
-    guint16 mp;
-    const gchar *r09x_str;
+    uint8_t ib1, ib2;
+    uint8_t ty, tl;
+    uint16_t mp;
+    const char *r09x_str;
 
-    ib1 = tvb_get_guint8(tvb, 0);
+    ib1 = tvb_get_uint8(tvb, 0);
     ty = ib1 & 0x0F;
 
     if (ib1 != 0x91) {
         return 0;
     }
 
-    ib2 = tvb_get_guint8(tvb, 1);
+    ib2 = tvb_get_uint8(tvb, 1);
     tl = ib2 & 0x0F;
 
     r09x_str = wmem_strdup_printf(pinfo->pool, "R09.%u%u", ty, tl);
@@ -96,11 +92,11 @@ dissect_r09(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
     if (tl == 0) {
         /* Infobyte 3 */
         proto_tree_add_item(r09_tree, hf_r09_mp8, tvb, 2, 1, ENC_BIG_ENDIAN);
-        mp = tvb_get_guint8(tvb, 2);
+        mp = tvb_get_uint8(tvb, 2);
     } else {
         /* Infobyte 3, Zusatzbyte 1 */
         proto_tree_add_item(r09_tree, hf_r09_mp16, tvb, 2, 2, ENC_BIG_ENDIAN);
-        mp = tvb_get_guint16(tvb, 2, ENC_BIG_ENDIAN);
+        mp = tvb_get_uint16(tvb, 2, ENC_BIG_ENDIAN);
     }
     col_append_fstr(pinfo->cinfo, COL_INFO, " MP=%u", mp);
 
@@ -194,16 +190,16 @@ proto_register_r09(void)
         },
     };
 
-    static gint* ett[] = {
+    static int* ett[] = {
         &ett_r09,
     };
 
-    proto_r09 = proto_register_protocol(PNAME, PSNAME, PFNAME);
+    proto_r09 = proto_register_protocol("R09.x", "R09", "r09");
 
     proto_register_subtree_array(ett, array_length(ett));
     proto_register_field_array(proto_r09, hf,array_length(hf));
 
-    r09_handle = register_dissector(PFNAME, dissect_r09, proto_r09);
+    r09_handle = register_dissector("r09", dissect_r09, proto_r09);
 
 }
 

@@ -25,9 +25,9 @@
 #include <wsutil/ws_assert.h>
 
 
-static GHashTable *registered_functions = NULL;
+static GHashTable *registered_functions;
 
-static GPtrArray *registered_names = NULL;
+static GPtrArray *registered_names;
 
 /* Convert an FT_STRING using a callback function */
 static bool
@@ -165,9 +165,134 @@ df_func_string(GSList *stack, uint32_t arg_count _U_, df_cell_t *retval)
     return true;
 }
 
+/* dfilter function: double() */
+static bool
+df_func_double(GSList *stack, uint32_t arg_count _U_, df_cell_t *retval)
+{
+    GPtrArray *arg1;
+    fvalue_t *arg_fvalue;
+    fvalue_t *new_ft_double;
+    double    res;
+
+    ws_assert(arg_count == 1);
+    arg1 = stack->data;
+    if (arg1 == NULL)
+        return false;
+
+    for (unsigned i = 0; i < arg1->len; i++) {
+        arg_fvalue = arg1->pdata[i];
+
+        if (fvalue_to_double(arg_fvalue, &res) == FT_OK) {
+            new_ft_double = fvalue_new(FT_DOUBLE);
+            fvalue_set_floating(new_ft_double, res);
+            df_cell_append(retval, new_ft_double);
+        }
+    }
+
+    if (df_cell_size(retval) == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+/* dfilter function: float() */
+static bool
+df_func_float(GSList *stack, uint32_t arg_count _U_, df_cell_t *retval)
+{
+    GPtrArray *arg1;
+    fvalue_t *arg_fvalue;
+    fvalue_t *new_ft_double;
+    double    res;
+
+    ws_assert(arg_count == 1);
+    arg1 = stack->data;
+    if (arg1 == NULL)
+        return false;
+
+    for (unsigned i = 0; i < arg1->len; i++) {
+        arg_fvalue = arg1->pdata[i];
+
+        if (fvalue_to_double(arg_fvalue, &res) == FT_OK) {
+            new_ft_double = fvalue_new(FT_FLOAT);
+            fvalue_set_floating(new_ft_double, (float)res);
+            df_cell_append(retval, new_ft_double);
+        }
+    }
+
+    if (df_cell_size(retval) == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+/* dfilter functions: dec(), hex(), */
+static bool
+df_func_base(GSList *stack, uint32_t arg_count _U_, df_cell_t *retval, int base)
+{
+    GPtrArray *arg1;
+    fvalue_t *arg_fvalue;
+    fvalue_t *new_ft_string;
+    char     *s;
+
+    ws_assert(arg_count == 1);
+    arg1 = stack->data;
+    if (arg1 == NULL)
+        return false;
+
+    for (unsigned i = 0; i < arg1->len; i++) {
+        arg_fvalue = arg1->pdata[i];
+
+        if (FT_IS_UINT(fvalue_type_ftenum(arg_fvalue))) {
+            s = fvalue_to_string_repr(NULL, arg_fvalue, FTREPR_DFILTER, base);
+            /* Ensure we have an allocated string here */
+            if (!s)
+                s = wmem_strdup(NULL, "");
+        } else {
+            /* XXX - We have, unfortunately, some field abbreviations which are
+             * re-used with incompatible types, some of which support different
+             * bases and some which don't.
+             */
+            s = wmem_strdup(NULL, "");
+        }
+
+        new_ft_string = fvalue_new(FT_STRING);
+        fvalue_set_string(new_ft_string, s);
+        wmem_free(NULL, s);
+        df_cell_append(retval, new_ft_string);
+    }
+
+    return true;
+}
+
+static bool
+df_func_hex(GSList *stack, uint32_t arg_count _U_, df_cell_t *retval)
+{
+    return df_func_base(stack, arg_count, retval, BASE_HEX);
+}
+
+static bool
+df_func_dec(GSList *stack, uint32_t arg_count _U_, df_cell_t *retval)
+{
+    return df_func_base(stack, arg_count, retval, BASE_DEC);
+}
+
+#if 0
+// XXX - BASE_OCT isn't handled by fvalue_to_string_repr; it probably
+// should at least for FTREPR_DISPLAY (the filter language doesn't
+// support it due to possible notation confusion, I assume.)
+// Add that first before offering it.
+static bool
+df_func_oct(GSList *stack, uint32_t arg_count _U_, df_cell_t *retval)
+{
+    return df_func_base(stack, arg_count, retval, BASE_OCT);
+}
+#endif
+
 static bool
 df_func_compare(GSList *stack, uint32_t arg_count, df_cell_t *retval,
-                    bool (*fv_cmp)(const fvalue_t *a, const fvalue_t *b))
+                    ft_bool_t (*fv_cmp)(const fvalue_t *a, const fvalue_t *b))
 {
     fvalue_t *fv_ret = NULL;
     GSList   *args;
@@ -180,7 +305,7 @@ df_func_compare(GSList *stack, uint32_t arg_count, df_cell_t *retval,
         if (arg1 != NULL) {
             for (unsigned j = 0; j < arg1->len; j++) {
                 arg_fvalue = arg1->pdata[j];
-                if (fv_ret == NULL || fv_cmp(arg_fvalue, fv_ret)) {
+                if (fv_ret == NULL || (fv_cmp(arg_fvalue, fv_ret) == FT_TRUE)) {
                     fv_ret = arg_fvalue;
                 }
             }
@@ -304,7 +429,7 @@ df_semcheck_param(dfwork_t *dfw, const char *func_name _U_, ftenum_t logical_fty
 /* For upper() and lower() checks that the parameter passed to
  * it is an FT_STRING */
 static ftenum_t
-ul_semcheck_is_field_string(dfwork_t *dfw, const char *func_name, ftenum_t logical_ftype _U_,
+ul_semcheck_is_string(dfwork_t *dfw, const char *func_name, ftenum_t logical_ftype _U_,
                             GSList *param_list, df_loc_t func_loc _U_)
 {
     ws_assert(g_slist_length(param_list) == 1);
@@ -313,9 +438,6 @@ ul_semcheck_is_field_string(dfwork_t *dfw, const char *func_name, ftenum_t logic
 
     resolve_unparsed(dfw, param, true);
 
-    if (stnode_type_id(param) != STTYPE_FIELD) {
-        dfunc_fail(dfw, param, "Only fields can be used as parameter for %s()", func_name);
-    }
     ftype = df_semcheck_param(dfw, func_name, logical_ftype, param, func_loc);
     if (!FT_IS_STRING(ftype)) {
         dfunc_fail(dfw, param, "Only string type fields can be used as parameter for %s()", func_name);
@@ -410,6 +532,99 @@ ul_semcheck_string(dfwork_t *dfw, const char *func_name, ftenum_t logical_ftype 
     dfunc_fail(dfw, param, "Only fields can be used as parameter for %s()", func_name);
 }
 
+static ftenum_t
+ul_semcheck_double(dfwork_t *dfw, const char *func_name, ftenum_t logical_ftype,
+                            GSList *param_list, df_loc_t func_loc)
+{
+    ws_assert(g_slist_length(param_list) == 1);
+    stnode_t *param = param_list->data;
+    ftenum_t ftype;
+
+    ftype = df_semcheck_param(dfw, func_name, logical_ftype, param, func_loc);
+    if (!ftype_can_val_to_double(ftype)) {
+        dfunc_fail(dfw, param, "Argument does not support the %s() function", func_name);
+    }
+    return FT_DOUBLE;
+}
+
+static ftenum_t
+ul_semcheck_base(dfwork_t *dfw, const char *func_name, ftenum_t logical_ftype _U_,
+                            GSList *param_list, df_loc_t func_loc _U_)
+{
+    header_field_info *hfinfo;
+
+    ws_assert(g_slist_length(param_list) == 1);
+    stnode_t *param = param_list->data;
+
+    resolve_unparsed(dfw, param, true);
+
+    if (stnode_type_id(param) == STTYPE_FIELD) {
+        dfw->field_count++;
+        hfinfo = sttype_field_hfinfo(param);
+        /* FT_CHAR also supports BASE_, but for what sort of escaped
+         * values to use for non-printable ASCII. BASE_HEX uses hex,
+         * all other bases will use octal.
+         * That's a little confusing, so don't support it for now.
+         * More useful might be to display all possible values as
+         * HEX or DEC, i.e. convert to a FT_UINT8 first. */
+        if (FT_IS_UINT(hfinfo->type)) {
+            return FT_STRING;
+        }
+        dfunc_fail(dfw, param, "Base conversion for field \"%s\" is not supported", hfinfo->abbrev);
+    }
+    dfunc_fail(dfw, param, "Only fields can be used as parameter for %s()", func_name);
+}
+
+static ftenum_t
+ul_semcheck_value_string(dfwork_t *dfw, const char *func_name, ftenum_t logical_ftype _U_,
+                            GSList *param_list, df_loc_t func_loc _U_)
+{
+    header_field_info *hfinfo;
+    const char *abbrev;
+
+    ws_assert(g_slist_length(param_list) == 1);
+    stnode_t *param = param_list->data;
+
+    resolve_unparsed(dfw, param, true);
+
+    if (stnode_type_id(param) == STTYPE_FIELD) {
+        if (sttype_field_raw(param)) {
+            /* Value string operates on the original value, not the raw bytes.
+             * We could ignore the raw operator and just use the value string,
+             * warn, or fail. We choose to fail. (Checking sttype_field_ftenum()
+             * instead of hfinfo->type below would also fail, but an explicit
+             * check for raw gives a more useful error message.
+             */
+            dfunc_fail(dfw, param, "The raw operator (\"@\") cannot be used with %s()",
+                                    func_name);
+        }
+
+        dfw->field_count++;
+        hfinfo = sttype_field_hfinfo(param);
+        abbrev = hfinfo->abbrev;
+
+        while (hfinfo->same_name_prev_id != -1) {
+            /* Rewind (shouldn't be necessary.) */
+            hfinfo = proto_registrar_get_nth(hfinfo->same_name_prev_id);
+        }
+
+        for (; hfinfo; hfinfo = hfinfo->same_name_next) {
+            if (hfinfo->strings != NULL && ((FT_IS_INTEGER(hfinfo->type) && hfinfo->type != FT_FRAMENUM) || hfinfo->type == FT_BOOLEAN)) {
+                /* XXX - Allow the types that mk_fvalue_from_hfinfo in semcheck allows.
+                 * Should we just allow the same types as display_column_strings
+                 * in ui/packet_list_utils.c ? dfvm now does exactly the same thing
+                 * as what proto_custom_set does when displaying a column "as strings".
+                 */
+                sttype_field_set_value_string(param, true);
+                return FT_STRING;
+            }
+        }
+        dfunc_fail(dfw, param, "Field \"%s\" does not have a value string.",
+				abbrev);
+    }
+    dfunc_fail(dfw, param, "Only fields can be used as parameter for %s()", func_name);
+}
+
 /* Check arguments are all the same type and they can be compared. */
 static ftenum_t
 ul_semcheck_compare(dfwork_t *dfw, const char *func_name, ftenum_t logical_ftype,
@@ -454,12 +669,19 @@ ul_semcheck_absolute_value(dfwork_t *dfw, const char *func_name, ftenum_t logica
 /* The table of all display-filter functions */
 static df_func_def_t
 df_functions[] = {
-    { "lower",  df_func_lower,  1, 1, FT_STRING, ul_semcheck_is_field_string },
-    { "upper",  df_func_upper,  1, 1, FT_STRING, ul_semcheck_is_field_string },
+    { "lower",  df_func_lower,  1, 1, FT_STRING, ul_semcheck_is_string },
+    { "upper",  df_func_upper,  1, 1, FT_STRING, ul_semcheck_is_string },
     /* Length function is implemented as a DFVM instruction. */
     { "len",    NULL,           1, 1, FT_UINT32, ul_semcheck_can_length },
     { "count",  df_func_count,  1, 1, FT_UINT32, ul_semcheck_is_field },
     { "string", df_func_string, 1, 1, FT_STRING, ul_semcheck_string },
+    { "float",  df_func_float,  1, 1, FT_FLOAT,  ul_semcheck_double },
+    { "double", df_func_double, 1, 1, FT_DOUBLE, ul_semcheck_double },
+    { "dec",    df_func_dec,    1, 1, FT_STRING, ul_semcheck_base },
+    { "hex",    df_func_hex,    1, 1, FT_STRING, ul_semcheck_base },
+    //{ "oct",    df_func_oct,    1, 1, FT_STRING, ul_semcheck_base },
+    /* VALUE STRING function is implemented as a DFVM instruction. */
+    { "vals",   NULL,           1, 1, FT_STRING, ul_semcheck_value_string },
     { "max",    df_func_max,    1, 0, FT_NONE, ul_semcheck_compare },
     { "min",    df_func_min,    1, 0, FT_NONE, ul_semcheck_compare },
     { "abs",    df_func_abs,    1, 1, FT_NONE, ul_semcheck_absolute_value },
@@ -512,8 +734,8 @@ df_func_register(df_func_def_t *func)
         return false;
     }
 
-    g_ptr_array_add(registered_names, (gpointer)func->name);
-    return g_hash_table_insert(registered_functions, (gpointer)func->name, func);
+    g_ptr_array_add(registered_names, (void *)func->name);
+    return g_hash_table_insert(registered_functions, (void *)func->name, func);
 }
 
 bool

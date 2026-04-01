@@ -8,23 +8,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Reference: 3GPP TS 36.443 v17.0.1
+ * Reference: 3GPP TS 36.443 v19.1.0
  */
 
 #include "config.h"
 
 #include <epan/packet.h>
-#include <epan/sctpppids.h>
 #include <epan/asn1.h>
 #include <epan/expert.h>
 #include <epan/proto_data.h>
+#include <epan/unit_strings.h>
+#include <wsutil/array.h>
 
 #include "packet-per.h"
 #include "packet-e212.h"
-
-#define PNAME  "M2 Application Protocol"
-#define PSNAME "M2AP"
-#define PFNAME "m2ap"
+#include "packet-sctp.h"
 
 void proto_register_m2ap(void);
 void proto_reg_handoff_m2ap(void);
@@ -60,9 +58,9 @@ enum{
 };
 
 /* Global variables */
-static guint32 ProcedureCode;
-static guint32 ProtocolIE_ID;
-static guint32 message_type;
+static uint32_t ProcedureCode;
+static uint32_t ProtocolIE_ID;
+static uint32_t message_type;
 static dissector_handle_t m2ap_handle;
 
 /* Dissector tables */
@@ -94,31 +92,31 @@ m2ap_get_private_data(packet_info *pinfo)
 static int
 dissect_ProtocolIEFieldValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint_new(m2ap_ies_dissector_table, ProtocolIE_ID, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_with_data(m2ap_ies_dissector_table, ProtocolIE_ID, tvb, pinfo, tree, false, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_ProtocolExtensionFieldExtensionValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint_new(m2ap_extension_dissector_table, ProtocolIE_ID, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_with_data(m2ap_extension_dissector_table, ProtocolIE_ID, tvb, pinfo, tree, false, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_InitiatingMessageValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint_new(m2ap_proc_imsg_dissector_table, ProcedureCode, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_with_data(m2ap_proc_imsg_dissector_table, ProcedureCode, tvb, pinfo, tree, false, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_SuccessfulOutcomeValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint_new(m2ap_proc_sout_dissector_table, ProcedureCode, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_with_data(m2ap_proc_sout_dissector_table, ProcedureCode, tvb, pinfo, tree, false, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 static int
 dissect_UnsuccessfulOutcomeValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  return (dissector_try_uint_new(m2ap_proc_uout_dissector_table, ProcedureCode, tvb, pinfo, tree, FALSE, NULL)) ? tvb_captured_length(tvb) : 0;
+  return (dissector_try_uint_with_data(m2ap_proc_uout_dissector_table, ProcedureCode, tvb, pinfo, tree, false, NULL)) ? tvb_captured_length(tvb) : 0;
 }
 
 
@@ -129,7 +127,7 @@ dissect_m2ap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
   proto_tree *m2ap_tree = NULL;
 
   /* make entry in the Protocol column on summary display */
-  col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+  col_set_str(pinfo->cinfo, COL_PROTOCOL, "M2AP");
   col_clear_fence(pinfo->cinfo, COL_INFO);
   col_clear(pinfo->cinfo, COL_INFO);
 
@@ -160,7 +158,7 @@ proto_register_m2ap(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_m2ap,
     &ett_m2ap_PLMN_Identity,
     &ett_m2ap_IPAddress,
@@ -174,14 +172,14 @@ proto_register_m2ap(void) {
   };
 
   /* Register protocol */
-  proto_m2ap = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_m2ap = proto_register_protocol("M2 Application Protocol", "M2AP", "m2ap");
   /* Register fields and subtrees */
   proto_register_field_array(proto_m2ap, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
   expert_m2ap = expert_register_protocol(proto_m2ap);
   expert_register_field_array(expert_m2ap, ei, array_length(ei));
   /* Register dissector */
-  m2ap_handle = register_dissector(PFNAME, dissect_m2ap, proto_m2ap);
+  m2ap_handle = register_dissector("m2ap", dissect_m2ap, proto_m2ap);
 
   /* Register dissector tables */
   m2ap_ies_dissector_table = register_dissector_table("m2ap.ies", "M2AP-PROTOCOL-IES", proto_m2ap, FT_UINT32, BASE_DEC);

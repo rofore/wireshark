@@ -1,4 +1,4 @@
-/* Packet-rdp_snd.c
+/* packet-rdp_snd.c
  * Routines for the audio output RDP channel
  * Copyright 2023, David Fort <contact@hardening-consulting.com>
  *
@@ -19,17 +19,11 @@
 #include <epan/prefs.h>
 #include <epan/conversation.h>
 #include <epan/expert.h>
-#include <epan/value_string.h>
 
 #include "packet-rdpudp.h"
 
-#define PNAME  "RDP audio output virtual channel Protocol"
-#define PSNAME "rdpsnd"
-#define PFNAME "rdp_snd"
-
 void proto_register_rdp_snd(void);
 void proto_reg_handoff_rdp_snd(void);
-
 
 static int proto_rdp_snd;
 
@@ -38,7 +32,6 @@ static int hf_snd_bPad;
 static int hf_snd_bodySize;
 
 static int ett_rdp_snd;
-
 
 enum {
 	SNDC_CLOSE = 0x01,
@@ -79,16 +72,16 @@ static int
 dissect_rdp_snd(tvbuff_t *tvb _U_, packet_info *pinfo, proto_tree *parent_tree _U_, void *data _U_)
 {
 	proto_item *item;
-	gint nextOffset, offset = 0;
-	guint32 cmdId = 0;
-	guint32 pduLength;
+	int nextOffset, offset = 0;
+	uint32_t cmdId = 0;
+	uint32_t pduLength;
 	proto_tree *tree;
 
 	parent_tree = proto_tree_get_root(parent_tree);
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "RDPSND");
 	col_clear(pinfo->cinfo, COL_INFO);
 
-	pduLength = tvb_get_guint32(tvb, offset + 2, ENC_LITTLE_ENDIAN) + 4;
+	pduLength = tvb_get_uint32(tvb, offset + 2, ENC_LITTLE_ENDIAN) + 4;
 	nextOffset = offset + pduLength;
 
 	item = proto_tree_add_item(parent_tree, proto_rdp_snd, tvb, offset, pduLength, ENC_NA);
@@ -103,7 +96,7 @@ dissect_rdp_snd(tvbuff_t *tvb _U_, packet_info *pinfo, proto_tree *parent_tree _
 	proto_tree_add_item(tree, hf_snd_bodySize, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 	//offset += 2;
 
-	col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str_const(cmdId, rdp_snd_order_vals, "Unknown rdpsnd command"));
+	col_set_str(pinfo->cinfo, COL_INFO, val_to_str_const(cmdId, rdp_snd_order_vals, "Unknown rdpsnd command"));
 
 	switch (cmdId) {
 	case SNDC_CLOSE:
@@ -147,11 +140,11 @@ void proto_register_rdp_snd(void) {
 		},
 	};
 
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_rdp_snd,
 	};
 
-	proto_rdp_snd = proto_register_protocol(PNAME, PSNAME, PFNAME);
+	proto_rdp_snd = proto_register_protocol("RDP audio output virtual channel Protocol", "rdpsnd", "rdp_snd");
 
 	/* Register fields and subtrees */
 	proto_register_field_array(proto_rdp_snd, hf, array_length(hf));

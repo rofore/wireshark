@@ -13,7 +13,7 @@
 
 #include "ws_symbol_export.h"
 
-#include <epan/value_string.h>
+#include <wsutil/value_string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -72,7 +72,7 @@ extern "C" {
 #endif
 
 #ifndef ETHERTYPE_WOL
-#define ETHERTYPE_WOL			0x0842	/* Wake on LAN. Not offically registered. */
+#define ETHERTYPE_WOL			0x0842	/* Wake on LAN. Not officially registered. */
 #endif
 
 #ifndef ETHERTYPE_WMX_M2M
@@ -139,6 +139,10 @@ extern "C" {
 
 #ifndef ETHERTYPE_EPL_V1
 #define ETHERTYPE_EPL_V1		0x3E3F
+#endif
+
+#ifndef ETHERTYPE_TTL
+#define ETHERTYPE_TTL                   0x4040  /* TTX Logger (TTL) format from TTTech Computertechnik AG */
 #endif
 
 #ifndef ETHERTYPE_C15_CH
@@ -353,6 +357,10 @@ extern "C" {
 #define ETHERTYPE_PROFINET		0x8892	/* PROFIBUS PROFINET protocol */
 #endif
 
+#ifndef ETHERTYPE_FORTINET_FGCP_SESSION  /* Not register https://community.fortinet.com/t5/FortiGate/Technical-Tip-FortiGate-HA-Heartbeat-packet-Ethertypes/ta-p/197807 */
+#define ETHERTYPE_FORTINET_FGCP_SESSION	0x8893	/* Fortinet FGCP HeartBeat */
+#endif
+
 #ifndef ETHERTYPE_REALTEK
 #define ETHERTYPE_REALTEK		0x8899	/* Realtek Layer 2 Protocols */
 #endif
@@ -456,7 +464,7 @@ extern "C" {
 #endif
 
 #ifndef ETHERTYPE_3GPP2
-#define ETHERTYPE_3GPP2			0x88D2	/* This will be used in a revision of the Interoperabi */
+#define ETHERTYPE_3GPP2			0x88D2	/* This will be used in a revision of the Interoperability */
 #endif						/* Specification (IOS) for cdma2000 Access Network Interfaces (document numbers A.S0011-B */
 						/* through A.S0017-B v1.0). This document already uses the Ether type 8881 */
 
@@ -664,6 +672,10 @@ extern "C" {
 
 #ifndef ETHERTYPE_EXEH
 #define ETHERTYPE_EXEH			0xE555	/* EXos internal Extra Header */
+#endif
+
+#ifndef ETHERTYPE_ATMF
+#define ETHERTYPE_ATMF			0xFBAE  /* Allied Telesis Autonomous Management Framework frames */
 #endif
 
 #ifndef ETHERTYPE_ATRL

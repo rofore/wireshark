@@ -1,7 +1,7 @@
 /* Do not modify this file. Changes will be overwritten.                      */
 /* Generated automatically by the ASN.1 to Wireshark dissector compiler       */
 /* packet-pres.c                                                              */
-/* asn2wrs.py -b -L -p pres -c ./pres.cnf -s ./packet-pres-template -D . -O ../.. ISO8823-PRESENTATION.asn ISO9576-PRESENTATION.asn */
+/* asn2wrs.py -b -q -L -p pres -c ./pres.cnf -s ./packet-pres-template -D . -O ../.. ISO8823-PRESENTATION.asn ISO9576-PRESENTATION.asn */
 
 /* packet-pres.c
  * Routine to dissect ISO 8823 OSI Presentation Protocol packets
@@ -23,6 +23,7 @@
 #include <epan/conversation.h>
 #include <epan/expert.h>
 #include <epan/uat.h>
+#include <wsutil/array.h>
 
 #include <epan/asn1.h>
 #include <epan/oids.h>
@@ -31,46 +32,37 @@
 #include "packet-pres.h"
 #include "packet-rtse.h"
 
-
-#define PNAME  "ISO 8823 OSI Presentation Protocol"
-#define PSNAME "PRES"
-#define PFNAME "pres"
-
-#define CLPNAME  "ISO 9576-1 OSI Connectionless Presentation Protocol"
-#define CLPSNAME "CLPRES"
-#define CLPFNAME "clpres"
-
 void proto_register_pres(void);
 void proto_reg_handoff_pres(void);
 
 /* Initialize the protocol and registered fields */
 static int proto_pres;
 
-/* Initialize the connectionles protocol */
+/* Initialize the connectionless protocol */
 static int proto_clpres;
 
 /*      pointers for acse dissector  */
-proto_tree *global_tree  = NULL;
-packet_info *global_pinfo = NULL;
+proto_tree *global_tree;
+packet_info *global_pinfo;
 
 static const char *abstract_syntax_name_oid;
-static guint32 presentation_context_identifier;
+static uint32_t presentation_context_identifier;
 
 /* to keep track of presentation context identifiers and protocol-oids */
 typedef struct _pres_ctx_oid_t {
-	guint32 ctx_id;
+	uint32_t ctx_id;
 	char *oid;
-	guint32 idx;
+	uint32_t idx;
 } pres_ctx_oid_t;
-static wmem_map_t *pres_ctx_oid_table = NULL;
+static wmem_map_t *pres_ctx_oid_table;
 
 typedef struct _pres_user_t {
-   guint ctx_id;
+   unsigned ctx_id;
    char *oid;
 } pres_user_t;
 
 static pres_user_t *pres_users;
-static guint num_pres_users;
+static unsigned num_pres_users;
 
 static int hf_pres_CP_type;
 static int hf_pres_CPA_PPDU;
@@ -93,7 +85,7 @@ static int hf_pres_protocol_options;              /* Protocol_options */
 static int hf_pres_initiators_nominated_context;  /* Presentation_context_identifier */
 static int hf_pres_extensions;                    /* T_extensions */
 static int hf_pres_user_data;                     /* User_data */
-static int hf_pres_cPR_PPDU_x400_mode_parameters;  /* RTOACapdu */
+static int hf_pres_cPR_PPDU_x410_mode_parameters;  /* RTOACapdu */
 static int hf_pres_cPU_PPDU_normal_mode_parameters;  /* T_CPA_PPDU_normal_mode_parameters */
 static int hf_pres_responding_presentation_selector;  /* Responding_presentation_selector */
 static int hf_pres_presentation_context_definition_result_list;  /* Presentation_context_definition_result_list */
@@ -158,44 +150,44 @@ static int hf_pres_User_session_requirements_symmetric_synchronize;
 static int hf_pres_User_session_requirements_data_separation;
 
 /* Initialize the subtree pointers */
-static gint ett_pres;
+static int ett_pres;
 
-static gint ett_pres_CP_type;
-static gint ett_pres_T_normal_mode_parameters;
-static gint ett_pres_T_extensions;
-static gint ett_pres_CPA_PPDU;
-static gint ett_pres_T_CPA_PPDU_normal_mode_parameters;
-static gint ett_pres_CPR_PPDU;
-static gint ett_pres_T_CPR_PPDU_normal_mode_parameters;
-static gint ett_pres_Abort_type;
-static gint ett_pres_ARU_PPDU;
-static gint ett_pres_T_ARU_PPDU_normal_mode_parameters;
-static gint ett_pres_ARP_PPDU;
-static gint ett_pres_Typed_data_type;
-static gint ett_pres_AC_PPDU;
-static gint ett_pres_ACA_PPDU;
-static gint ett_pres_RS_PPDU;
-static gint ett_pres_RSA_PPDU;
-static gint ett_pres_Context_list;
-static gint ett_pres_Context_list_item;
-static gint ett_pres_SEQUENCE_OF_Transfer_syntax_name;
-static gint ett_pres_Default_context_name;
-static gint ett_pres_Mode_selector;
-static gint ett_pres_Presentation_context_deletion_list;
-static gint ett_pres_Presentation_context_deletion_result_list;
-static gint ett_pres_Presentation_context_identifier_list;
-static gint ett_pres_Presentation_context_identifier_list_item;
-static gint ett_pres_Presentation_requirements;
-static gint ett_pres_Protocol_options;
-static gint ett_pres_Protocol_version;
-static gint ett_pres_Result_list;
-static gint ett_pres_Result_list_item;
-static gint ett_pres_User_data;
-static gint ett_pres_Fully_encoded_data;
-static gint ett_pres_PDV_list;
-static gint ett_pres_T_presentation_data_values;
-static gint ett_pres_User_session_requirements;
-static gint ett_pres_UD_type;
+static int ett_pres_CP_type;
+static int ett_pres_T_normal_mode_parameters;
+static int ett_pres_T_extensions;
+static int ett_pres_CPA_PPDU;
+static int ett_pres_T_CPA_PPDU_normal_mode_parameters;
+static int ett_pres_CPR_PPDU;
+static int ett_pres_T_CPR_PPDU_normal_mode_parameters;
+static int ett_pres_Abort_type;
+static int ett_pres_ARU_PPDU;
+static int ett_pres_T_ARU_PPDU_normal_mode_parameters;
+static int ett_pres_ARP_PPDU;
+static int ett_pres_Typed_data_type;
+static int ett_pres_AC_PPDU;
+static int ett_pres_ACA_PPDU;
+static int ett_pres_RS_PPDU;
+static int ett_pres_RSA_PPDU;
+static int ett_pres_Context_list;
+static int ett_pres_Context_list_item;
+static int ett_pres_SEQUENCE_OF_Transfer_syntax_name;
+static int ett_pres_Default_context_name;
+static int ett_pres_Mode_selector;
+static int ett_pres_Presentation_context_deletion_list;
+static int ett_pres_Presentation_context_deletion_result_list;
+static int ett_pres_Presentation_context_identifier_list;
+static int ett_pres_Presentation_context_identifier_list_item;
+static int ett_pres_Presentation_requirements;
+static int ett_pres_Protocol_options;
+static int ett_pres_Protocol_version;
+static int ett_pres_Result_list;
+static int ett_pres_Result_list_item;
+static int ett_pres_User_data;
+static int ett_pres_Fully_encoded_data;
+static int ett_pres_PDV_list;
+static int ett_pres_T_presentation_data_values;
+static int ett_pres_User_session_requirements;
+static int ett_pres_UD_type;
 
 static expert_field ei_pres_dissector_not_available;
 static expert_field ei_pres_wrong_spdu_type;
@@ -204,15 +196,15 @@ static expert_field ei_pres_invalid_offset;
 UAT_DEC_CB_DEF(pres_users, ctx_id, pres_user_t)
 UAT_CSTRING_CB_DEF(pres_users, oid, pres_user_t)
 
-static guint
-pres_ctx_oid_hash(gconstpointer k)
+static unsigned
+pres_ctx_oid_hash(const void *k)
 {
 	const pres_ctx_oid_t *pco=(const pres_ctx_oid_t *)k;
 	return pco->ctx_id;
 }
 
-static gint
-pres_ctx_oid_equal(gconstpointer k1, gconstpointer k2)
+static int
+pres_ctx_oid_equal(const void *k1, const void *k2)
 {
 	const pres_ctx_oid_t *pco1=(const pres_ctx_oid_t *)k1;
 	const pres_ctx_oid_t *pco2=(const pres_ctx_oid_t *)k2;
@@ -220,7 +212,7 @@ pres_ctx_oid_equal(gconstpointer k1, gconstpointer k2)
 }
 
 static void
-register_ctx_id_and_oid(packet_info *pinfo _U_, guint32 idx, const char *oid)
+register_ctx_id_and_oid(packet_info *pinfo _U_, uint32_t idx, const char *oid)
 {
 	pres_ctx_oid_t *pco, *tmppco;
 	conversation_t *conversation;
@@ -249,9 +241,9 @@ register_ctx_id_and_oid(packet_info *pinfo _U_, guint32 idx, const char *oid)
 }
 
 static char *
-find_oid_in_users_table(packet_info *pinfo, guint32 ctx_id)
+find_oid_in_users_table(packet_info *pinfo, uint32_t ctx_id)
 {
-	guint i;
+	unsigned i;
 
 	for (i = 0; i < num_pres_users; i++) {
 		pres_user_t *u = &(pres_users[i]);
@@ -267,7 +259,7 @@ find_oid_in_users_table(packet_info *pinfo, guint32 ctx_id)
 }
 
 char *
-find_oid_by_pres_ctx_id(packet_info *pinfo, guint32 idx)
+find_oid_by_pres_ctx_id(packet_info *pinfo, uint32_t idx)
 {
 	pres_ctx_oid_t pco, *tmppco;
 	conversation_t *conversation;
@@ -317,8 +309,8 @@ static const value_string pres_T_mode_value_vals[] = {
 };
 
 
-static int
-dissect_pres_T_mode_value(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_mode_value(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 NULL);
 
@@ -331,8 +323,8 @@ static const ber_sequence_t Mode_selector_set[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_Mode_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Mode_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_set(implicit_tag, actx, tree, tvb, offset,
                               Mode_selector_set, hf_index, ett_pres_Mode_selector);
 
@@ -345,8 +337,8 @@ static int * const Protocol_version_bits[] = {
   NULL
 };
 
-static int
-dissect_pres_Protocol_version(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Protocol_version(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_bitstring(implicit_tag, actx, tree, tvb, offset,
                                     Protocol_version_bits, 1, hf_index, ett_pres_Protocol_version,
                                     NULL);
@@ -356,8 +348,8 @@ dissect_pres_Protocol_version(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offs
 
 
 
-static int
-dissect_pres_Presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_octet_string(implicit_tag, actx, tree, tvb, offset, hf_index,
                                        NULL);
 
@@ -366,8 +358,8 @@ dissect_pres_Presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, int
 
 
 
-static int
-dissect_pres_Calling_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Calling_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Presentation_selector(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -375,8 +367,8 @@ dissect_pres_Calling_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb 
 
 
 
-static int
-dissect_pres_Called_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Called_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Presentation_selector(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -384,8 +376,8 @@ dissect_pres_Called_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _
 
 
 
-static int
-dissect_pres_Presentation_context_identifier(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_identifier(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   const char *name;
   char *oid;
   struct SESSION_DATA_STRUCTURE* session = (struct SESSION_DATA_STRUCTURE*)actx->private_data;
@@ -409,8 +401,8 @@ dissect_pres_Presentation_context_identifier(bool implicit_tag _U_, tvbuff_t *tv
 
 
 
-static int
-dissect_pres_Abstract_syntax_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Abstract_syntax_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_object_identifier_str(implicit_tag, actx, tree, tvb, offset, hf_index, &abstract_syntax_name_oid);
 
   return offset;
@@ -418,8 +410,8 @@ dissect_pres_Abstract_syntax_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, int 
 
 
 
-static int
-dissect_pres_Transfer_syntax_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Transfer_syntax_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_object_identifier(implicit_tag, actx, tree, tvb, offset, hf_index, NULL);
 
   return offset;
@@ -430,8 +422,8 @@ static const ber_sequence_t SEQUENCE_OF_Transfer_syntax_name_sequence_of[1] = {
   { &hf_pres_transfer_syntax_name_list_item, BER_CLASS_UNI, BER_UNI_TAG_OID, BER_FLAGS_NOOWNTAG, dissect_pres_Transfer_syntax_name },
 };
 
-static int
-dissect_pres_SEQUENCE_OF_Transfer_syntax_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_SEQUENCE_OF_Transfer_syntax_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence_of(implicit_tag, actx, tree, tvb, offset,
                                       SEQUENCE_OF_Transfer_syntax_name_sequence_of, hf_index, ett_pres_SEQUENCE_OF_Transfer_syntax_name);
 
@@ -446,8 +438,8 @@ static const ber_sequence_t Context_list_item_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_Context_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Context_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
 	abstract_syntax_name_oid=NULL;
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    Context_list_item_sequence, hf_index, ett_pres_Context_list_item);
@@ -461,8 +453,8 @@ static const ber_sequence_t Context_list_sequence_of[1] = {
   { &hf_pres_Context_list_item, BER_CLASS_UNI, BER_UNI_TAG_SEQUENCE, BER_FLAGS_NOOWNTAG, dissect_pres_Context_list_item },
 };
 
-static int
-dissect_pres_Context_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Context_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence_of(implicit_tag, actx, tree, tvb, offset,
                                       Context_list_sequence_of, hf_index, ett_pres_Context_list);
 
@@ -471,8 +463,8 @@ dissect_pres_Context_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _
 
 
 
-static int
-dissect_pres_Presentation_context_definition_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_definition_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Context_list(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -485,8 +477,8 @@ static const ber_sequence_t Default_context_name_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_Default_context_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Default_context_name(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    Default_context_name_sequence, hf_index, ett_pres_Default_context_name);
 
@@ -500,8 +492,8 @@ static int * const Presentation_requirements_bits[] = {
   NULL
 };
 
-static int
-dissect_pres_Presentation_requirements(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_requirements(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_bitstring(implicit_tag, actx, tree, tvb, offset,
                                     Presentation_requirements_bits, 2, hf_index, ett_pres_Presentation_requirements,
                                     NULL);
@@ -527,8 +519,8 @@ static int * const User_session_requirements_bits[] = {
   NULL
 };
 
-static int
-dissect_pres_User_session_requirements(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_User_session_requirements(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_bitstring(implicit_tag, actx, tree, tvb, offset,
                                     User_session_requirements_bits, 13, hf_index, ett_pres_User_session_requirements,
                                     NULL);
@@ -544,8 +536,8 @@ static int * const Protocol_options_bits[] = {
   NULL
 };
 
-static int
-dissect_pres_Protocol_options(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Protocol_options(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_bitstring(implicit_tag, actx, tree, tvb, offset,
                                     Protocol_options_bits, 3, hf_index, ett_pres_Protocol_options,
                                     NULL);
@@ -558,8 +550,8 @@ static const ber_sequence_t T_extensions_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_T_extensions(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_extensions(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    T_extensions_sequence, hf_index, ett_pres_T_extensions);
 
@@ -568,8 +560,8 @@ dissect_pres_T_extensions(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _
 
 
 
-static int
-dissect_pres_Simply_encoded_data(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Simply_encoded_data(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_octet_string(implicit_tag, actx, tree, tvb, offset, hf_index,
                                        NULL);
 
@@ -578,8 +570,8 @@ dissect_pres_Simply_encoded_data(bool implicit_tag _U_, tvbuff_t *tvb _U_, int o
 
 
 
-static int
-dissect_pres_T_single_ASN1_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_single_ASN1_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
 
  tvbuff_t	*next_tvb;
  char *oid;
@@ -589,8 +581,8 @@ dissect_pres_T_single_ASN1_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int of
 		next_tvb = tvb_new_subset_remaining(tvb, offset);
 		call_ber_oid_callback(oid, next_tvb, offset, actx->pinfo, global_tree, actx->private_data);
 	} else {
-		proto_tree_add_expert(tree, actx->pinfo, &ei_pres_dissector_not_available,
-								tvb, offset, -1);
+		proto_tree_add_expert_remaining(tree, actx->pinfo, &ei_pres_dissector_not_available,
+								tvb, offset);
 	}
 
 
@@ -599,8 +591,8 @@ dissect_pres_T_single_ASN1_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int of
 
 
 
-static int
-dissect_pres_T_octet_aligned(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_octet_aligned(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
 
  tvbuff_t	*next_tvb;
  char *oid;
@@ -610,8 +602,8 @@ dissect_pres_T_octet_aligned(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offse
 		dissect_ber_octet_string(implicit_tag, actx, tree, tvb, offset, hf_index, &next_tvb);
 		call_ber_oid_callback(oid, next_tvb, offset, actx->pinfo, global_tree, actx->private_data);
 	} else {
-		proto_tree_add_expert(tree, actx->pinfo, &ei_pres_dissector_not_available,
-								tvb, offset, -1);
+		proto_tree_add_expert_remaining(tree, actx->pinfo, &ei_pres_dissector_not_available,
+								tvb, offset);
 		  offset = dissect_ber_octet_string(implicit_tag, actx, tree, tvb, offset, hf_index,
                                        NULL);
 
@@ -624,8 +616,8 @@ dissect_pres_T_octet_aligned(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offse
 
 
 
-static int
-dissect_pres_BIT_STRING(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_BIT_STRING(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_bitstring(implicit_tag, actx, tree, tvb, offset,
                                     NULL, 0, hf_index, -1,
                                     NULL);
@@ -648,8 +640,8 @@ static const ber_choice_t T_presentation_data_values_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_T_presentation_data_values(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_presentation_data_values(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  T_presentation_data_values_choice, hf_index, ett_pres_T_presentation_data_values,
                                  NULL);
@@ -665,8 +657,8 @@ static const ber_sequence_t PDV_list_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_PDV_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_PDV_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    PDV_list_sequence, hf_index, ett_pres_PDV_list);
 
@@ -678,8 +670,8 @@ static const ber_sequence_t Fully_encoded_data_sequence_of[1] = {
   { &hf_pres_Fully_encoded_data_item, BER_CLASS_UNI, BER_UNI_TAG_SEQUENCE, BER_FLAGS_NOOWNTAG, dissect_pres_PDV_list },
 };
 
-static int
-dissect_pres_Fully_encoded_data(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Fully_encoded_data(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence_of(implicit_tag, actx, tree, tvb, offset,
                                       Fully_encoded_data_sequence_of, hf_index, ett_pres_Fully_encoded_data);
 
@@ -699,8 +691,8 @@ static const ber_choice_t User_data_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_User_data(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_User_data(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  User_data_choice, hf_index, ett_pres_User_data,
                                  NULL);
@@ -724,8 +716,8 @@ static const ber_sequence_t T_normal_mode_parameters_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_T_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    T_normal_mode_parameters_sequence, hf_index, ett_pres_T_normal_mode_parameters);
 
@@ -740,8 +732,8 @@ static const ber_sequence_t CP_type_set[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_CP_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_CP_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_set(implicit_tag, actx, tree, tvb, offset,
                               CP_type_set, hf_index, ett_pres_CP_type);
 
@@ -750,8 +742,8 @@ dissect_pres_CP_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, a
 
 
 
-static int
-dissect_pres_CPC_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_CPC_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_User_data(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -759,8 +751,8 @@ dissect_pres_CPC_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, 
 
 
 
-static int
-dissect_pres_Responding_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Responding_presentation_selector(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Presentation_selector(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -775,8 +767,8 @@ static const value_string pres_Result_vals[] = {
 };
 
 
-static int
-dissect_pres_Result(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Result(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 NULL);
 
@@ -793,8 +785,8 @@ static const value_string pres_T_provider_reason_vals[] = {
 };
 
 
-static int
-dissect_pres_T_provider_reason(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_provider_reason(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 NULL);
 
@@ -809,8 +801,8 @@ static const ber_sequence_t Result_list_item_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_Result_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Result_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    Result_list_item_sequence, hf_index, ett_pres_Result_list_item);
 
@@ -822,8 +814,8 @@ static const ber_sequence_t Result_list_sequence_of[1] = {
   { &hf_pres_Result_list_item, BER_CLASS_UNI, BER_UNI_TAG_SEQUENCE, BER_FLAGS_NOOWNTAG, dissect_pres_Result_list_item },
 };
 
-static int
-dissect_pres_Result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence_of(implicit_tag, actx, tree, tvb, offset,
                                       Result_list_sequence_of, hf_index, ett_pres_Result_list);
 
@@ -832,8 +824,8 @@ dissect_pres_Result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U
 
 
 
-static int
-dissect_pres_Presentation_context_definition_result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_definition_result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Result_list(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -852,8 +844,8 @@ static const ber_sequence_t T_CPA_PPDU_normal_mode_parameters_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_T_CPA_PPDU_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_CPA_PPDU_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    T_CPA_PPDU_normal_mode_parameters_sequence, hf_index, ett_pres_T_CPA_PPDU_normal_mode_parameters);
 
@@ -863,13 +855,13 @@ dissect_pres_T_CPA_PPDU_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *
 
 static const ber_sequence_t CPA_PPDU_set[] = {
   { &hf_pres_mode_selector  , BER_CLASS_CON, 0, BER_FLAGS_IMPLTAG, dissect_pres_Mode_selector },
-  { &hf_pres_cPR_PPDU_x400_mode_parameters, BER_CLASS_CON, 1, BER_FLAGS_OPTIONAL|BER_FLAGS_IMPLTAG, dissect_rtse_RTOACapdu },
+  { &hf_pres_cPR_PPDU_x410_mode_parameters, BER_CLASS_CON, 1, BER_FLAGS_OPTIONAL|BER_FLAGS_IMPLTAG, dissect_rtse_RTOACapdu },
   { &hf_pres_cPU_PPDU_normal_mode_parameters, BER_CLASS_CON, 2, BER_FLAGS_OPTIONAL|BER_FLAGS_IMPLTAG, dissect_pres_T_CPA_PPDU_normal_mode_parameters },
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_CPA_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_CPA_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_set(implicit_tag, actx, tree, tvb, offset,
                               CPA_PPDU_set, hf_index, ett_pres_CPA_PPDU);
 
@@ -878,8 +870,8 @@ dissect_pres_CPA_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, 
 
 
 
-static int
-dissect_pres_Default_context_result(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Default_context_result(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Result(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -899,8 +891,8 @@ static const value_string pres_Provider_reason_vals[] = {
 };
 
 
-static int
-dissect_pres_Provider_reason(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Provider_reason(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 NULL);
 
@@ -918,8 +910,8 @@ static const ber_sequence_t T_CPR_PPDU_normal_mode_parameters_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_T_CPR_PPDU_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_CPR_PPDU_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    T_CPR_PPDU_normal_mode_parameters_sequence, hf_index, ett_pres_T_CPR_PPDU_normal_mode_parameters);
 
@@ -939,8 +931,8 @@ static const ber_choice_t CPR_PPDU_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_CPR_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_CPR_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  CPR_PPDU_choice, hf_index, ett_pres_CPR_PPDU,
                                  NULL);
@@ -955,8 +947,8 @@ static const ber_sequence_t Presentation_context_identifier_list_item_sequence[]
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_Presentation_context_identifier_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_identifier_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    Presentation_context_identifier_list_item_sequence, hf_index, ett_pres_Presentation_context_identifier_list_item);
 
@@ -968,8 +960,8 @@ static const ber_sequence_t Presentation_context_identifier_list_sequence_of[1] 
   { &hf_pres_Presentation_context_identifier_list_item, BER_CLASS_UNI, BER_UNI_TAG_SEQUENCE, BER_FLAGS_NOOWNTAG, dissect_pres_Presentation_context_identifier_list_item },
 };
 
-static int
-dissect_pres_Presentation_context_identifier_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_identifier_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence_of(implicit_tag, actx, tree, tvb, offset,
                                       Presentation_context_identifier_list_sequence_of, hf_index, ett_pres_Presentation_context_identifier_list);
 
@@ -983,8 +975,8 @@ static const ber_sequence_t T_ARU_PPDU_normal_mode_parameters_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_T_ARU_PPDU_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_T_ARU_PPDU_normal_mode_parameters(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    T_ARU_PPDU_normal_mode_parameters_sequence, hf_index, ett_pres_T_ARU_PPDU_normal_mode_parameters);
 
@@ -1004,8 +996,8 @@ static const ber_choice_t ARU_PPDU_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_ARU_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_ARU_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  ARU_PPDU_choice, hf_index, ett_pres_ARU_PPDU,
                                  NULL);
@@ -1026,15 +1018,15 @@ static const value_string pres_Abort_reason_vals[] = {
 };
 
 
-static int
-dissect_pres_Abort_reason(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-  guint32 reason;
+static unsigned
+dissect_pres_Abort_reason(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  uint32_t reason;
 
     offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 &reason);
 
 
-  col_append_fstr(actx->pinfo->cinfo, COL_INFO, " (%s)", val_to_str(reason, pres_Abort_reason_vals, "unknown: %d"));
+  col_append_fstr(actx->pinfo->cinfo, COL_INFO, " (%s)", val_to_str(actx->pinfo->pool, reason, pres_Abort_reason_vals, "unknown: %d"));
 
 
   return offset;
@@ -1079,8 +1071,8 @@ static const value_string pres_Event_identifier_vals[] = {
 };
 
 
-static int
-dissect_pres_Event_identifier(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Event_identifier(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 NULL);
 
@@ -1094,8 +1086,8 @@ static const ber_sequence_t ARP_PPDU_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_ARP_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_ARP_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    ARP_PPDU_sequence, hf_index, ett_pres_ARP_PPDU);
 
@@ -1115,8 +1107,8 @@ static const ber_choice_t Abort_type_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_Abort_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Abort_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  Abort_type_choice, hf_index, ett_pres_Abort_type,
                                  NULL);
@@ -1126,8 +1118,8 @@ dissect_pres_Abort_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_
 
 
 
-static int
-dissect_pres_Presentation_context_addition_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_addition_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Context_list(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -1138,8 +1130,8 @@ static const ber_sequence_t Presentation_context_deletion_list_sequence_of[1] = 
   { &hf_pres_Presentation_context_deletion_list_item, BER_CLASS_UNI, BER_UNI_TAG_INTEGER, BER_FLAGS_NOOWNTAG, dissect_pres_Presentation_context_identifier },
 };
 
-static int
-dissect_pres_Presentation_context_deletion_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_deletion_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence_of(implicit_tag, actx, tree, tvb, offset,
                                       Presentation_context_deletion_list_sequence_of, hf_index, ett_pres_Presentation_context_deletion_list);
 
@@ -1154,8 +1146,8 @@ static const ber_sequence_t AC_PPDU_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_AC_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_AC_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    AC_PPDU_sequence, hf_index, ett_pres_AC_PPDU);
 
@@ -1164,8 +1156,8 @@ dissect_pres_AC_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, a
 
 
 
-static int
-dissect_pres_Presentation_context_addition_result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_addition_result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_pres_Result_list(implicit_tag, tvb, offset, actx, tree, hf_index);
 
   return offset;
@@ -1179,8 +1171,8 @@ static const value_string pres_Presentation_context_deletion_result_list_item_va
 };
 
 
-static int
-dissect_pres_Presentation_context_deletion_result_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_deletion_result_list_item(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 NULL);
 
@@ -1192,8 +1184,8 @@ static const ber_sequence_t Presentation_context_deletion_result_list_sequence_o
   { &hf_pres_Presentation_context_deletion_result_list_item, BER_CLASS_UNI, BER_UNI_TAG_INTEGER, BER_FLAGS_NOOWNTAG, dissect_pres_Presentation_context_deletion_result_list_item },
 };
 
-static int
-dissect_pres_Presentation_context_deletion_result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Presentation_context_deletion_result_list(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence_of(implicit_tag, actx, tree, tvb, offset,
                                       Presentation_context_deletion_result_list_sequence_of, hf_index, ett_pres_Presentation_context_deletion_result_list);
 
@@ -1208,8 +1200,8 @@ static const ber_sequence_t ACA_PPDU_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_ACA_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_ACA_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    ACA_PPDU_sequence, hf_index, ett_pres_ACA_PPDU);
 
@@ -1231,8 +1223,8 @@ static const ber_choice_t Typed_data_type_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_Typed_data_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_Typed_data_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  Typed_data_type_choice, hf_index, ett_pres_Typed_data_type,
                                  NULL);
@@ -1247,8 +1239,8 @@ static const ber_sequence_t RS_PPDU_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_RS_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_RS_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    RS_PPDU_sequence, hf_index, ett_pres_RS_PPDU);
 
@@ -1262,8 +1254,8 @@ static const ber_sequence_t RSA_PPDU_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_RSA_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_RSA_PPDU(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    RSA_PPDU_sequence, hf_index, ett_pres_RSA_PPDU);
 
@@ -1280,8 +1272,8 @@ static const ber_sequence_t UD_type_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_pres_UD_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_pres_UD_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    UD_type_sequence, hf_index, ett_pres_UD_type);
 
@@ -1292,10 +1284,10 @@ dissect_pres_UD_type(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, a
 /*--- PDUs ---*/
 
 static int dissect_UD_type_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
-  int offset = 0;
+  unsigned offset = 0;
   asn1_ctx_t asn1_ctx;
-  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
-  offset = dissect_pres_UD_type(FALSE, tvb, offset, &asn1_ctx, tree, hf_pres_UD_type_PDU);
+  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
+  offset = dissect_pres_UD_type(false, tvb, offset, &asn1_ctx, tree, hf_pres_UD_type_PDU);
   return offset;
 }
 
@@ -1304,31 +1296,31 @@ static int dissect_UD_type_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_
 /*
  * Dissect an PPDU.
  */
-static int
-dissect_ppdu(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tree *tree, struct SESSION_DATA_STRUCTURE* local_session)
+static unsigned
+dissect_ppdu(tvbuff_t *tvb, unsigned offset, packet_info *pinfo, proto_tree *tree, struct SESSION_DATA_STRUCTURE* local_session)
 {
 	proto_item *ti;
 	proto_tree *pres_tree;
 	struct SESSION_DATA_STRUCTURE* session;
 	asn1_ctx_t asn1_ctx;
-	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
+	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
 
 	/* do we have spdu type from the session dissector?  */
 	if (local_session == NULL) {
-		proto_tree_add_expert(tree, pinfo, &ei_pres_wrong_spdu_type, tvb, offset, -1);
+		proto_tree_add_expert_remaining(tree, pinfo, &ei_pres_wrong_spdu_type, tvb, offset);
 		return 0;
 	}
 
 	session = local_session;
 	if (session->spdu_type == 0) {
-		proto_tree_add_expert_format(tree, pinfo, &ei_pres_wrong_spdu_type, tvb, offset, -1,
+		proto_tree_add_expert_format_remaining(tree, pinfo, &ei_pres_wrong_spdu_type, tvb, offset,
 			"Internal error:wrong spdu type %x from session dissector.",session->spdu_type);
 		return 0;
 	}
 
 	/*  set up type of PPDU */
 	col_add_str(pinfo->cinfo, COL_INFO,
-		    val_to_str_ext(session->spdu_type, &ses_vals_ext, "Unknown PPDU type (0x%02x)"));
+		    val_to_str_ext(pinfo->pool, session->spdu_type, &ses_vals_ext, "Unknown PPDU type (0x%02x)"));
 
 	asn1_ctx.private_data = session;
 
@@ -1337,32 +1329,32 @@ dissect_ppdu(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tree *tree, st
 
 	switch (session->spdu_type) {
 		case SES_CONNECTION_REQUEST:
-			offset = dissect_pres_CP_type(FALSE, tvb, offset, &asn1_ctx, pres_tree, hf_pres_CP_type);
+			offset = dissect_pres_CP_type(false, tvb, offset, &asn1_ctx, pres_tree, hf_pres_CP_type);
 			break;
 		case SES_CONNECTION_ACCEPT:
-			offset = dissect_pres_CPA_PPDU(FALSE, tvb, offset, &asn1_ctx, pres_tree, hf_pres_CPA_PPDU);
+			offset = dissect_pres_CPA_PPDU(false, tvb, offset, &asn1_ctx, pres_tree, hf_pres_CPA_PPDU);
 			break;
 		case SES_ABORT:
 		case SES_ABORT_ACCEPT:
-			offset = dissect_pres_Abort_type(FALSE, tvb, offset, &asn1_ctx, pres_tree, hf_pres_Abort_type);
+			offset = dissect_pres_Abort_type(false, tvb, offset, &asn1_ctx, pres_tree, hf_pres_Abort_type);
 			break;
 		case SES_DATA_TRANSFER:
-			offset = dissect_pres_CPC_type(FALSE, tvb, offset, &asn1_ctx, pres_tree, hf_pres_user_data);
+			offset = dissect_pres_CPC_type(false, tvb, offset, &asn1_ctx, pres_tree, hf_pres_user_data);
 			break;
 		case SES_TYPED_DATA:
-			offset = dissect_pres_Typed_data_type(FALSE, tvb, offset, &asn1_ctx, pres_tree, hf_pres_Typed_data_type);
+			offset = dissect_pres_Typed_data_type(false, tvb, offset, &asn1_ctx, pres_tree, hf_pres_Typed_data_type);
 			break;
 		case SES_RESYNCHRONIZE:
-			offset = dissect_pres_RS_PPDU(FALSE, tvb, offset, &asn1_ctx, pres_tree, -1);
+			offset = dissect_pres_RS_PPDU(false, tvb, offset, &asn1_ctx, pres_tree, -1);
 			break;
 		case SES_RESYNCHRONIZE_ACK:
-			offset = dissect_pres_RSA_PPDU(FALSE, tvb, offset, &asn1_ctx, pres_tree, -1);
+			offset = dissect_pres_RSA_PPDU(false, tvb, offset, &asn1_ctx, pres_tree, -1);
 			break;
 		case SES_REFUSE:
-			offset = dissect_pres_CPR_PPDU(FALSE, tvb, offset, &asn1_ctx, pres_tree, hf_pres_CPR_PPDU);
+			offset = dissect_pres_CPR_PPDU(false, tvb, offset, &asn1_ctx, pres_tree, hf_pres_CPR_PPDU);
 			break;
 		default:
-			offset = dissect_pres_CPC_type(FALSE, tvb, offset, &asn1_ctx, pres_tree, hf_pres_user_data);
+			offset = dissect_pres_CPC_type(false, tvb, offset, &asn1_ctx, pres_tree, hf_pres_user_data);
 			break;
 	}
 
@@ -1372,7 +1364,7 @@ dissect_ppdu(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tree *tree, st
 static int
 dissect_pres(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* data)
 {
-	int offset = 0, old_offset;
+	unsigned offset = 0, old_offset;
 	struct SESSION_DATA_STRUCTURE* session;
 
 	session = ((struct SESSION_DATA_STRUCTURE*)data);
@@ -1382,7 +1374,7 @@ dissect_pres(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 	if (!tvb_bytes_exist(tvb, 0, 4)) {
 		if (session && session->spdu_type != SES_MAJOR_SYNC_POINT) {
 			proto_tree_add_item(parent_tree, hf_pres_user_data, tvb, offset,
-					    tvb_reported_length_remaining(tvb,offset), ENC_NA);
+					tvb_reported_length_remaining(tvb,offset), ENC_BIG_ENDIAN);
 			return 0;  /* no, it isn't a presentation PDU */
 		}
 	}
@@ -1423,7 +1415,7 @@ dissect_pres(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 			call_ber_oid_callback (oid, tvb, offset, pinfo, parent_tree, session);
 		} else {
 			proto_tree_add_item(parent_tree, hf_pres_user_data, tvb, offset,
-					    tvb_reported_length_remaining(tvb,offset), ENC_NA);
+			                    tvb_reported_length_remaining(tvb,offset), ENC_BIG_ENDIAN);
 		}
 		return tvb_captured_length(tvb);
 	}
@@ -1432,7 +1424,7 @@ dissect_pres(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 		old_offset = offset;
 		offset = dissect_ppdu(tvb, offset, pinfo, parent_tree, session);
 		if (offset <= old_offset) {
-			proto_tree_add_expert(parent_tree, pinfo, &ei_pres_invalid_offset, tvb, offset, -1);
+			proto_tree_add_expert_remaining(parent_tree, pinfo, &ei_pres_invalid_offset, tvb, offset);
 			break;
 		}
 	}
@@ -1527,12 +1519,12 @@ void proto_register_pres(void) {
       { "user-data", "pres.user_data",
         FT_UINT32, BASE_DEC, VALS(pres_User_data_vals), 0,
         NULL, HFILL }},
-    { &hf_pres_cPR_PPDU_x400_mode_parameters,
-      { "x410-mode-parameters", "pres.x410_mode_parameters_element",
+    { &hf_pres_cPR_PPDU_x410_mode_parameters,
+      { "x410-mode-parameters", "pres.cPR_PPDU_x410_mode_parameters_element",
         FT_NONE, BASE_NONE, NULL, 0,
         "RTOACapdu", HFILL }},
     { &hf_pres_cPU_PPDU_normal_mode_parameters,
-      { "normal-mode-parameters", "pres.normal_mode_parameters_element",
+      { "normal-mode-parameters", "pres.cPU_PPDU_normal_mode_parameters_element",
         FT_NONE, BASE_NONE, NULL, 0,
         "T_CPA_PPDU_normal_mode_parameters", HFILL }},
     { &hf_pres_responding_presentation_selector,
@@ -1548,11 +1540,11 @@ void proto_register_pres(void) {
         FT_INT32, BASE_DEC, NULL, 0,
         "Presentation_context_identifier", HFILL }},
     { &hf_pres_cPU_PPDU_x400_mode_parameters,
-      { "x400-mode-parameters", "pres.x400_mode_parameters_element",
+      { "x400-mode-parameters", "pres.cPU_PPDU_x400_mode_parameters_element",
         FT_NONE, BASE_NONE, NULL, 0,
         "RTORJapdu", HFILL }},
     { &hf_pres_cPR_PPDU_normal_mode_parameters,
-      { "normal-mode-parameters", "pres.normal_mode_parameters_element",
+      { "normal-mode-parameters", "pres.cPR_PPDU_normal_mode_parameters_element",
         FT_NONE, BASE_NONE, NULL, 0,
         "T_CPR_PPDU_normal_mode_parameters", HFILL }},
     { &hf_pres_default_context_result,
@@ -1560,7 +1552,7 @@ void proto_register_pres(void) {
         FT_INT32, BASE_DEC, VALS(pres_Result_vals), 0,
         NULL, HFILL }},
     { &hf_pres_cPR_PPDU__provider_reason,
-      { "provider-reason", "pres.provider_reason",
+      { "provider-reason", "pres.cPR_PPDU__provider_reason",
         FT_INT32, BASE_DEC, VALS(pres_Provider_reason_vals), 0,
         NULL, HFILL }},
     { &hf_pres_aru_ppdu,
@@ -1572,11 +1564,11 @@ void proto_register_pres(void) {
         FT_NONE, BASE_NONE, NULL, 0,
         NULL, HFILL }},
     { &hf_pres_aRU_PPDU_x400_mode_parameters,
-      { "x400-mode-parameters", "pres.x400_mode_parameters_element",
+      { "x400-mode-parameters", "pres.aRU_PPDU_x400_mode_parameters_element",
         FT_NONE, BASE_NONE, NULL, 0,
         "RTABapdu", HFILL }},
     { &hf_pres_aRU_PPDU_normal_mode_parameters,
-      { "normal-mode-parameters", "pres.normal_mode_parameters_element",
+      { "normal-mode-parameters", "pres.aRU_PPDU_normal_mode_parameters_element",
         FT_NONE, BASE_NONE, NULL, 0,
         "T_ARU_PPDU_normal_mode_parameters", HFILL }},
     { &hf_pres_presentation_context_identifier_list,
@@ -1584,7 +1576,7 @@ void proto_register_pres(void) {
         FT_UINT32, BASE_DEC, NULL, 0,
         NULL, HFILL }},
     { &hf_pres_aRU_PPDU_provider_reason,
-      { "provider-reason", "pres.provider_reason",
+      { "provider-reason", "pres.aRU_PPDU_provider_reason",
         FT_INT32, BASE_DEC, VALS(pres_Abort_reason_vals), 0,
         "Abort_reason", HFILL }},
     { &hf_pres_event_identifier,
@@ -1778,7 +1770,7 @@ void proto_register_pres(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 		&ett_pres,
     &ett_pres_CP_type,
     &ett_pres_T_normal_mode_parameters,
@@ -1821,7 +1813,7 @@ void proto_register_pres(void) {
   static ei_register_info ei[] = {
      { &ei_pres_dissector_not_available, { "pres.dissector_not_available", PI_UNDECODED, PI_WARN, "Dissector is not available", EXPFILL }},
      { &ei_pres_wrong_spdu_type, { "pres.wrong_spdu_type", PI_PROTOCOL, PI_WARN, "Internal error:can't get spdu type from session dissector", EXPFILL }},
-     { &ei_pres_invalid_offset, { "pres.invalid_offset", PI_MALFORMED, PI_ERROR, "Internal error:can't get spdu type from session dissector", EXPFILL }},
+     { &ei_pres_invalid_offset, { "pres.invalid_offset", PI_MALFORMED, PI_ERROR, "Internal error: PPDU made offset go backwards", EXPFILL }},
   };
 
   static uat_field_t users_flds[] = {
@@ -1833,7 +1825,7 @@ void proto_register_pres(void) {
   uat_t* users_uat = uat_new("PRES Users Context List",
                              sizeof(pres_user_t),
                              "pres_context_list",
-                             TRUE,
+                             true,
                              &pres_users,
                              &num_pres_users,
                              UAT_AFFECTS_DISSECTION, /* affects dissection of packets, but not set of named fields */
@@ -1849,11 +1841,11 @@ void proto_register_pres(void) {
   module_t *pres_module;
 
   /* Register protocol */
-  proto_pres = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_pres = proto_register_protocol("ISO 8823 OSI Presentation Protocol", "PRES", "pres");
   register_dissector("pres", dissect_pres, proto_pres);
 
   /* Register connectionless protocol (just for the description) */
-  proto_clpres = proto_register_protocol(CLPNAME, CLPSNAME, CLPFNAME);
+  proto_clpres = proto_register_protocol("ISO 9576-1 OSI Connectionless Presentation Protocol", "CLPRES", "clpres");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_pres, hf, array_length(hf));

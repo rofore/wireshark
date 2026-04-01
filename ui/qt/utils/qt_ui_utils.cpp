@@ -11,12 +11,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include <ui/qt/utils/qt_ui_utils.h>
 
 #include <epan/addr_resolv.h>
+#include <epan/guid-utils.h>
 #include <epan/range.h>
 #include <epan/to_str.h>
-#include <epan/value_string.h>
+#include <wsutil/value_string.h>
 
 #include <ui/recent.h>
 #include <ui/util.h>
@@ -33,6 +38,7 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QScreen>
 
@@ -50,15 +56,15 @@
  * to .toUtf8().constData().
  */
 
-gchar *qstring_strdup(QString q_string) {
+char *qstring_strdup(QString q_string) {
     return g_strdup(qUtf8Printable(q_string));
 }
 
-QString gchar_free_to_qstring(gchar *glib_string) {
+QString gchar_free_to_qstring(char *glib_string) {
     return QString(gchar_free_to_qbytearray(glib_string));
 }
 
-QByteArray gchar_free_to_qbytearray(gchar *glib_string)
+QByteArray gchar_free_to_qbytearray(char *glib_string)
 {
     QByteArray qt_bytearray(glib_string);
     g_free(glib_string);
@@ -75,7 +81,7 @@ QByteArray gstring_free_to_qbytearray(GString *glib_gstring)
 QByteArray gbytearray_free_to_qbytearray(GByteArray *glib_array)
 {
     QByteArray qt_ba(reinterpret_cast<char *>(glib_array->data), glib_array->len);
-    g_byte_array_free(glib_array, TRUE);
+    g_byte_array_free(glib_array, true);
     return qt_ba;
 }
 
@@ -97,7 +103,7 @@ const QString int_to_qstring(qint64 value, int field_width, int base)
         break;
     }
 
-    int_qstr += QString("%1").arg(value, field_width, base, QChar('0'));
+    int_qstr += QStringLiteral("%1").arg(value, field_width, base, QChar('0'));
     return int_qstr;
 }
 
@@ -106,7 +112,7 @@ const QString address_to_qstring(const _address *address, bool enclose)
     QString address_qstr = QString();
     if (address) {
         if (enclose && address->type == AT_IPv6) address_qstr += "[";
-        gchar *address_gchar_p = address_to_str(NULL, address);
+        char *address_gchar_p = address_to_str(NULL, address);
         address_qstr += address_gchar_p;
         wmem_free(NULL, address_gchar_p);
         if (enclose && address->type == AT_IPv6) address_qstr += "]";
@@ -118,27 +124,27 @@ const QString address_to_display_qstring(const _address *address)
 {
     QString address_qstr = QString();
     if (address) {
-        gchar *address_gchar_p = address_to_display(NULL, address);
+        char *address_gchar_p = address_to_display(NULL, address);
         address_qstr = address_gchar_p;
         wmem_free(NULL, address_gchar_p);
     }
     return address_qstr;
 }
 
-const QString val_to_qstring(const guint32 val, const value_string *vs, const char *fmt)
+const QString val_to_qstring(const uint32_t val, const value_string *vs, const char *fmt)
 {
     QString val_qstr;
-    gchar* gchar_p = val_to_str_wmem(NULL, val, vs, fmt);
+    char* gchar_p = val_to_str(NULL, val, vs, fmt);
     val_qstr = gchar_p;
     wmem_free(NULL, gchar_p);
 
     return val_qstr;
 }
 
-const QString val_ext_to_qstring(const guint32 val, value_string_ext *vse, const char *fmt)
+const QString val_ext_to_qstring(const uint32_t val, value_string_ext *vse, const char *fmt)
 {
     QString val_qstr;
-    gchar* gchar_p = val_to_str_ext_wmem(NULL, val, vse, fmt);
+    char* gchar_p = val_to_str_ext(NULL, val, vse, fmt);
     val_qstr = gchar_p;
     wmem_free(NULL, gchar_p);
 
@@ -149,7 +155,7 @@ const QString range_to_qstring(const range_string *range)
 {
     QString range_qstr = QString();
     if (range) {
-        range_qstr += QString("%1-%2").arg(range->value_min).arg(range->value_max);
+        range_qstr += QStringLiteral("%1-%2").arg(range->value_min).arg(range->value_max);
     }
     return range_qstr;
 }
@@ -160,7 +166,7 @@ const QString bits_s_to_qstring(const double bits_s)
                 format_size(bits_s, FORMAT_SIZE_UNIT_NONE, FORMAT_SIZE_PREFIX_SI));
 }
 
-const QString file_size_to_qstring(const gint64 size)
+const QString file_size_to_qstring(const int64_t size)
 {
     return gchar_free_to_qstring(
                 format_size(size, FORMAT_SIZE_UNIT_BYTES, FORMAT_SIZE_PREFIX_SI));
@@ -173,10 +179,32 @@ const QString time_t_to_qstring(time_t ti_time)
     return time_str;
 }
 
+QUuid e_guid_t_to_quuid(const e_guid_t &guid)
+{
+    return QUuid(guid.data1, guid.data2, guid.data3,
+        guid.data4[0], guid.data4[1], guid.data4[2], guid.data4[3],
+        guid.data4[4], guid.data4[5], guid.data4[6], guid.data4[7]);
+}
+
 QString html_escape(const QString plain_string) {
     return plain_string.toHtmlEscaped();
 }
 
+// This matches line terminators plus whitespace before or after.
+static const QRegularExpression join_lines_regexp("\\s*\\R\\s*");
+
+QString join_lines(const QString multiline_string) {
+    // Replace all nonoverlapping matches with a single space.
+    // Certain file formats (prefs, filter files, etc.) expect one entry
+    // per line and newlines create unexpected behavior.
+    // Removing line terminators outside quotes doesn't change the behavior
+    // of a filter, but it does to remove non-escaped line terminators inside
+    // string and character literals (which are arguably user error.)
+    // A more complicated algorithm could try to escape things inside
+    // quotes, which would work for normal string and character literals
+    // but not for raw string literals, which just break with newlines.
+    return QString(multiline_string).replace(join_lines_regexp, QStringLiteral(" "));
+}
 
 void smooth_font_size(QFont &font) {
 #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
@@ -246,7 +274,14 @@ void desktop_show_in_folder(const QString file_path)
     // If that failed, perhaps we are sandboxed.  Try using Portal Services.
     // https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.OpenURI.html
     if (!success) {
-        const int fd = ws_open(QFile::encodeName(file_path), O_CLOEXEC | O_PATH, 0000);
+        const int flags =
+#ifdef O_PATH
+            O_CLOEXEC | O_PATH; /* Get an fd, but refrain from opening the file for I/O. */
+#else
+            O_CLOEXEC | O_RDONLY;
+#endif
+
+        const int fd = ws_open(QFile::encodeName(file_path), flags, 0000);
         if (fd != -1) {
             QDBusUnixFileDescriptor descriptor;
             descriptor.giveFileDescriptor(fd);
@@ -283,17 +318,9 @@ bool rect_on_screen(const QRect &rect)
 
 void set_action_shortcuts_visible_in_context_menu(QList<QAction *> actions)
 {
-#if QT_VERSION < QT_VERSION_CHECK(5, 13, 0)
     // For QT_VERSION >= 5.13.0 we call styleHints()->setShowShortcutsInContextMenus(true)
     // in WiresharkApplication.
-    // QTBUG-71471
-    // QTBUG-61181
-    foreach (QAction *action, actions) {
-        action->setShortcutVisibleInContextMenu(true);
-    }
-#else
     Q_UNUSED(actions)
-#endif
 }
 
 QVector<rtpstream_id_t *>qvector_rtpstream_ids_copy(QVector<rtpstream_id_t *> stream_ids)
@@ -323,7 +350,7 @@ QString make_filter_based_on_rtpstream_id(QVector<rtpstream_id_t *> stream_ids)
 
     foreach(rtpstream_id_t *id, stream_ids) {
         QString ip_proto = id->src_addr.type == AT_IPv6 ? "ipv6" : "ip";
-        stream_filters << QString("(%1.src==%2 && udp.srcport==%3 && %1.dst==%4 && udp.dstport==%5 && rtp.ssrc==0x%6)")
+        stream_filters << QStringLiteral("(%1.src==%2 && udp.srcport==%3 && %1.dst==%4 && udp.dstport==%5 && rtp.ssrc==0x%6)")
                          .arg(ip_proto) // %1
                          .arg(address_to_qstring(&id->src_addr)) // %2
                          .arg(id->src_port) // %3
@@ -355,5 +382,51 @@ void storeLastDir(QString dir)
     /* XXX - printable? */
     if (dir.length() > 0)
         set_last_open_dir(qUtf8Printable(dir));
+}
+
+bool filePathsMatch(const QString &path1, const QString &path2)
+{
+    QFileInfo fi1(path1);
+    QFileInfo fi2(path2);
+
+    if (fi1.exists() && fi2.exists()) {
+        return fi1 == fi2;
+    }
+
+    QString abs1 = fi1.absoluteFilePath();
+    QString abs2 = fi2.absoluteFilePath();
+
+#if defined(Q_OS_WIN)
+    return abs1.compare(abs2, Qt::CaseInsensitive) == 0;
+#endif
+
+    Qt::CaseSensitivity cs = Qt::CaseSensitive;
+
+#ifdef _PC_CASE_SENSITIVE
+    // Determine case sensitivity from the actual filesystem.
+    // Try the paths themselves first, then their parent directories.
+    // Default to case-insensitive since platforms that define
+    // _PC_CASE_SENSITIVE (macOS, FreeBSD) are typically
+    // case-insensitive by default (APFS, HFS+).
+    QString probe;
+    if (fi1.exists())
+        probe = abs1;
+    else if (fi2.exists())
+        probe = abs2;
+    else if (QFileInfo(fi1.absolutePath()).exists())
+        probe = fi1.absolutePath();
+    else if (QFileInfo(fi2.absolutePath()).exists())
+        probe = fi2.absolutePath();
+
+    if (probe.isEmpty()) {
+        cs = Qt::CaseInsensitive;
+    } else {
+        auto ret = pathconf(probe.toUtf8().constData(), _PC_CASE_SENSITIVE);
+        if (ret != 1)
+            cs = Qt::CaseInsensitive;
+    }
+#endif
+
+    return abs1.compare(abs2, cs) == 0;
 }
 

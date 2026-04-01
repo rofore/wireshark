@@ -1459,7 +1459,7 @@ class Grammar(object):
         self.Precedence   = {}      # Precedence rules for each terminal. Contains tuples of the
                                     # form ('right',level) or ('nonassoc', level) or ('left',level)
 
-        self.UsedPrecedence = set() # Precedence rules that were actually used by the grammer.
+        self.UsedPrecedence = set() # Precedence rules that were actually used by the grammar.
                                     # This is only used to provide error checking and to generate
                                     # a warning about unused precedence rules.
 
@@ -2649,7 +2649,7 @@ class LRGeneratedTable(LRTable):
             for a, p, m in actlist:
                 if a in st_action:
                     if p is not st_actionp[a]:
-                        if not (a, m) in _actprint:
+                        if (a, m) not in _actprint:
                             log.debug('  ! %-15s [ %s ]', a, m)
                             not_used = 1
                             _actprint[(a, m)] = 1
@@ -2794,7 +2794,7 @@ del _lr_goto_items
             f.write(']\n')
             f.close()
 
-        except IOError as e:
+        except IOError:
             raise
 
 

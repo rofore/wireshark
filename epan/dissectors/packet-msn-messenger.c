@@ -45,7 +45,7 @@ static dissector_handle_t msnms_handle;
 static int proto_msnms;
 /* static int hf_msnms_command; */
 
-static gint ett_msnms;
+static int ett_msnms;
 
 #define TCP_PORT_MSNMS    1863
 
@@ -54,23 +54,23 @@ dissect_msnms(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U
 {
     proto_tree   *msnms_tree;
     proto_item   *ti;
-    gint          offset = 0;
-    const guchar *line;
-    gint          next_offset;
-    int           linelen;
+    unsigned      offset = 0;
+    const unsigned char *line;
+    unsigned      next_offset;
+    unsigned      linelen;
     /* int              tokenlen; */
-    /* const guchar     *next_token; */
+    /* const unsigned char     *next_token; */
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "MSNMS");
 
     /*
      * Find the end of the first line.
      *
-     * Note that "tvb_find_line_end()" will return a value that is
+     * Note that "tvb_find_line_end_remaining()" will return a value that is
      * not longer than what's in the buffer, so the "tvb_get_ptr()"
      * call won't throw an exception.
      */
-    linelen = tvb_find_line_end(tvb, offset, -1, &next_offset, FALSE);
+    (void) tvb_find_line_end_remaining(tvb, offset, &linelen, &next_offset);
     line = tvb_get_ptr(tvb, offset, linelen);
 
 
@@ -78,7 +78,7 @@ dissect_msnms(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U
      * Put the first line from the buffer into the summary.
      */
     col_add_str(pinfo->cinfo, COL_INFO,
-                format_text(pinfo->pool, line, linelen));
+                format_text(pinfo->pool, (const char*)line, linelen));
 
     if (tree) {
         ti = proto_tree_add_item(tree, proto_msnms, tvb, offset, -1,
@@ -93,8 +93,7 @@ dissect_msnms(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U
             /*
              * Find the end of the line.
              */
-            tvb_find_line_end(tvb, offset, -1,
-                              &next_offset, FALSE);
+            (void) tvb_find_line_end_remaining(tvb, offset, NULL, &next_offset);
 
             /*
              * Put this line.
@@ -109,7 +108,7 @@ dissect_msnms(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U
 void
 proto_register_msnms(void)
 {
-    static gint *ett[] = {
+    static int *ett[] = {
         &ett_msnms,
     };
 

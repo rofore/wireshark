@@ -18,16 +18,13 @@
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-per.h"
 #include "packet-tcp.h"
 #include "packet-gsm_map.h"
 #include "packet-e164.h"
 #include "packet-e212.h"
-
-#define PNAME  "OMA Internal Location Protocol"
-#define PSNAME "ILP"
-#define PFNAME "ilp"
 
 void proto_register_ilp(void);
 
@@ -47,14 +44,14 @@ static int proto_ilp;
 
 #define ILP_HEADER_SIZE 2
 
-static gboolean ilp_desegment = TRUE;
+static bool ilp_desegment = true;
 
 #include "packet-ilp-hf.c"
 static int hf_ilp_mobile_directory_number;
 
 /* Initialize the subtree pointers */
-static gint ett_ilp;
-static gint ett_ilp_setid;
+static int ett_ilp;
+static int ett_ilp_setid;
 #include "packet-ilp-ett.c"
 
 /* Include constants */
@@ -64,7 +61,7 @@ static gint ett_ilp_setid;
 #include "packet-ilp-fn.c"
 
 
-static guint
+static unsigned
 get_ilp_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *data _U_)
 {
   /* PDU length = Message length */
@@ -95,7 +92,7 @@ void proto_register_ilp(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_ilp,
     &ett_ilp_setid,
 #include "packet-ilp-ettarr.c"
@@ -105,7 +102,7 @@ void proto_register_ilp(void) {
 
 
   /* Register protocol */
-  proto_ilp = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_ilp = proto_register_protocol("OMA Internal Location Protocol", "ILP", "ilp");
   ilp_tcp_handle = register_dissector("ilp", dissect_ilp_tcp, proto_ilp);
 
   /* Register fields and subtrees */

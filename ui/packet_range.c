@@ -18,33 +18,38 @@
 #include <glib.h>
 
 #include <epan/frame_data.h>
+#include <epan/prefs.h>
 
 #include "packet_range.h"
 
 #include <wsutil/ws_assert.h>
 
 static void
-depended_frames_add(GHashTable* depended_table, frame_data_sequence *frames, frame_data *frame)
+// NOLINTNEXTLINE(misc-no-recursion)
+depended_frames_add(GHashTable* depended_table, frame_data_sequence *frames, frame_data *frame, unsigned depth)
 {
+    if (depth > prefs.gui_max_tree_depth) {
+        return;
+    }
     if (g_hash_table_add(depended_table, GUINT_TO_POINTER(frame->num)) && frame->dependent_frames) {
         GHashTableIter iter;
-        gpointer key;
+        void *key;
         frame_data *depended_fd;
         g_hash_table_iter_init(&iter, frame->dependent_frames);
         while (g_hash_table_iter_next(&iter, &key, NULL)) {
             depended_fd = frame_data_sequence_find(frames, GPOINTER_TO_UINT(key));
-            depended_frames_add(depended_table, frames, depended_fd);
+            depended_frames_add(depended_table, frames, depended_fd, depth + 1);
         }
     }
 }
 
 /* (re-)calculate the packet counts (except the user specified range) */
 static void packet_range_calc(packet_range_t *range) {
-    guint32       framenum;
-    guint32       mark_low;
-    guint32       mark_high;
-    guint32       displayed_mark_low;
-    guint32       displayed_mark_high;
+    uint32_t      framenum;
+    uint32_t      mark_low;
+    uint32_t      mark_high;
+    uint32_t      displayed_mark_low;
+    uint32_t      displayed_mark_high;
     frame_data    *packet;
 
 
@@ -123,7 +128,7 @@ static void packet_range_calc(packet_range_t *range) {
                     if (framenum > displayed_mark_high) {
                        displayed_mark_high = framenum;
                     }
-                    depended_frames_add(range->displayed_marked_plus_depends, range->cf->provider.frames, packet);
+                    depended_frames_add(range->displayed_marked_plus_depends, range->cf->provider.frames, packet, 0);
                 }
 
                 if (mark_low == 0) {
@@ -132,7 +137,7 @@ static void packet_range_calc(packet_range_t *range) {
                 if (framenum > mark_high) {
                    mark_high = framenum;
                 }
-                depended_frames_add(range->marked_plus_depends, range->cf->provider.frames, packet);
+                depended_frames_add(range->marked_plus_depends, range->cf->provider.frames, packet, 0);
             }
             if (packet->ignored) {
                 range->ignored_cnt++;
@@ -152,7 +157,7 @@ static void packet_range_calc(packet_range_t *range) {
                 if (packet->ignored) {
                     range->ignored_mark_range_cnt++;
                 }
-                depended_frames_add(range->mark_range_plus_depends, range->cf->provider.frames, packet);
+                depended_frames_add(range->mark_range_plus_depends, range->cf->provider.frames, packet, 0);
             }
 
             if (framenum >= displayed_mark_low &&
@@ -164,7 +169,7 @@ static void packet_range_calc(packet_range_t *range) {
                         range->displayed_ignored_mark_range_cnt++;
                     }
                 }
-                depended_frames_add(range->displayed_mark_range_plus_depends, range->cf->provider.frames, packet);
+                depended_frames_add(range->displayed_mark_range_plus_depends, range->cf->provider.frames, packet, 0);
             }
         }
         range->marked_plus_depends_cnt = g_hash_table_size(range->marked_plus_depends);
@@ -177,7 +182,7 @@ static void packet_range_calc(packet_range_t *range) {
 
 /* (re-)calculate the user specified packet range counts */
 static void packet_range_calc_user(packet_range_t *range) {
-    guint32       framenum;
+    uint32_t      framenum;
     frame_data    *packet;
 
     range->user_range_cnt                   = 0;
@@ -216,13 +221,13 @@ static void packet_range_calc_user(packet_range_t *range) {
                 if (packet->ignored) {
                     range->ignored_user_range_cnt++;
                 }
-                depended_frames_add(range->user_range_plus_depends, range->cf->provider.frames, packet);
+                depended_frames_add(range->user_range_plus_depends, range->cf->provider.frames, packet, 0);
                 if (packet->passed_dfilter) {
                     range->displayed_user_range_cnt++;
                     if (packet->ignored) {
                         range->displayed_ignored_user_range_cnt++;
                     }
-                    depended_frames_add(range->displayed_user_range_plus_depends, range->cf->provider.frames, packet);
+                    depended_frames_add(range->displayed_user_range_plus_depends, range->cf->provider.frames, packet, 0);
                 }
             }
         }
@@ -232,7 +237,7 @@ static void packet_range_calc_user(packet_range_t *range) {
 }
 
 static void packet_range_calc_selection(packet_range_t *range) {
-    guint32       framenum;
+    uint32_t      framenum;
     frame_data    *packet;
 
     range->selection_range_cnt                   = 0;
@@ -251,13 +256,13 @@ static void packet_range_calc_selection(packet_range_t *range) {
                 if (packet->ignored) {
                     range->ignored_selection_range_cnt++;
                 }
-                depended_frames_add(range->selected_plus_depends, range->cf->provider.frames, packet);
+                depended_frames_add(range->selected_plus_depends, range->cf->provider.frames, packet, 0);
                 if (packet->passed_dfilter) {
                     range->displayed_selection_range_cnt++;
                     if (packet->ignored) {
                         range->displayed_ignored_selection_range_cnt++;
                     }
-                    depended_frames_add(range->displayed_selected_plus_depends, range->cf->provider.frames, packet);
+                    depended_frames_add(range->displayed_selected_plus_depends, range->cf->provider.frames, packet, 0);
                 }
             }
         }
@@ -320,9 +325,9 @@ convert_ret_t packet_range_check(packet_range_t *range) {
 void packet_range_process_init(packet_range_t *range) {
     /* Check that, if an explicit range was selected, it's valid. */
     /* "enumeration" values */
-    range->marked_range_active    = FALSE;
+    range->marked_range_active    = false;
 
-    if (range->process_filtered == FALSE) {
+    if (range->process_filtered == false) {
         range->marked_range_left = range->mark_range_cnt;
     } else {
         range->marked_range_left = range->displayed_mark_range_cnt;
@@ -333,7 +338,7 @@ void packet_range_process_init(packet_range_t *range) {
 }
 
 /* do we have to process all packets? */
-gboolean packet_range_process_all(packet_range_t *range) {
+bool packet_range_process_all(packet_range_t *range) {
     return range->process == range_process_all && !range->process_filtered && !range->remove_ignored;
 }
 
@@ -343,7 +348,7 @@ packet_range_process_packet_include_depends(packet_range_t *range, frame_data *f
     switch(range->process) {
     case(range_process_all):
         if (range->process_filtered) {
-            if ((fdata->passed_dfilter || fdata->dependent_of_displayed) == FALSE) {
+            if ((fdata->passed_dfilter || fdata->dependent_of_displayed) == false) {
                 return range_process_next;
             }
         }
@@ -422,12 +427,12 @@ range_process_e packet_range_process_packet(packet_range_t *range, frame_data *f
     case(range_process_all):
         break;
     case(range_process_selected):
-        if (value_is_in_range(range->selection_range, fdata->num) == FALSE) {
+        if (value_is_in_range(range->selection_range, fdata->num) == false) {
           return range_process_next;
         }
         break;
     case(range_process_marked):
-        if (fdata->marked == FALSE) {
+        if (fdata->marked == false) {
           return range_process_next;
         }
         break;
@@ -435,20 +440,20 @@ range_process_e packet_range_process_packet(packet_range_t *range, frame_data *f
         if (range->marked_range_left == 0) {
           return range_processing_finished;
         }
-        if (fdata->marked == TRUE) {
-          range->marked_range_active = TRUE;
+        if (fdata->marked == true) {
+          range->marked_range_active = true;
         }
-        if (range->marked_range_active == FALSE ) {
+        if (range->marked_range_active == false ) {
           return range_process_next;
         }
         if (!range->process_filtered ||
-          (range->process_filtered && fdata->passed_dfilter == TRUE))
+          (range->process_filtered && fdata->passed_dfilter == true))
         {
           range->marked_range_left--;
         }
         break;
     case(range_process_user_range):
-        if (value_is_in_range(range->user_range, fdata->num) == FALSE) {
+        if (value_is_in_range(range->user_range, fdata->num) == false) {
           return range_process_next;
         }
         break;
@@ -460,7 +465,7 @@ range_process_e packet_range_process_packet(packet_range_t *range, frame_data *f
      * Try next (if we're including dependent packets we called the
      * other function above).
      */
-    if ((range->process_filtered && fdata->passed_dfilter == FALSE)) {
+    if ((range->process_filtered && fdata->passed_dfilter == false)) {
         return range_process_next;
     }
 
@@ -476,7 +481,7 @@ range_process_e packet_range_process_packet(packet_range_t *range, frame_data *f
  * the Save/Print-As widget.
  */
 
-void packet_range_convert_str(packet_range_t *range, const gchar *es)
+void packet_range_convert_str(packet_range_t *range, const char *es)
 {
     range_t *new_range;
     convert_ret_t ret;
@@ -536,4 +541,116 @@ void packet_range_convert_selection_str(packet_range_t *range, const char *es)
 
     /* calculate new user specified packet range counts */
     packet_range_calc_selection(range);
+}
+
+uint32_t packet_range_count(const packet_range_t *range)
+{
+    uint32_t count;
+    switch(range->process) {
+    case(range_process_all):
+        if (range->process_filtered) {
+            if (range->include_dependents) {
+                count = range->displayed_plus_dependents_cnt;
+            } else {
+                count = range->displayed_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->displayed_ignored_cnt;
+            }
+        } else {
+            count = range->cf->count;
+            if (range->remove_ignored) {
+                count -= range->ignored_cnt;
+            }
+        }
+        break;
+    case(range_process_selected):
+        if (range->process_filtered) {
+            if (range->include_dependents) {
+                count = range->displayed_selected_plus_depends_cnt;
+            } else {
+                count = range->displayed_selection_range_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->displayed_ignored_selection_range_cnt;
+            }
+        } else {
+            if (range->include_dependents) {
+                count = range->selected_plus_depends_cnt;
+            } else {
+                count = range->selection_range_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->ignored_selection_range_cnt;
+            }
+        }
+        break;
+    case(range_process_marked):
+        if (range->process_filtered) {
+            if (range->include_dependents) {
+                count = range->displayed_marked_plus_depends_cnt;
+            } else {
+                count = range->displayed_marked_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->displayed_ignored_marked_cnt;
+            }
+        } else {
+            if (range->include_dependents) {
+                count = range->marked_plus_depends_cnt;
+            } else {
+                count = range->cf->marked_count;
+            }
+            if (range->remove_ignored) {
+                count -= range->ignored_marked_cnt;
+            }
+        }
+        break;
+    case(range_process_marked_range):
+        if (range->process_filtered) {
+            if (range->include_dependents) {
+                count = range->displayed_mark_range_plus_depends_cnt;
+            } else {
+                count = range->displayed_mark_range_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->displayed_ignored_mark_range_cnt;
+            }
+        } else {
+            if (range->include_dependents) {
+                count = range->mark_range_plus_depends_cnt;
+            } else {
+                count = range->mark_range_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->ignored_mark_range_cnt;
+            }
+        }
+        break;
+    case(range_process_user_range):
+        if (range->process_filtered) {
+            if (range->include_dependents) {
+                count = range->displayed_user_range_plus_depends_cnt;
+            } else {
+                count = range->displayed_user_range_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->displayed_ignored_user_range_cnt;
+            }
+        } else {
+            if (range->include_dependents) {
+                count = range->user_range_plus_depends_cnt;
+            } else {
+                count = range->user_range_cnt;
+            }
+            if (range->remove_ignored) {
+                count -= range->ignored_user_range_cnt;
+            }
+        }
+        break;
+    default:
+        ws_assert_not_reached();
+    }
+
+    return count;
 }

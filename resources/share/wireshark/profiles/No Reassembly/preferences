@@ -67,6 +67,7 @@ ippusb.attempt_reassembly: FALSE
 iscsi.desegment_iscsi_messages: FALSE
 isns.desegment: FALSE
 iwarp_ddp_rdmap.reassemble_iwarp_rdma_send: FALSE
+json.plus_desegment: FALSE
 jxta.desegment: FALSE
 kip.desegment: FALSE
 kpasswd.desegment: FALSE
@@ -93,7 +94,10 @@ ncp.desegment: FALSE
 ndmp.desegment: FALSE
 ndps.desegment_tcp: FALSE
 ndps.desegment_spx: FALSE
+netperfmeter.desegment: FALSE
 netsync.desegment_netsync_messages: FALSE
+nmf.reassemble_nmf: FALSE
+oran_fh_cus.oran.attempt_reassembly: FALSE
 opa.mad.reassemble_rmpp: FALSE
 openflow.desegment: FALSE
 openwire.desegment: FALSE
@@ -109,6 +113,7 @@ pvfs.desegment: FALSE
 q931.desegment_h323_messages: FALSE
 q931.reassembly: FALSE
 quic.reassemble_crypto_out_of_order: FALSE
+quic.reassemble_stream_out_of_order: FALSE
 resp.desegment_data: FALSE
 rlc.perform_reassembly: FALSE
 rlc-lte.reassembly: FALSE
@@ -122,6 +127,7 @@ rtsp.desegment_headers: FALSE
 rtsp.desegment_body: FALSE
 sametime.reassemble: FALSE
 sapni.desegment: FALSE
+saprfc.table_reassembly: FALSE
 sasp.desegment_sasp_messages: FALSE
 sctp.reassembly: FALSE
 scylla.desegment: FALSE
@@ -134,6 +140,7 @@ smb.trans_reassembly: FALSE
 smb.dcerpc_reassembly: FALSE
 smb2.pipe_reassembly: FALSE
 smb_direct.reassemble_smb_direct: FALSE
+smb_direct.reassemble_smb_direct_infiniband: FALSE
 sml.reassemble: FALSE
 smp.desegment: FALSE
 smpp.reassemble_smpp_over_tcp: FALSE

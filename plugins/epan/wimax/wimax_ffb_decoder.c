@@ -19,23 +19,23 @@
 #include <epan/packet.h>
 #include "wimax-int.h"
 
-extern gint proto_wimax;
+extern int proto_wimax;
 
-static gint proto_wimax_ffb_decoder;
-static gint ett_wimax_ffb_decoder;
+static int proto_wimax_ffb_decoder;
+static int ett_wimax_ffb_decoder;
 
-/* static gint hf_ffb_burst; */
-static gint hf_ffb_num_of_ffbs;
-static gint hf_ffb_type;
-static gint hf_ffb_subchannel;
-static gint hf_ffb_symboloffset;
-static gint hf_ffb_value;
+/* static int hf_ffb_burst; */
+static int hf_ffb_num_of_ffbs;
+static int hf_ffb_type;
+static int hf_ffb_subchannel;
+static int hf_ffb_symboloffset;
+static int hf_ffb_value;
 
 
 static int dissect_wimax_ffb_decoder(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
-	gint offset = 0;
-	guint length, num_of_ffbs, i;
+	int offset = 0;
+	unsigned length, num_of_ffbs, i;
 	proto_item *ffb_item = NULL;
 	proto_tree *ffb_tree = NULL;
 
@@ -49,10 +49,8 @@ static int dissect_wimax_ffb_decoder(tvbuff_t *tvb, packet_info *pinfo, proto_tr
 		ffb_item = proto_tree_add_protocol_format(tree, proto_wimax_ffb_decoder, tvb, offset, length, "Fast Feedback Burst (%u bytes)", length);
 		/* add Fast Feedback Burst subtree */
 		ffb_tree = proto_item_add_subtree(ffb_item, ett_wimax_ffb_decoder);
-		/* get the number of FFBs */
-		num_of_ffbs =  tvb_get_guint8(tvb, offset);
-		/* display the number of FFBs */
-		proto_tree_add_item(ffb_tree, hf_ffb_num_of_ffbs, tvb, offset++, 1, ENC_BIG_ENDIAN);
+		/* number of FFBs */
+		proto_tree_add_item_ret_uint(ffb_tree, hf_ffb_num_of_ffbs, tvb, offset++, 1, ENC_BIG_ENDIAN, &num_of_ffbs);
 		/* display the FFB type */
 		proto_tree_add_item(ffb_tree, hf_ffb_type, tvb, offset++, 1, ENC_BIG_ENDIAN);
 		/* display the FFBs */
@@ -101,7 +99,7 @@ void wimax_proto_register_wimax_ffb(void)
 	};
 
 	/* Setup protocol subtree array */
-	static gint *ett[] =
+	static int *ett[] =
 		{
 			&ett_wimax_ffb_decoder,
 		};

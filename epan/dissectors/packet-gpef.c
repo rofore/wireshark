@@ -29,8 +29,8 @@ static int hf_gpef_efskey_cert_offset;
 static int hf_gpef_efskey_cert_length;
 static int hf_gpef_efskey_certificate;
 
-static gint ett_gpef;
-static gint ett_gpef_efskey;
+static int ett_gpef;
+static int ett_gpef_efskey;
 
 
 /* MS-GPEF section 2.2.1.2.2 EfsKey*/
@@ -40,20 +40,19 @@ dissect_gpef_efskey(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tree *p
 	proto_item *item = NULL;
 	proto_tree *tree = NULL;
 	int old_offset = offset;
-	guint32 length1, sid_offset;
-	guint32 cert_length, cert_offset;
+	uint32_t length1, sid_offset;
+	uint32_t cert_length, cert_offset;
 	tvbuff_t *next_tvb;
 	asn1_ctx_t asn1_ctx;
-	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
+	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
 
 	if (parent_tree) {
-		item = proto_tree_add_item(parent_tree, hf_gpef_efskey, tvb, -1, -1, ENC_NA);
+		item = proto_tree_add_item(parent_tree, hf_gpef_efskey, tvb, 0, -1, ENC_NA);
 		tree = proto_item_add_subtree(item, ett_gpef_efskey);
 	}
 
 	/* length 1 */
-	length1 = tvb_get_letohl(tvb, offset);
-	proto_tree_add_item(tree, hf_gpef_efskey_length1, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+	proto_tree_add_item_ret_uint(tree, hf_gpef_efskey_length1, tvb, offset, 4, ENC_LITTLE_ENDIAN, &length1);
 	offset += 4;
 
 	/* length 2 */
@@ -61,32 +60,29 @@ dissect_gpef_efskey(tvbuff_t *tvb, int offset, packet_info *pinfo, proto_tree *p
 	offset += 4;
 
 	/* sid offset */
-	sid_offset = tvb_get_letohl(tvb, offset);
-	proto_tree_add_item(tree, hf_gpef_efskey_sid_offset, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+	proto_tree_add_item_ret_uint(tree, hf_gpef_efskey_sid_offset, tvb, offset, 4, ENC_LITTLE_ENDIAN, &sid_offset);
 	offset += 4;
 
 	/* reserved */
 	offset += 4;
 
 	/* cert length */
-	cert_length = tvb_get_letohl(tvb, offset);
-	proto_tree_add_item(tree, hf_gpef_efskey_cert_length, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+	proto_tree_add_item_ret_uint(tree, hf_gpef_efskey_cert_length, tvb, offset, 4, ENC_LITTLE_ENDIAN, &cert_length);
 	offset += 4;
 
 	/* cert offset */
-	cert_offset = tvb_get_letohl(tvb, offset);
-	proto_tree_add_item(tree, hf_gpef_efskey_cert_offset, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+	proto_tree_add_item_ret_uint(tree, hf_gpef_efskey_cert_offset, tvb, offset, 4, ENC_LITTLE_ENDIAN, &cert_offset);
 	/*offset += 4;*/
 
 	/* reserved, must be 0x20 0x00 0x00 0x00 */
 	/*offset += 4;*/
 
 	/* sid */
-	dissect_nt_sid(tvb, old_offset+4+sid_offset, tree, "sid", NULL, -1);
+	dissect_nt_sid(tvb, pinfo, old_offset+4+sid_offset, tree, "sid", NULL, -1);
 
 	/* certificate */
 	next_tvb = tvb_new_subset_length(tvb, old_offset+4+cert_offset, cert_length);
-	(void)dissect_x509af_Certificate(FALSE, next_tvb, 0, &asn1_ctx, tree, hf_gpef_efskey_certificate);
+	(void)dissect_x509af_Certificate(false, next_tvb, 0, &asn1_ctx, tree, hf_gpef_efskey_certificate);
 
 
 	offset = old_offset + length1;
@@ -101,7 +97,7 @@ dissect_gpef_efsblob(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree,
 	int offset = 0;
 	proto_tree *tree;
 	proto_item *item;
-	guint32 count;
+	uint32_t count;
 
 	item = proto_tree_add_item(parent_tree, proto_gpef, tvb, 0, -1, ENC_NA);
 	tree = proto_item_add_subtree(item, ett_gpef);
@@ -110,8 +106,7 @@ dissect_gpef_efsblob(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree,
 	offset += 4;
 
 	/* key count */
-	count = tvb_get_letohl(tvb, offset);
-	proto_tree_add_item(tree, hf_gpef_keycount, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+	proto_tree_add_item_ret_uint(tree, hf_gpef_keycount, tvb, offset, 4, ENC_LITTLE_ENDIAN, &count);
 	offset += 4;
 
 	while (count--) {
@@ -159,7 +154,7 @@ proto_register_gpef(void)
 
 	};
 
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_gpef,
 		&ett_gpef_efskey,
 	};

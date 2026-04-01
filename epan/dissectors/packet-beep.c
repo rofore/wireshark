@@ -15,16 +15,15 @@
  */
 
 #include "config.h"
+#define WS_LOG_DOMAIN "beep"
 
 #include <stdlib.h>
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/conversation.h>
 #include <epan/expert.h>
+#include <epan/exceptions.h>
 #include <epan/proto_data.h>
-#if defined(DEBUG_BEEP_HASH)
-#include <epan/ws_printf.h>
-#endif
 
 #define TCP_PORT_BEEP 10288 /* Don't think this is IANA registered */
 
@@ -33,8 +32,8 @@ void proto_reg_handoff_beep(void);
 
 static dissector_handle_t beep_handle;
 
-static range_t *global_beep_tcp_ports = NULL;
-static int global_beep_strict_term = TRUE;
+static range_t *global_beep_tcp_ports;
+static bool global_beep_strict_term = true;
 
 static int proto_beep;
 
@@ -135,11 +134,11 @@ struct beep_proto_data {
  */
 
 struct beep_request_key {
-  guint32 conversation;
+  uint32_t conversation;
 };
 
 struct beep_request_val {
-  guint16 processed;     /* Have we processed this conversation? */
+  uint16_t processed;     /* Have we processed this conversation? */
   int size;              /* Size of the message                  */
                          /* We need an indication in each dirn of
                           * whether on not a mime header is expected
@@ -147,19 +146,16 @@ struct beep_request_val {
   int c_mime_hdr, s_mime_hdr;
 };
 
-static wmem_map_t *beep_request_hash = NULL;
+static wmem_map_t *beep_request_hash;
 
 /* Hash Functions */
-static gint
-beep_equal(gconstpointer v, gconstpointer w)
+static int
+beep_equal(const void *v, const void *w)
 {
   const struct beep_request_key *v1 = (const struct beep_request_key *)v;
   const struct beep_request_key *v2 = (const struct beep_request_key *)w;
 
-#if defined(DEBUG_BEEP_HASH)
-  ws_debug_printf("Comparing %08X\n      and %08X\n",
-         v1->conversation, v2->conversation);
-#endif
+  ws_debug("Comparing %08X\n      and %08X\n", v1->conversation, v2->conversation);
 
   if (v1->conversation == v2->conversation)
     return 1;
@@ -168,17 +164,15 @@ beep_equal(gconstpointer v, gconstpointer w)
 
 }
 
-static guint
-beep_hash(gconstpointer v)
+static unsigned
+beep_hash(const void *v)
 {
   const struct beep_request_key *key = (const struct beep_request_key *)v;
-  guint val;
+  unsigned val;
 
   val = key->conversation;
 
-#if defined(DEBUG_BEEP_HASH)
-  ws_debug_printf("BEEP Hash calculated as %u\n", val);
-#endif
+  ws_debug("BEEP Hash calculated as %u\n", val);
 
   return val;
 
@@ -197,9 +191,9 @@ dissect_beep_more(tvbuff_t *tvb, packet_info *pinfo, int offset,
 {
   proto_item *hidden_item;
   int ret = 0;
-  guint8 more = tvb_get_guint8(tvb, offset);
+  uint8_t more = tvb_get_uint8(tvb, offset);
 
-  hidden_item = proto_tree_add_item(tree, hf_beep_more, tvb, offset, 1, ENC_ASCII|ENC_NA);
+  hidden_item = proto_tree_add_item(tree, hf_beep_more, tvb, offset, 1, ENC_ASCII);
   proto_item_set_hidden(hidden_item);
 
   switch(more) {
@@ -233,7 +227,7 @@ static int num_len(tvbuff_t *tvb, int offset)
 {
   unsigned int i = 0;
 
-  while (g_ascii_isdigit(tvb_get_guint8(tvb, offset + i))) i++;
+  while (g_ascii_isdigit(tvb_get_uint8(tvb, offset + i))) i++;
 
   return i;
 
@@ -257,22 +251,22 @@ check_term(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tree *tree)
    * dissection ... so-be-it!
    */
 
-  if ((tvb_get_guint8(tvb, offset) == 0x0d &&
-       tvb_get_guint8(tvb, offset + 1) == 0x0a)){ /* Correct terminator */
+  if ((tvb_get_uint8(tvb, offset) == 0x0d &&
+       tvb_get_uint8(tvb, offset + 1) == 0x0a)){ /* Correct terminator */
 
     proto_tree_add_item(tree, hf_beep_crlf_terminator, tvb, offset, 2, ENC_NA);
     return 2;
 
   }
 
-  if ((tvb_get_guint8(tvb, offset) == 0x0d) && !global_beep_strict_term) {
+  if ((tvb_get_uint8(tvb, offset) == 0x0d) && !global_beep_strict_term) {
 
     proto_tree_add_expert(tree, pinfo, &ei_beep_cr_terminator, tvb, offset, 1);
     return 1;
 
   }
 
-  if ((tvb_get_guint8(tvb, offset) == 0x0a) && !global_beep_strict_term) {
+  if ((tvb_get_uint8(tvb, offset) == 0x0a) && !global_beep_strict_term) {
 
     proto_tree_add_expert(tree, pinfo, &ei_beep_lf_terminator, tvb, offset, 1);
     return 1;
@@ -287,7 +281,7 @@ check_term(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tree *tree)
 static int header_len(tvbuff_t *tvb, int offset)
 {
   int i = 0;
-  guint8 sc;
+  uint8_t sc;
 
   /* FIXME: Have to make sure we stop looking at the end of the tvb ... */
 
@@ -297,8 +291,8 @@ static int header_len(tvbuff_t *tvb, int offset)
 
   while (1) {
 
-    if ((sc = tvb_get_guint8(tvb, offset + i)) == 0x0d
-        && tvb_get_guint8(tvb, offset + i + 1) == 0x0a)
+    if ((sc = tvb_get_uint8(tvb, offset + i)) == 0x0d
+        && tvb_get_uint8(tvb, offset + i + 1) == 0x0a)
       return i;   /* Done here ... */
 
     if (!global_beep_strict_term && (sc == 0x0d || sc == 0x0a))
@@ -322,7 +316,7 @@ dissect_beep_mime_header(tvbuff_t *tvb, packet_info *pinfo, int offset,
   if (tree) {
 
     /* FIXME: Should calculate the whole length of the mime headers */
-    ti = proto_tree_add_item(tree, hf_beep_mime_header, tvb, offset, mime_length, ENC_NA|ENC_ASCII);
+    ti = proto_tree_add_item(tree, hf_beep_mime_header, tvb, offset, mime_length, ENC_ASCII);
     mime_tree = proto_item_add_subtree(ti, ett_mime_header);
   }
 
@@ -342,7 +336,7 @@ dissect_beep_mime_header(tvbuff_t *tvb, packet_info *pinfo, int offset,
   else {  /* FIXME: Process the headers */
 
     if (tree) {
-      proto_tree_add_item(mime_tree, hf_beep_header, tvb, offset, mime_length, ENC_NA|ENC_ASCII);
+      proto_tree_add_item(mime_tree, hf_beep_header, tvb, offset, mime_length, ENC_ASCII);
     }
 
     if ((cc = check_term(tvb, pinfo, offset + mime_length, mime_tree)) <= 0) {
@@ -359,13 +353,15 @@ dissect_beep_mime_header(tvbuff_t *tvb, packet_info *pinfo, int offset,
 
 static int
 dissect_beep_int(tvbuff_t *tvb, packet_info *pinfo, int offset,
-                    proto_tree *tree, int hf, int *val, int *hfa[])
+                    proto_tree *tree, int hf, unsigned *val, int *hfa[])
 {
   proto_item  *hidden_item;
-  int ival, ind = 0;
+  unsigned ival, ind = 0;
   unsigned int len = num_len(tvb, offset);
 
-  ival = (int)strtol(tvb_get_string_enc(pinfo->pool, tvb, offset, len, ENC_ASCII), NULL, 10);
+  /* XXX - Should check for conversion errors and, for values except for
+   * seqno, values outside the range. */
+  ival = (unsigned)strtoul((char*)tvb_get_string_enc(pinfo->pool, tvb, offset, len, ENC_ASCII), NULL, 10);
   proto_tree_add_uint(tree, hf, tvb, offset, len, ival);
 
   while (hfa[ind]) {
@@ -376,7 +372,9 @@ dissect_beep_int(tvbuff_t *tvb, packet_info *pinfo, int offset,
 
   }
 
-  *val = ival;  /* Return the value */
+  if (val) {
+    *val = ival;  /* Return the value */
+  }
 
   return len;
 
@@ -437,14 +435,15 @@ set_mime_hdr_flags(int more, struct beep_request_val *request_val,
  */
 
 static int
+// NOLINTNEXTLINE(misc-no-recursion)
 dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
                   proto_tree *tree, struct beep_request_val *request_val,
                   struct beep_proto_data *beep_frame_data)
 {
   proto_tree     *ti = NULL, *hdr = NULL;
   /*proto_item     *hidden_item;*/
-  int            st_offset, msgno, ansno, seqno, size, channel, ackno, window, cc,
-                 more;
+  int            st_offset, cc, more;
+  unsigned       size;
 
   const char * cmd_temp = NULL;
   int is_ANS = 0;
@@ -469,21 +468,21 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
       hdr = proto_tree_add_subtree(tree, tvb, offset, header_len(tvb, offset) + 2,
             ett_header, NULL, "Header");
 
-      ti = proto_tree_add_item(hdr, hf_beep_cmd, tvb, offset, 3, ENC_NA|ENC_ASCII);
+      ti = proto_tree_add_item(hdr, hf_beep_cmd, tvb, offset, 3, ENC_ASCII);
       /* Include space */
       proto_item_set_len(ti, 4);
 
-      proto_tree_add_boolean(hdr, hf_beep_req, tvb, offset, 3, TRUE);
+      proto_tree_add_boolean(hdr, hf_beep_req, tvb, offset, 3, true);
     }
 
     offset += 4;
 
     /* Get the channel */
-    offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_channel, &channel, req_chan_hfa);
+    offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_channel, NULL, req_chan_hfa);
     offset += 1; /* Skip the space */
 
     /* Dissect the message number */
-    offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_msgno, &msgno, req_msgno_hfa);
+    offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_msgno, NULL, req_msgno_hfa);
     offset += 1; /* skip the space */
 
     /* Insert the more elements ... */
@@ -497,7 +496,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
     else {  /* Protocol violation, so dissect rest as undissectable */
       if (tree && (tvb_reported_length_remaining(tvb, offset) > 0)) {
         proto_tree_add_item(tree, hf_beep_payload_undissected, tvb, offset,
-                            tvb_reported_length_remaining(tvb, offset), ENC_NA|ENC_ASCII);
+                            tvb_reported_length_remaining(tvb, offset), ENC_ASCII);
       }
       return -1;
     }
@@ -505,22 +504,24 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
     offset += 2; /* Skip the flag and the space ... */
 
     /* now for the seqno */
-    offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_seqno, &seqno, req_seqno_hfa);
+    offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_seqno, NULL, req_seqno_hfa);
     offset += 1; /* skip the space */
 
     offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_size, &size, req_size_hfa);
-    if (request_val)   /* FIXME, is this the right order ... */
-      request_val -> size = size;  /* Stash this away */
-    else if (beep_frame_data) {
+    if (size > INT32_MAX) {
+      THROW(ReportedBoundsError);
+    }
+    if (request_val) {  /* FIXME, is this the right order ... */
+      request_val->size = size;  /* Stash this away */
+    } else if (beep_frame_data) {
       beep_frame_data->pl_size = size;
-      if (beep_frame_data->pl_size < 0) beep_frame_data->pl_size = 0; /* FIXME: OK? */
     }
     /* offset += 1; skip the space */
 
     if (is_ANS) { /* We need to put in the ansno */
         offset += 1; /* skip the space */
         /* Dissect the message number */
-        offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_ansno, &ansno, req_ansno_hfa);
+        offset += dissect_beep_int(tvb, pinfo, offset, hdr, hf_beep_ansno, NULL, req_ansno_hfa);
     }
 
     if ((cc = check_term(tvb, pinfo, offset, hdr)) <= 0) {
@@ -529,7 +530,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
 
       if (tree && (tvb_reported_length_remaining(tvb, offset) > 0)) {
         proto_tree_add_item(tree, hf_beep_payload_undissected, tvb, offset,
-                            tvb_reported_length_remaining(tvb, offset), ENC_NA|ENC_ASCII);
+                            tvb_reported_length_remaining(tvb, offset), ENC_ASCII);
       }
 
       return -1;
@@ -557,7 +558,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
        */
 
       if (tree) {
-        proto_tree_add_item(tree, hf_beep_payload, tvb, offset, pl_size, ENC_NA|ENC_ASCII);
+        proto_tree_add_item(tree, hf_beep_payload, tvb, offset, pl_size, ENC_ASCII);
       }
 
       offset += pl_size;
@@ -574,13 +575,15 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
 
     /* If anything else left, dissect it ... */
 
-    if (tvb_reported_length_remaining(tvb, offset) > 0)
+    if (tvb_reported_length_remaining(tvb, offset) > 0) {
+      increment_dissection_depth(pinfo);
       offset += dissect_beep_tree(tvb, offset, pinfo, tree, request_val, beep_frame_data);
-
+      decrement_dissection_depth(pinfo);
+    }
   } else if (tvb_strneql(tvb, offset, "SEQ ", 4) == 0) {
 
     if (tree) {
-      ti = proto_tree_add_item(hdr, hf_beep_cmd, tvb, offset, 3, ENC_NA|ENC_ASCII);
+      ti = proto_tree_add_item(hdr, hf_beep_cmd, tvb, offset, 3, ENC_ASCII);
       /* Include space */
       proto_item_set_len(ti, 4);
     }
@@ -591,19 +594,19 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
 
     offset += 1;
 
-    offset += dissect_beep_int(tvb, pinfo, offset, tree, hf_beep_channel, &channel, seq_chan_hfa);
+    offset += dissect_beep_int(tvb, pinfo, offset, tree, hf_beep_channel, NULL, seq_chan_hfa);
 
     /* Check the space: FIXME */
 
     offset += 1;
 
-    offset += dissect_beep_int(tvb, pinfo, offset, tree, hf_beep_ackno, &ackno, seq_ackno_hfa);
+    offset += dissect_beep_int(tvb, pinfo, offset, tree, hf_beep_ackno, NULL, seq_ackno_hfa);
 
     /* Check the space: FIXME */
 
     offset += 1;
 
-    offset += dissect_beep_int(tvb, pinfo, offset, tree, hf_beep_window, &window, seq_window_hfa);
+    offset += dissect_beep_int(tvb, pinfo, offset, tree, hf_beep_window, NULL, seq_window_hfa);
 
     if ((cc = check_term(tvb, pinfo, offset, tree)) <= 0) {
 
@@ -611,7 +614,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
 
       if (tree && (tvb_reported_length_remaining(tvb, offset) > 0)) {
         proto_tree_add_item(tree, hf_beep_payload_undissected, tvb, offset,
-                            tvb_reported_length_remaining(tvb, offset), ENC_NA|ENC_ASCII);
+                            tvb_reported_length_remaining(tvb, offset), ENC_ASCII);
       }
 
       return -1;
@@ -625,10 +628,10 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
     proto_tree *tr = NULL;
 
     if (tree) {
-      tr = proto_tree_add_subtree(tree, tvb, offset, MIN(5, MAX(0, tvb_reported_length_remaining(tvb, offset))),
+      tr = proto_tree_add_subtree(tree, tvb, offset, MIN(5, tvb_reported_length_remaining(tvb, offset)),
                                     ett_trailer, NULL, "Trailer");
 
-      proto_tree_add_item(hdr, hf_beep_cmd, tvb, offset, 3, ENC_NA|ENC_ASCII);
+      proto_tree_add_item(hdr, hf_beep_cmd, tvb, offset, 3, ENC_ASCII);
     }
 
     offset += 3;
@@ -639,7 +642,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
 
       if (tree && (tvb_reported_length_remaining(tvb, offset) > 0)) {
         proto_tree_add_item(tree, hf_beep_payload_undissected, tvb, offset,
-                            tvb_reported_length_remaining(tvb, offset), ENC_NA|ENC_ASCII);
+                            tvb_reported_length_remaining(tvb, offset), ENC_ASCII);
       }
 
       return -1;
@@ -656,7 +659,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
 
     if (request_val) {
 
-      pl_size = MIN(request_val->size, tvb_reported_length_remaining(tvb, offset));
+      pl_size = MIN(request_val->size, (int)tvb_reported_length_remaining(tvb, offset));
 
       if (pl_size == 0) { /* The whole of the rest must be payload */
 
@@ -665,7 +668,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
       }
 
     } else if (beep_frame_data) {
-      pl_size = MIN(beep_frame_data->pl_size, tvb_reported_length_remaining(tvb, offset));
+      pl_size = MIN(beep_frame_data->pl_size, (int)tvb_reported_length_remaining(tvb, offset));
     } else { /* Just in case */
       pl_size = tvb_reported_length_remaining(tvb, offset);
     }
@@ -685,7 +688,7 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
     if (pl_size > 0) {
 
       if (tree) {
-        proto_tree_add_item(tree, hf_beep_payload, tvb, offset, pl_size, ENC_NA|ENC_ASCII);
+        proto_tree_add_item(tree, hf_beep_payload, tvb, offset, pl_size, ENC_ASCII);
       }
 
       offset += pl_size;            /* Advance past the payload */
@@ -701,7 +704,9 @@ dissect_beep_tree(tvbuff_t *tvb, int offset, packet_info *pinfo,
     }
 
     if (tvb_reported_length_remaining(tvb, offset) > 0) {
+      increment_dissection_depth(pinfo);
       offset += dissect_beep_tree(tvb, offset, pinfo, tree, request_val, beep_frame_data);
+      decrement_dissection_depth(pinfo);
     }
   }
 
@@ -811,11 +816,11 @@ dissect_beep(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
 
     int pl_left = beep_frame_data->pl_left;
 
-    pl_left = MIN(pl_left, MAX(0, tvb_reported_length_remaining(tvb, offset)));
+    pl_left = MIN(pl_left, MAX(0, (int)tvb_reported_length_remaining(tvb, offset)));
 
     /* Add the payload bit, only if we have a tree */
     if (tree && (pl_left > 0)) {
-      proto_tree_add_item(tree, hf_beep_payload, tvb, offset, pl_left, ENC_NA|ENC_ASCII);
+      proto_tree_add_item(tree, hf_beep_payload, tvb, offset, pl_left, ENC_ASCII);
     }
     offset += pl_left;
   }
@@ -941,7 +946,7 @@ proto_register_beep(void)
     { &hf_beep_crlf_terminator,
       { "Terminator: CRLF", "beep.crlf_terminator", FT_NONE, BASE_NONE, NULL, 0x0, NULL, HFILL }},
   };
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_beep,
     &ett_mime_header,
     &ett_header,

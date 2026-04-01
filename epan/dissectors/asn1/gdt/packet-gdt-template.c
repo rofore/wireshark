@@ -12,24 +12,18 @@
 
 # include "config.h"
 
-#include <glib.h>
 #include <epan/packet.h>
-#include <epan/conversation.h>
-#include <epan/sctpppids.h>
-
-#include <stdio.h>
-#include <string.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
-#include "packet-gdt.h"
+#include "packet-sctp.h"
 
-#define PNAME  "Generic Data Transfer Protocol"
-#define PSNAME "GDT"
-#define PFNAME "gdt"
+void proto_register_gdt(void);
+void proto_reg_handoff_gdt(void);
 
 /* Initialize the protocol and registered fields */
 static int proto_gdt;
-static dissector_handle_t gdt_handle = NULL;
+static dissector_handle_t gdt_handle;
 
 #include "packet-gdt-hf.c"
 
@@ -47,7 +41,7 @@ static int dissect_gdt(tvbuff_t *tvb,
     proto_tree *gdt_tree = NULL;
 
     /* make entry in the Protocol column on summary display */
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, PNAME);
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "GDT");
 
     /* create the gdt protocol tree */
     if (tree) {
@@ -66,13 +60,13 @@ void proto_register_gdt(void) {
     };
 
     /* List of subtrees */
-    static gint *ett[] = {
+    static int *ett[] = {
         &ett_gdt,
 #include "packet-gdt-ettarr.c"
     };
 
     /* Register protocol */
-    proto_gdt = proto_register_protocol(PNAME, PSNAME, PFNAME);
+    proto_gdt = proto_register_protocol("Generic Data Transfer Protocol", "GDT", "gdt");
 
     /* Register fields and subtrees */
     proto_register_field_array(proto_gdt, hf, array_length(hf));
@@ -84,11 +78,11 @@ void proto_register_gdt(void) {
 
 /*--- proto_reg_handoff_gdt -------------------------------------------*/
 void proto_reg_handoff_gdt(void) {
-    static gboolean initialized = FALSE;
+    static bool initialized = false;
 
     if (!initialized) {
         dissector_add_for_decode_as("sctp.ppi", gdt_handle);
         dissector_add_uint("sctp.ppi", GDT_PROTOCOL_ID, gdt_handle);
-        initialized = TRUE;
+        initialized = true;
     }
 }

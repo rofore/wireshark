@@ -116,8 +116,8 @@ dissect_ipvs_syncd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, v
 	proto_tree *tree;
 	proto_item *item;
 	int         offset = 0;
-	guint8      cnt    = 0;
-	guint8      version = 0;
+	uint8_t     cnt    = 0;
+	uint8_t     version = 0;
 	int         conn   = 0;
 
 	item = proto_tree_add_item(parent_tree, proto_ipvs_syncd, tvb, offset, -1, ENC_NA);
@@ -127,7 +127,7 @@ dissect_ipvs_syncd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, v
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "IPVS");
 	col_clear(pinfo->cinfo, COL_INFO);
 
-	cnt = tvb_get_guint8(tvb, offset);
+	cnt = tvb_get_uint8(tvb, offset);
 	if(cnt == 0) { //Version 1 (or after...) first byte is reserved
 		proto_tree_add_item(tree, hf_resv, tvb, offset, 1, ENC_NA);
 		col_set_str(pinfo->cinfo, COL_INFO, "v1");
@@ -144,12 +144,10 @@ dissect_ipvs_syncd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, v
 	offset += 2;
 
 	if(cnt == 0) { //Version 1 (or after...)
-		cnt = tvb_get_guint8(tvb, offset);
-		proto_tree_add_item(tree, hf_conn_count, tvb, offset, 1, ENC_BIG_ENDIAN);
+		proto_tree_add_item_ret_uint8(tree, hf_conn_count, tvb, offset, 1, ENC_BIG_ENDIAN, &cnt);
 		offset += 1;
 
-		version = tvb_get_guint8(tvb, offset);
-		proto_tree_add_item(tree, hf_version, tvb, offset, 1, ENC_BIG_ENDIAN);
+		proto_tree_add_item_ret_uint8(tree, hf_version, tvb, offset, 1, ENC_BIG_ENDIAN, &version);
 		offset += 1;
 
 		proto_tree_add_item(tree, hf_resv, tvb, offset, 2, ENC_NA);
@@ -162,14 +160,13 @@ dissect_ipvs_syncd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, v
 		if(version) {
 
 			proto_tree *ctree;
-			guint8 type;
-			guint16 size;
+			uint8_t type;
+			uint16_t size;
 
 			ctree = proto_tree_add_subtree_format(tree, tvb, offset, 36, ett_conn, NULL,
 							      "Connection #%d", conn+1);
 
-			type = tvb_get_guint8(tvb, offset);
-			proto_tree_add_item(ctree, hf_type, tvb, offset, 1, ENC_BIG_ENDIAN);
+			proto_tree_add_item_ret_uint8(ctree, hf_type, tvb, offset, 1, ENC_BIG_ENDIAN, &type);
 			offset += 1;
 
 			proto_tree_add_item(ctree, hf_proto, tvb, offset, 1, ENC_BIG_ENDIAN);
@@ -228,7 +225,7 @@ dissect_ipvs_syncd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, v
 
 			proto_tree *ctree;
 			proto_tree *ftree, *fi;
-			guint16 flags;
+			uint16_t flags;
 
 			ctree = proto_tree_add_subtree_format(tree, tvb, offset, 24, ett_conn, NULL,
 							      "Connection #%d", conn+1);
@@ -257,8 +254,7 @@ dissect_ipvs_syncd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, v
 			proto_tree_add_item(ctree, hf_daddr, tvb, offset, 4, ENC_BIG_ENDIAN);
 			offset += 4;
 
-			flags = tvb_get_ntohs(tvb, offset);
-			fi = proto_tree_add_item(ctree, hf_flags, tvb, offset, 2, ENC_BIG_ENDIAN);
+			fi = proto_tree_add_item_ret_uint16(ctree, hf_flags, tvb, offset, 2, ENC_BIG_ENDIAN, &flags);
 			ftree = proto_item_add_subtree(fi, ett_flags);
 			proto_tree_add_item(ftree, hf_flags_conn_type, tvb, offset, 2, ENC_BIG_ENDIAN);
 			proto_tree_add_item(ftree, hf_flags_hashed_entry, tvb, offset, 2, ENC_BIG_ENDIAN);
@@ -453,7 +449,7 @@ proto_register_ipvs_syncd(void)
 			  NULL, 0, NULL, HFILL }},
 
 	};
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_ipvs_syncd,
 		&ett_conn,
 		&ett_flags,

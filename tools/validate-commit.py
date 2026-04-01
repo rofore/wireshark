@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Verifies whether commit messages adhere to the standards.
 # Checks the author name and email and invokes the tools/commit-msg script.
-# Copy this into .git/hooks/post-commit
+# Preferred setup: run tools/setup-dev.sh (or tools/setup-dev.ps1 on Windows) to
+# configure core.hooksPath=tools/git_hooks and commit.template=.gitmessage.
 #
 # Copyright (c) 2018 Peter Wu <peter@lekensteyn.nl>
 #
@@ -19,13 +20,12 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import urllib.request
 import re
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('commit', nargs='?', default='HEAD',
+parser.add_argument('commits', nargs='*', default=['HEAD'],
                     help='Commit ID to be checked (default %(default)s)')
 parser.add_argument('--commitmsg', help='commit-msg check', action='store')
 
@@ -41,6 +41,22 @@ def print_git_user_instructions():
     print('  git commit --amend --reset-author --no-edit')
     print('')
 
+def print_standards():
+    print('''
+Please rewrite your commit message to our standards, matching this format:
+
+    component: a very brief summary of the change
+
+    A commit message should start with a brief summary, followed by a single
+    blank line and an optional longer description. If the change is specific to
+    a single protocol, start the summary line with the abbreviated name of the
+    protocol and a colon.
+
+    Use paragraphs to improve readability. Limit each line to 80 characters.
+
+    Finish with a trailer about possible AI involvement, in the form of
+    AI-Assisted: no|yes [tool(s)]
+''')
 
 def verify_name(name):
     name = name.lower().strip()
@@ -110,8 +126,15 @@ def extract_subject(subject):
 
 
 def verify_body(body):
-    bodynocomments = re.sub('^#.*$', '', body, flags=re.MULTILINE)
-    old_lines = bodynocomments.splitlines(True)
+    git_cut_marker = '\n# ------------------------ >8 ------------------------\n'
+    cut_index = body.find(git_cut_marker)
+    if cut_index == -1:
+        cut_index = len(body) - 1
+    body = body[0:cut_index + 1]
+
+    # XXX Should depend on core.commentChar. Might use 'git stripspace -s' instead?
+    body = re.sub('^#.*\n?', '', body, flags=re.MULTILINE)
+    old_lines = body.splitlines(True)
     is_good = True
     if len(old_lines) >= 2 and old_lines[1].strip():
         print('ERROR: missing blank line after the first subject line.')
@@ -119,22 +142,10 @@ def verify_body(body):
     cleaned_subject = extract_subject(old_lines[0])
     if len(cleaned_subject) > 80:
         # Note that this check is also invoked by the commit-msg hook.
-        print('Warning: keep lines in the commit message under 80 characters.')
+        print("Warning: the subject line '%s' is longer than 80 characters." % (cleaned_subject,))
         is_good = False
     if not is_good:
-        print('''
-Please rewrite your commit message to our standards, matching this format:
-
-    component: a very brief summary of the change
-
-    A commit message should start with a brief summary, followed by a single
-    blank line and an optional longer description. If the change is specific to
-    a single protocol, start the summary line with the abbreviated name of the
-    protocol and a colon.
-
-    Use paragraphs to improve readability. Limit each line to 80 characters.
-
-''')
+        print_standards()
     if any(line.startswith('Bug:') or line.startswith('Ping-Bug:') for line in old_lines):
         sys.stderr.write('''
 To close an issue, use "Closes #1234" or "Fixes #1234" instead of "Bug: 1234".
@@ -147,6 +158,14 @@ for details.
     # Cherry-picking can add an extra newline, which we'll allow.
     cp_line = '\n(cherry picked from commit'
     body = body.replace('\n' + cp_line, cp_line)
+    # GitLab's "Cherry-pick" button can add an extra newline *and* a slightly
+    # different message, with hyphen-minus, which we'll also allow.
+    cp_line = '\n(cherry-picked from commit'
+    body = body.replace('\n' + cp_line, cp_line)
+
+    # Some editors (e.g. gitk) add a trailing newline, regardless if it exists.
+    # Reduce any number of newlines at the end of the body to a single newline.
+    body = body.rstrip('\n') + '\n'
 
     try:
         cmd = ['git', 'stripspace']
@@ -166,6 +185,11 @@ for details.
             for line in diff
         ]
         print('The commit message does not follow our standards.')
+        print_standards()
+        print('Commit message:')
+        print(body.splitlines(True))
+        print('After git stripspace:')
+        print(newbody.splitlines(True))
         print('Please rewrite it (there are likely whitespace issues):')
         print('')
         print(''.join(diff))
@@ -175,8 +199,7 @@ for details.
 
 
 def verify_merge_request():
-    # Not needed if/when https://gitlab.com/gitlab-org/gitlab/-/issues/23308 is fixed.
-    gitlab_api_pfx = "https://gitlab.com/api/v4"
+    gitlab_api_pfx = os.getenv('CI_API_V4_URL')
     # gitlab.com/wireshark/wireshark = 7898047
     project_id = os.getenv('CI_MERGE_REQUEST_PROJECT_ID')
     ansi_csi = '\x1b['
@@ -220,54 +243,57 @@ is checked so that maintainers can rebase your change and make minor edits.\
 
 def main():
     args = parser.parse_args()
-    commit = args.commit
-
-    # If called from commit-msg script, just validate that part and return.
-    if args.commitmsg:
-        try:
-            with open(args.commitmsg) as f:
-                return 0 if verify_body(f.read()) else 1
-        except:
-            print("Couldn't verify body of message from file '", + args.commitmsg + "'");
-            return 1
-
-
-    if(os.getenv('CI_MERGE_REQUEST_EVENT_TYPE') == 'merge_train'):
-        print("If we were on the love train, people all over the world would be joining hands for this merge request.\nInstead, we're on a merge train so we're skipping commit validation checks. ")
-        return 0
-
-    cmd = ['git', 'show', '--no-patch',
-           '--format=%h%n%an%n%ae%n%B', commit, '--']
-    output = subprocess.check_output(cmd, universal_newlines=True)
-    # For some reason there is always an additional LF in the output, drop it.
-    if output.endswith('\n\n'):
-        output = output[:-1]
-    abbrev, author_name, author_email, body = output.split('\n', 3)
-    subject = body.split('\n', 1)[0]
-
-    # If called directly (from the tools directory), print the commit that was
-    # being validated. If called from a git hook (without .py extension), try to
-    # remain silent unless there are issues.
-    if __file__.endswith('.py'):
-        print('Checking commit: %s %s' % (abbrev, subject))
-
     exit_code = 0
-    if not verify_name(author_name):
-        print('Disallowed author name: {}'.format(author_name))
-        exit_code = 1
+    bad_git_author = False
 
-    if not verify_email(author_email):
-        print('Disallowed author email address: {}'.format(author_email))
-        exit_code = 1
+    for commit in args.commits:
+        # If called from commit-msg script, just validate that part and return.
+        if args.commitmsg:
+            try:
+                with open(args.commitmsg) as f:
+                    return 0 if verify_body(f.read()) else 1
+            except Exception:
+                print("Couldn't verify body of message from file '" + args.commitmsg + "'")
+                return 1
 
-    if exit_code:
+
+        if(os.getenv('CI_MERGE_REQUEST_EVENT_TYPE') == 'merge_train'):
+            print("If we were on the love train, people all over the world would be joining hands for this merge request.\nInstead, we're on a merge train so we're skipping commit validation checks. ")
+            return 0
+
+        cmd = ['git', 'show', '--no-patch',
+            '--format=%h%n%an%n%ae%n%B', commit, '--']
+        output = subprocess.check_output(cmd, universal_newlines=True)
+        # For some reason there is always an additional LF in the output, drop it.
+        if output.endswith('\n\n'):
+            output = output[:-1]
+        abbrev, author_name, author_email, body = output.split('\n', 3)
+        subject = body.split('\n', 1)[0]
+
+        # If called directly (from the tools directory), print the commit that was
+        # being validated. If called from a git hook (without .py extension), try to
+        # remain silent unless there are issues.
+        if __file__.endswith('.py'):
+            print('Checking commit: %s %s' % (abbrev, subject))
+
+        if not verify_name(author_name):
+            print('Disallowed author name: {}'.format(author_name))
+            exit_code = 1
+            bad_git_author = True
+
+        if not verify_email(author_email):
+            print('Disallowed author email address: {}'.format(author_email))
+            exit_code = 1
+            bad_git_author = True
+
+        if not verify_body(body):
+            exit_code = 1
+
+        if not verify_merge_request():
+            exit_code = 1
+
+    if bad_git_author:
         print_git_user_instructions()
-
-    if not verify_body(body):
-        exit_code = 1
-
-    if not verify_merge_request():
-        exit_code = 1
 
     return exit_code
 

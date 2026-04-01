@@ -1,5 +1,5 @@
 /* packet-dap.c
- * Routines for X.511 (X.500 Directory Asbtract Service) and X.519 DAP  packet dissection
+ * Routines for X.511 (X.500 Directory Abstract Service) and X.519 DAP  packet dissection
  * Graeme Lunt 2005
  *
  * Wireshark - Network traffic analyzer
@@ -17,6 +17,7 @@
 #include <epan/oids.h>
 #include <epan/asn1.h>
 #include <epan/proto_data.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-acse.h"
@@ -33,12 +34,6 @@
 #include "packet-dap.h"
 #include <epan/strutil.h>
 
-/* we don't have a separate dissector for X519 -
-   most of DAP is defined in X511 */
-#define PNAME  "X.519 Directory Access Protocol"
-#define PSNAME "DAP"
-#define PFNAME "dap"
-
 void proto_register_dap(void);
 void proto_reg_handoff_dap(void);
 
@@ -49,7 +44,7 @@ static int proto_dap;
 #include "packet-dap-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_dap;
+static int ett_dap;
 #include "packet-dap-ett.c"
 
 static expert_field ei_dap_anonymous;
@@ -84,7 +79,7 @@ void proto_register_dap(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_dap,
 #include "packet-dap-ettarr.c"
   };
@@ -97,7 +92,7 @@ void proto_register_dap(void) {
   expert_module_t* expert_dap;
 
   /* Register protocol */
-  proto_dap = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_dap = proto_register_protocol("X.519 Directory Access Protocol", "DAP", "dap");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_dap, hf, array_length(hf));
@@ -129,7 +124,7 @@ void proto_reg_handoff_dap(void) {
   /* ABSTRACT SYNTAXES */
 
   /* Register DAP with ROS (with no use of RTSE) */
-  register_ros_protocol_info("2.5.9.1", &dap_ros_info, 0, "id-as-directory-access", FALSE);
+  register_ros_protocol_info("2.5.9.1", &dap_ros_info, 0, "id-as-directory-access", false);
 
   register_idmp_protocol_info("2.5.33.0", &dap_ros_info, 0, "dap-ip");
 

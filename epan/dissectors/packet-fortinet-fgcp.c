@@ -20,6 +20,7 @@
 #include <epan/expert.h>
 #include <epan/prefs.h>
 #include <epan/etypes.h>
+#include <epan/tfs.h>
 
 void proto_reg_handoff_fortinet_fgcp(void);
 void proto_register_fortinet_fgcp(void);
@@ -48,15 +49,40 @@ static int hf_fortinet_fgcp_hb_tlv_value;
 static int hf_fortinet_fgcp_hb_tlv_vcluster_id;
 static int hf_fortinet_fgcp_hb_tlv_priority;
 static int hf_fortinet_fgcp_hb_tlv_override;
+static int hf_fortinet_fgcp_hb_tlv_ha_checksum_global;
+static int hf_fortinet_fgcp_hb_tlv_ha_checksum_vdom;
+static int hf_fortinet_fgcp_hb_tlv_ha_checksum_root;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_interface;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_number;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_name;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_mac;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_flag;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_admin_status;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_operation_status;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_link_monitored;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_ha_eligible;
+static int hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_b74;
 
 //static int hf_fortinet_fgcp_hb_unknown;
 static int hf_fortinet_fgcp_hb_unknown_uint16;
 
 static dissector_handle_t fortinet_fgcp_hb_handle;
 
-static gint ett_fortinet_fgcp_hb;
-static gint ett_fortinet_fgcp_hb_flag;
-static gint ett_fortinet_fgcp_hb_tlv;
+static int ett_fortinet_fgcp_hb;
+static int ett_fortinet_fgcp_hb_flag;
+static int ett_fortinet_fgcp_hb_tlv;
+static int ett_fortinet_fgcp_hb_tlv_interface;
+static int ett_fortinet_fgcp_hb_tlv_interface_flag;
+
+static int proto_fortinet_fgcp_session;
+static int hf_fortinet_fgcp_session_magic;
+static int hf_fortinet_fgcp_session_type;
+
+static dissector_handle_t fortinet_fgcp_session_handle;
+static dissector_handle_t ip_handle;
+
+static int ett_fortinet_fgcp_session;
 
 static const value_string fortinet_fgcp_hb_mode_vals[] = {
     { 0x1,            "A/A (Active/Active)"},
@@ -68,11 +94,15 @@ static const value_string fortinet_fgcp_hb_mode_vals[] = {
 #define HB_TLV_VCLUSTER_ID      0x0B
 #define HB_TLV_PRIORITY         0x0C
 #define HB_TLV_OVERRIDE         0x0D
+#define HB_TLV_INTERFACE_INVENTORY 0x2a
+#define HB_TLV_HA_CHECKSUM      0x3C
 
 static const value_string fortinet_fgcp_hb_tlv_vals[] = {
     { HB_TLV_END_OF_TLV, "End of TLV" },
     { HB_TLV_PRIORITY, "Port Priority" },
     { HB_TLV_OVERRIDE, "Override" },
+    { HB_TLV_INTERFACE_INVENTORY, "Interface Inventory" },
+    { HB_TLV_HA_CHECKSUM, "HA Checksum" },
     { 0, NULL }
 };
 
@@ -83,14 +113,14 @@ dissect_fortinet_fgcp_hb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 {
     proto_item *ti;
     proto_tree *fortinet_hb_tree;
-    guint       offset = 0, length, auth_len=0;
-    guint8      flags;
+    unsigned    offset = 0, length, auth_len=0;
+    uint8_t     flags;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "FGCP-HB");
 
     col_add_fstr(pinfo->cinfo, COL_INFO, "Cluster: %s(%u) - monitor: %s - SN: %s",
                 tvb_get_string_enc(pinfo->pool, tvb, offset+4, 32, ENC_ASCII), /* Group Name*/
-                tvb_get_guint16(tvb, (offset+4+32+2), ENC_LITTLE_ENDIAN),  /* Group ID*/
+                tvb_get_uint16(tvb, (offset+4+32+2), ENC_LITTLE_ENDIAN),  /* Group ID*/
                 tvb_get_string_enc(pinfo->pool, tvb, offset+4+32+2+14, 16, ENC_ASCII), /* Port */
                 tvb_get_string_enc(pinfo->pool, tvb, offset+4+32+2+14+16+2+2, 16, ENC_ASCII) /* Serial Number */);
 
@@ -113,9 +143,18 @@ dissect_fortinet_fgcp_hb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         NULL
     };
 
+    static int * const fortinet_fgcp_tlv_interface_flag[] = {
+        &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_admin_status,
+        &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_operation_status,
+        &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_link_monitored,
+        &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_ha_eligible,
+        &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_b74,
+        NULL
+    };
+
     proto_tree_add_bitmask(fortinet_hb_tree, tvb, offset, hf_fortinet_fgcp_hb_flag, ett_fortinet_fgcp_hb_flag,
                            fortinet_fgcp_hb_flag, ENC_NA);
-    flags =  tvb_get_guint8(tvb, offset);
+    flags =  tvb_get_uint8(tvb, offset);
     offset += 1;
 
     /* Group Name */
@@ -156,7 +195,7 @@ dissect_fortinet_fgcp_hb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     offset += 2;
 
     /* Hash/crc ? change after each revision*/
-    proto_tree_add_item(fortinet_hb_tree, hf_fortinet_fgcp_hb_unknown_uint16, tvb, offset, 2, ENC_NA);
+    proto_tree_add_item(fortinet_hb_tree, hf_fortinet_fgcp_hb_unknown_uint16, tvb, offset, 2, ENC_LITTLE_ENDIAN);
     offset += 2;
 
     /* Serial Number */
@@ -173,13 +212,13 @@ dissect_fortinet_fgcp_hb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(fortinet_hb_tree, hf_fortinet_fgcp_hb_payload_encrypted, tvb, offset, length, ENC_NA);
         offset += length;
     } else {
-        guint next_offset;
+        unsigned next_offset;
 
         length = tvb_reported_length_remaining(tvb, offset) - auth_len;
         next_offset = offset + length;
 
         while (offset < next_offset) {
-                guint32 type, len;
+                uint32_t type, len;
                 proto_item *ti_tlv;
                 proto_tree *tlv_tree;
 
@@ -196,21 +235,21 @@ dissect_fortinet_fgcp_hb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 proto_tree_add_item(tlv_tree, hf_fortinet_fgcp_hb_tlv_value, tvb, offset, len, ENC_NA);
                 switch (type) {
                 case HB_TLV_VCLUSTER_ID:{
-                    guint32 vcluster_id;
+                    uint32_t vcluster_id;
                     proto_tree_add_item_ret_uint(tlv_tree, hf_fortinet_fgcp_hb_tlv_vcluster_id, tvb, offset, 1, ENC_NA, &vcluster_id);
                     proto_item_append_text(ti_tlv, ": %u", vcluster_id);
                     offset += 1;
                     }
                 break;
                 case HB_TLV_PRIORITY:{
-                    guint32 priority;
+                    uint32_t priority;
                     proto_tree_add_item_ret_uint(tlv_tree, hf_fortinet_fgcp_hb_tlv_priority, tvb, offset, 1, ENC_NA, &priority);
                     proto_item_append_text(ti_tlv, ": %u", priority);
                     offset += 1;
                     }
                 break;
                 case HB_TLV_OVERRIDE:{
-                    guint32 override;
+                    uint32_t override;
                     proto_tree_add_item_ret_uint(tlv_tree, hf_fortinet_fgcp_hb_tlv_override, tvb, offset, 1, ENC_NA, &override);
                     if (override){
                         proto_item_append_text(ti_tlv, ": True");
@@ -220,6 +259,59 @@ dissect_fortinet_fgcp_hb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     offset += 1;
                     }
                 break;
+                case HB_TLV_HA_CHECKSUM:{
+                    proto_tree_add_item(tlv_tree, hf_fortinet_fgcp_hb_tlv_ha_checksum_global, tvb, offset, 16, ENC_NA);
+                    offset += 16;
+                    proto_tree_add_item(tlv_tree, hf_fortinet_fgcp_hb_tlv_ha_checksum_vdom, tvb, offset, 16, ENC_NA);
+                    offset += 16;
+                    proto_tree_add_item(tlv_tree, hf_fortinet_fgcp_hb_tlv_ha_checksum_root, tvb, offset, 16, ENC_NA);
+                    offset += 16;
+                }
+                break;
+                case HB_TLV_INTERFACE_INVENTORY:{
+                    tvbuff_t* compressed_tvb;
+                    uint32_t number;
+                    unsigned    coffset = 0;
+                    proto_item *ti_interface;
+                    proto_tree *interface_tree;
+                    proto_tree_add_item_ret_uint(tlv_tree, hf_fortinet_fgcp_hb_tlv_interface_inventory_number, tvb, offset, 2, ENC_LITTLE_ENDIAN, &number);
+                    offset += 2;
+                    compressed_tvb = tvb_child_uncompress_zlib(tvb, tvb, offset, len-2);
+                    if (compressed_tvb) {
+                        add_new_data_source(pinfo, compressed_tvb, "Decompressed Data");
+                        proto_tree_add_item(tlv_tree, hf_fortinet_fgcp_hb_tlv_interface_inventory, compressed_tvb, 0, -1, ENC_NA);
+                        while (number) {
+                            ti_interface = proto_tree_add_item(tlv_tree, hf_fortinet_fgcp_hb_tlv_interface_inventory_interface, compressed_tvb, coffset, 16+6+1, ENC_NA);
+                            interface_tree = proto_item_add_subtree(ti_interface, ett_fortinet_fgcp_hb_tlv_interface);
+                            proto_tree_add_item(interface_tree, hf_fortinet_fgcp_hb_tlv_interface_inventory_name, compressed_tvb, coffset, 16, ENC_ASCII);
+                            proto_item_append_text(ti_interface, ": %s", tvb_get_stringz_enc(pinfo->pool, compressed_tvb, coffset, NULL, ENC_ASCII) );
+                            coffset += 16;
+                            proto_tree_add_item(interface_tree, hf_fortinet_fgcp_hb_tlv_interface_inventory_mac, compressed_tvb, coffset, 6, ENC_NA);
+                            coffset += 6;
+                            proto_tree_add_bitmask(interface_tree, compressed_tvb, coffset, hf_fortinet_fgcp_hb_tlv_interface_inventory_flag,
+                                                   ett_fortinet_fgcp_hb_tlv_interface_flag, fortinet_fgcp_tlv_interface_flag, ENC_NA);
+                            flags =  tvb_get_uint8(compressed_tvb, coffset);
+                            if (flags & 0x01) {
+                                proto_item_append_text(ti_interface, ", Admin Status: UP");
+                            }
+                            if (flags & 0x02) {
+                                proto_item_append_text(ti_interface, ", Operation Status: UP");
+                            }
+                            if (flags & 0x04) {
+                                proto_item_append_text(ti_interface, ", Link Monitored: Yes");
+                            }
+                            if (flags & 0x08) {
+                                proto_item_append_text(ti_interface, ", HA Eligible: Yes");
+                            }
+                            coffset += 1;
+                            number--;
+                        }
+
+                    }
+                    offset += (len-2);
+                }
+                break;
+
                 default:
                     offset += len;
                 break;
@@ -231,6 +323,33 @@ dissect_fortinet_fgcp_hb(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(fortinet_hb_tree, hf_fortinet_fgcp_hb_authentication, tvb, offset, 32, ENC_NA);
         offset += 32;
     }
+
+    return offset;
+}
+
+static int
+dissect_fortinet_fgcp_session(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+        void *data _U_)
+{
+    proto_item *ti;
+    proto_tree *fortinet_hb_tree;
+    unsigned    offset = 0;
+    tvbuff_t    *data_tvb;
+
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "FGCP-SESSION");
+
+    ti = proto_tree_add_item(tree, proto_fortinet_fgcp_session, tvb, 0, -1, ENC_NA);
+
+    fortinet_hb_tree = proto_item_add_subtree(ti, ett_fortinet_fgcp_session);
+
+    proto_tree_add_item(fortinet_hb_tree, hf_fortinet_fgcp_session_magic, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+
+    proto_tree_add_item(fortinet_hb_tree, hf_fortinet_fgcp_session_type, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+
+    data_tvb = tvb_new_subset_remaining(tvb, offset);
+    call_dissector(ip_handle, data_tvb, pinfo, tree);
 
     return offset;
 }
@@ -353,6 +472,76 @@ proto_register_fortinet_fgcp(void)
             FT_UINT8, BASE_DEC, NULL, 0x0,
             NULL, HFILL }
         },
+        { &hf_fortinet_fgcp_hb_tlv_ha_checksum_global,
+            { "HA Checksum Global", "fortinet_fgcp.hb.tlv.ha_checksum.global",
+            FT_BYTES, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_ha_checksum_vdom,
+            { "HA Checksum VDOM", "fortinet_fgcp.hb.tlv.ha_checksum.vdom",
+            FT_BYTES, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_ha_checksum_root,
+            { "HA Checksum Root", "fortinet_fgcp.hb.tlv.ha_checksum.root",
+            FT_BYTES, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory,
+            { "Interface Inventory", "fortinet_fgcp.hb.tlv.interface_inventory",
+            FT_BYTES, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_interface,
+            { "Interface", "fortinet_fgcp.hb.tlv.interface_inventory.interface",
+            FT_NONE, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_number,
+            { "Number of Interfaces", "fortinet_fgcp.hb.tlv.interface_inventory.number",
+            FT_UINT16, BASE_DEC, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_name,
+            { "Name", "fortinet_fgcp.hb.tlv.interface_inventory.name",
+            FT_STRINGZ, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_mac,
+            { "Mac", "fortinet_fgcp.hb.tlv.interface_inventory.mac",
+            FT_ETHER, BASE_NONE, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag,
+            { "Flag", "fortinet_fgcp.hb.tlv.interface_inventory.flag",
+            FT_UINT8, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_admin_status,
+            { "Admin Status", "fortinet_fgcp.hb.tlv.interface_inventory.flag.admin_status",
+            FT_BOOLEAN, 8, TFS(&tfs_up_down), 0x01,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_operation_status,
+            { "Operation Status", "fortinet_fgcp.hb.tlv.interface_inventory.flag.operation_status",
+            FT_BOOLEAN, 8, TFS(&tfs_up_down), 0x02,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_link_monitored,
+            { "Link Monitored", "fortinet_fgcp.hb.tlv.interface_inventory.flag.link_monitored",
+            FT_BOOLEAN, 8, NULL, 0x04,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_ha_eligible,
+            { "HA Eligible", "fortinet_fgcp.hb.tlv.interface_inventory.flag.ha_eligbile",
+            FT_BOOLEAN, 8, NULL, 0x08,
+            NULL, HFILL }
+        },
+        { &hf_fortinet_fgcp_hb_tlv_interface_inventory_flag_b74,
+            { "Reserved", "fortinet_fgcp.hb.tlv.interface_inventory.flag.b74",
+            FT_UINT8, BASE_HEX, NULL, 0xF0,
+            "Bit 7 to 4", HFILL }
+        },
         /*
         { &hf_fortinet_fgcp_hb_unknown,
             { "Unknown", "fortinet_fgcp.hb.unknown",
@@ -365,18 +554,36 @@ proto_register_fortinet_fgcp(void)
             FT_UINT16, BASE_DEC_HEX, NULL, 0x0,
             NULL, HFILL }
         },
+
+        /* Session */
+        { &hf_fortinet_fgcp_session_magic,
+            { "Magic Number", "fortinet_fgcp.session.magic",
+            FT_UINT16, BASE_HEX_DEC, NULL, 0x0,
+            "Magic Number ?", HFILL }
+        },
+        { &hf_fortinet_fgcp_session_type,
+            { "Type", "fortinet_fgcp.session.type",
+            FT_UINT16, BASE_HEX, NULL, 0x0,
+            NULL, HFILL }
+        },
     };
 
     /* Setup protocol subtree array */
-    static gint *ett[] = {
+    static int *ett[] = {
         &ett_fortinet_fgcp_hb,
         &ett_fortinet_fgcp_hb_flag,
-        &ett_fortinet_fgcp_hb_tlv
+        &ett_fortinet_fgcp_hb_tlv,
+        &ett_fortinet_fgcp_hb_tlv_interface,
+        &ett_fortinet_fgcp_hb_tlv_interface_flag,
+        &ett_fortinet_fgcp_session,
     };
 
     /* Register the protocol name and description */
     proto_fortinet_fgcp_hb = proto_register_protocol("FortiGate Cluster Protocol - HeartBeat",
             "fortinet_fgcp_hb", "fortinet_fgcp_hb");
+
+    proto_fortinet_fgcp_session = proto_register_protocol("FortiGate Cluster Protocol - Session",
+            "fortinet_fgcp_session", "fortinet_fgcp_session");
 
     /* Required function calls to register the header fields and subtrees */
     proto_register_field_array(proto_fortinet_fgcp_hb, hf, array_length(hf));
@@ -385,6 +592,9 @@ proto_register_fortinet_fgcp(void)
     fortinet_fgcp_hb_handle = register_dissector("fortinet_fgcp_hb", dissect_fortinet_fgcp_hb,
             proto_fortinet_fgcp_hb);
 
+    fortinet_fgcp_session_handle = register_dissector("fortinet_fgcp_session", dissect_fortinet_fgcp_session,
+            proto_fortinet_fgcp_session);
+
 }
 
 
@@ -392,6 +602,9 @@ void
 proto_reg_handoff_fortinet_fgcp(void)
 {
       dissector_add_uint("ethertype", ETHERTYPE_FORTINET_FGCP_HB, fortinet_fgcp_hb_handle);
+      dissector_add_uint("ethertype", ETHERTYPE_FORTINET_FGCP_SESSION, fortinet_fgcp_session_handle);
+
+      ip_handle  = find_dissector_add_dependency("ip", proto_fortinet_fgcp_session);
 }
 
 /*

@@ -20,15 +20,12 @@
 #include <epan/expert.h>
 
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-per.h"
 #include "packet-h225.h"
 
 #include "packet-h450-ros.h"
-
-#define PNAME  "H.450 Supplementary Services"
-#define PSNAME "H.450"
-#define PFNAME "h450"
 
 void proto_register_h450(void);
 void proto_reg_handoff_h450(void);
@@ -68,7 +65,7 @@ static rose_ctx_t h450_rose_ctx;
 #include "packet-h450-fn.c"
 
 typedef struct _h450_op_t {
-  gint32 opcode;
+  int32_t opcode;
   dissector_t arg_pdu;
   dissector_t res_pdu;
 } h450_op_t;
@@ -78,7 +75,7 @@ static const h450_op_t h450_op_tab[] = {
 };
 
 typedef struct _h450_err_t {
-  gint32 errcode;
+  int32_t errcode;
   dissector_t err_pdu;
 } h450_err_t;
 
@@ -86,7 +83,7 @@ static const h450_err_t h450_err_tab[] = {
 #include "packet-h450-table21.c"
 };
 
-static const h450_op_t *get_op(gint32 opcode) {
+static const h450_op_t *get_op(int32_t opcode) {
   int i;
 
   /* search from the end to get the last occurrence if the operation is redefined in some newer specification */
@@ -96,7 +93,7 @@ static const h450_op_t *get_op(gint32 opcode) {
   return NULL;
 }
 
-static const h450_err_t *get_err(gint32 errcode) {
+static const h450_err_t *get_err(int32_t errcode) {
   int i;
 
   /* search from the end to get the last occurrence if the operation is redefined in some newer specification */
@@ -110,11 +107,11 @@ static const h450_err_t *get_err(gint32 errcode) {
 static int
 dissect_h450_arg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data) {
   proto_item *hidden_item;
-  int offset = 0;
+  unsigned offset = 0;
   rose_ctx_t *rctx;
-  gint32 opcode;
+  int32_t opcode;
   const h450_op_t *op_ptr;
-  const gchar *p;
+  const char *p;
 
   /* Reject the packet if data is NULL */
   if (data == NULL)
@@ -144,7 +141,7 @@ dissect_h450_arg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
     offset = op_ptr->arg_pdu(tvb, pinfo, tree, NULL);
   else
     if (tvb_reported_length_remaining(tvb, offset) > 0) {
-      proto_tree_add_expert(tree, pinfo, &ei_h450_unsupported_arg_type, tvb, offset, -1);
+      proto_tree_add_expert_remaining(tree, pinfo, &ei_h450_unsupported_arg_type, tvb, offset);
       offset += tvb_reported_length_remaining(tvb, offset);
     }
 
@@ -155,11 +152,11 @@ dissect_h450_arg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
 static int
 dissect_h450_res(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data) {
   proto_item *hidden_item;
-  int offset = 0;
+  unsigned offset = 0;
   rose_ctx_t *rctx;
-  gint32 opcode;
+  int32_t opcode;
   const h450_op_t *op_ptr;
-  const gchar *p;
+  const char *p;
 
   /* Reject the packet if data is NULL */
   if (data == NULL)
@@ -189,7 +186,7 @@ dissect_h450_res(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
     offset = op_ptr->res_pdu(tvb, pinfo, tree, NULL);
   else
     if (tvb_reported_length_remaining(tvb, offset) > 0) {
-      proto_tree_add_expert(tree, pinfo, &ei_h450_unsupported_result_type, tvb, offset, -1);
+      proto_tree_add_expert_remaining(tree, pinfo, &ei_h450_unsupported_result_type, tvb, offset);
       offset += tvb_reported_length_remaining(tvb, offset);
     }
 
@@ -200,11 +197,11 @@ dissect_h450_res(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
 static int
 dissect_h450_err(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data) {
   proto_item *hidden_item;
-  int offset = 0;
+  unsigned offset = 0;
   rose_ctx_t *rctx;
-  gint32 errcode;
+  int32_t errcode;
   const h450_err_t *err_ptr;
-  const gchar *p;
+  const char *p;
 
   /* Reject the packet if data is NULL */
   if (data == NULL)
@@ -234,7 +231,7 @@ dissect_h450_err(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
     offset = err_ptr->err_pdu(tvb, pinfo, tree, NULL);
   else
     if (tvb_reported_length_remaining(tvb, offset) > 0) {
-      proto_tree_add_expert(tree, pinfo, &ei_h450_unsupported_error_type, tvb, offset, -1);
+      proto_tree_add_expert_remaining(tree, pinfo, &ei_h450_unsupported_error_type, tvb, offset);
       offset += tvb_reported_length_remaining(tvb, offset);
     }
 
@@ -256,7 +253,7 @@ void proto_register_h450(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 #include "packet-h450-ettarr.c"
   };
 
@@ -269,7 +266,7 @@ void proto_register_h450(void) {
   expert_module_t* expert_h450;
 
   /* Register protocol */
-  proto_h450 = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_h450 = proto_register_protocol("H.450 Supplementary Services", "H.450", "h450");
   register_dissector("h4501", dissect_h450_H4501SupplementaryService_PDU, proto_h450);
   /* Register fields and subtrees */
   proto_register_field_array(proto_h450, hf, array_length(hf));

@@ -15,12 +15,9 @@
 #include <epan/strutil.h>
 #include <epan/asn1.h>
 #include <epan/expert.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
-
-#define PNAME  "Q.932 Operations Service Element"
-#define PSNAME "Q932.ROS"
-#define PFNAME "q932.ros"
 
 void proto_register_q932_ros(void);
 void proto_reg_handoff_q932_ros(void);
@@ -37,13 +34,13 @@ static expert_field ei_ros_undecoded;
 /* Preferences */
 
 /* Subdissectors */
-static dissector_handle_t data_handle = NULL;
+static dissector_handle_t data_handle;
 
 /* Global variables */
 static rose_ctx_t *rose_ctx_tmp;
 
-static guint32 problem_val;
-static gchar problem_str[64];
+static uint32_t problem_val;
+static char problem_str[64];
 static tvbuff_t *arg_next_tvb, *res_next_tvb, *err_next_tvb;
 
 
@@ -68,7 +65,7 @@ void proto_register_q932_ros(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 #include "packet-q932-ros-ettarr.c"
   };
 
@@ -79,7 +76,7 @@ void proto_register_q932_ros(void) {
   expert_module_t* expert_q932_ros;
 
   /* Register protocol and dissector */
-  proto_q932_ros = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_q932_ros = proto_register_protocol("Q.932 Operations Service Element", "Q932.ROS", "q932.ros");
   proto_set_cant_toggle(proto_q932_ros);
 
   /* Register fields and subtrees */
@@ -88,7 +85,7 @@ void proto_register_q932_ros(void) {
   expert_q932_ros = expert_register_protocol(proto_q932_ros);
   expert_register_field_array(expert_q932_ros, ei, array_length(ei));
 
-  register_dissector(PFNAME, dissect_q932_ros, proto_q932_ros);
+  register_dissector("q932.ros", dissect_q932_ros, proto_q932_ros);
 }
 
 /*--- proto_reg_handoff_q932_ros --------------------------------------------*/

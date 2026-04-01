@@ -16,6 +16,7 @@
 
 #include "ui/qt/widgets/wireshark_file_dialog.h"
 #include <wsutil/report_message.h>
+#include <epan/prefs.h>
 #include <QMessageBox>
 #include <ui/all_files_wildcard.h>
 
@@ -63,10 +64,10 @@ RsaKeysFrame::~RsaKeysFrame()
     delete ui;
 }
 
-gboolean RsaKeysFrame::verifyKey(const char *uri, const char *password, gboolean *need_password, QString &error)
+bool RsaKeysFrame::verifyKey(const char *uri, const char *password, bool *need_password, QString &error)
 {
     char *error_c = NULL;
-    gboolean key_ok = secrets_verify_key(qPrintable(uri), qPrintable(password), need_password, &error_c);
+    bool key_ok = secrets_verify_key(qPrintable(uri), qPrintable(password), need_password, &error_c);
     error = error_c ? error_c : "";
     g_free(error_c);
     return key_ok;
@@ -120,7 +121,7 @@ void RsaKeysFrame::on_addItemButton_clicked()
     }
 
     // Validate the token, is a PIN needed?
-    gboolean key_ok = false, needs_pin = true;
+    bool key_ok = false, needs_pin = true;
     QString error;
     if (!item.startsWith("pkcs11:")) {
         // For keys other than pkcs11, try to verify the key without password.
@@ -168,14 +169,14 @@ void RsaKeysFrame::on_addFileButton_clicked()
     // Try to load the key as unencrypted key file. If any errors occur, assume
     // an encrypted key file and prompt for a password.
     QString password, error;
-    gboolean key_ok = secrets_verify_key(qPrintable(file), NULL, NULL, NULL);
+    bool key_ok = secrets_verify_key(qPrintable(file), NULL, NULL, NULL);
     while (!key_ok) {
         QString msg;
         if (!error.isEmpty()) {
             msg = error + "\n";
             error.clear();
         }
-        msg += QString("Enter the password to open %1").arg(file);
+        msg += QStringLiteral("Enter the password to open %1").arg(file);
 
         bool ok;
         password = QInputDialog::getText(this, tr("Select RSA private key file"), msg,
@@ -197,13 +198,17 @@ void RsaKeysFrame::on_deleteItemButton_clicked()
     }
 }
 
-void RsaKeysFrame::acceptChanges()
+int RsaKeysFrame::acceptChanges()
 {
     // Save keys list mutations. The PKCS #11 provider list was already saved.
     QString error;
-    if (rsa_keys_model_->applyChanges(error) && !error.isEmpty()) {
-        report_failure("%s", qPrintable(error));
+    if (rsa_keys_model_->applyChanges(error)) {
+        if (!error.isEmpty()) {
+            report_failure("%s", qPrintable(error));
+        }
+        return PREF_EFFECT_DISSECTION;
     }
+    return 0;
 }
 
 void RsaKeysFrame::rejectChanges()
@@ -261,6 +266,8 @@ void RsaKeysFrame::on_deleteLibraryButton_clicked()
     pkcs11_libs_model_->removeRows(current.row(), 1);
     // Due to technical limitations of GnuTLS, libraries cannot be unloaded or
     // disabled once loaded. Inform the user of this caveat.
+    // XXX - Is this still true? Calling gnutls_pkcs11_deinit()
+    // followed by gnutls_pkcs11_init() should work.
     QMessageBox::information(this, tr("Changes will apply after a restart"),
             tr("PKCS #11 provider %1 will be removed after the next restart.").arg(file),
             QMessageBox::Ok);

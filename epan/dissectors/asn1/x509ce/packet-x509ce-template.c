@@ -14,6 +14,7 @@
 #include <epan/packet.h>
 #include <epan/asn1.h>
 #include <epan/oids.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-x509ce.h"
@@ -21,10 +22,6 @@
 #include "packet-x509if.h"
 #include "packet-x509sat.h"
 #include "packet-p1.h"
-
-#define PNAME  "X.509 Certificate Extensions"
-#define PSNAME "X509CE"
-#define PFNAME "x509ce"
 
 void proto_register_x509ce(void);
 void proto_reg_handoff_x509ce(void);
@@ -90,17 +87,17 @@ static int
 dissect_x509ce_invalidityDate_callback(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
   asn1_ctx_t asn1_ctx;
-  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
+  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
 
-  return dissect_x509ce_GeneralizedTime(FALSE, tvb, 0, &asn1_ctx, tree, hf_x509ce_id_ce_invalidityDate);
+  return dissect_x509ce_GeneralizedTime(false, tvb, 0, &asn1_ctx, tree, hf_x509ce_id_ce_invalidityDate);
 }
 
 static int
 dissect_x509ce_baseUpdateTime_callback(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
   asn1_ctx_t asn1_ctx;
-  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
-  return dissect_x509ce_GeneralizedTime(FALSE, tvb, 0, &asn1_ctx, tree, hf_x509ce_id_ce_baseUpdateTime);
+  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
+  return dissect_x509ce_GeneralizedTime(false, tvb, 0, &asn1_ctx, tree, hf_x509ce_id_ce_baseUpdateTime);
 }
 
 /*--- proto_register_x509ce ----------------------------------------------*/
@@ -139,12 +136,12 @@ void proto_register_x509ce(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 #include "packet-x509ce-ettarr.c"
   };
 
   /* Register protocol */
-  proto_x509ce = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_x509ce = proto_register_protocol("X.509 Certificate Extensions", "X509CE", "x509ce");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_x509ce, hf, array_length(hf));

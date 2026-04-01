@@ -16,40 +16,9 @@ set(CODEC_SRC
 	sbc.c
 )
 
-set(PLUGIN_FILES
-	plugin.c
-	${CODEC_SRC}
-)
-
-set_source_files_properties(
-	${PLUGIN_FILES}
-	PROPERTIES
-	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
-)
-
-register_codec_files(plugin.c 1
-	"Bluetooth SBC"
-	${CODEC_SRC}
-)
-
-add_wireshark_codec_plugin_library(sbc)
-
-target_include_directories(sbc PRIVATE ${CMAKE_SOURCE_DIR}/codecs)
-
-target_link_libraries(sbc wsutil ${SBC_LIBRARIES})
-
-target_include_directories(sbc SYSTEM PRIVATE ${SBC_INCLUDE_DIRS})
-
-install_plugin(sbc codecs)
-
-file(GLOB CODEC_HEADERS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "*.h")
-CHECKAPI(
-	NAME
-	  sbc
-	SWITCHES
-	SOURCES
-	  ${CODEC_SRC}
-	  ${CODEC_HEADERS}
+add_wireshark_codec_plugin_library(sbc
+	PLUGIN_LIBS ${SBC_LIBRARIES}
+	PLUGIN_INCS ${SBC_INCLUDE_DIRS}
 )
 
 #

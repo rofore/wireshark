@@ -15,15 +15,12 @@
 #include <epan/prefs.h>
 #include <epan/oids.h>
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-tpkt.h"
 #include "packet-per.h"
 #include "packet-h225.h"
 #include "packet-h235.h"
-
-#define PNAME  "H.501 Mobility"
-#define PSNAME "H.501"
-#define PFNAME "h501"
 
 void proto_register_h501(void);
 
@@ -42,7 +39,7 @@ static dissector_handle_t h501_tcp_handle;
 
 /* Preferences */
 #define H501_PORT 2099
-static gboolean h501_desegment_tcp = TRUE;
+static bool h501_desegment_tcp = true;
 
 void proto_reg_handoff_h501(void);
 
@@ -54,7 +51,7 @@ dissect_h501_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
   proto_item  *ti = NULL;
   proto_tree  *h501_tree = NULL;
 
-  col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+  col_set_str(pinfo->cinfo, COL_PROTOCOL, "H.501");
 
   ti = proto_tree_add_item(tree, proto_h501, tvb, 0, -1, ENC_NA);
   h501_tree = proto_item_add_subtree(ti, ett_h501);
@@ -65,7 +62,7 @@ dissect_h501_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data
 static int
 dissect_h501_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
-  dissect_tpkt_encap(tvb, pinfo, tree, FALSE, h501_pdu_handle);
+  dissect_tpkt_encap(tvb, pinfo, tree, false, h501_pdu_handle);
   return tvb_captured_length(tvb);
 }
 
@@ -86,22 +83,22 @@ void proto_register_h501(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_h501,
 #include "packet-h501-ettarr.c"
   };
 
   /* Register protocol */
-  proto_h501 = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_h501 = proto_register_protocol("H.501 Mobility", "H.501", "h501");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_h501, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
 
   /* Register dissectors */
-  h501_pdu_handle = register_dissector(PFNAME, dissect_h501_pdu, proto_h501);
-  h501_udp_handle = register_dissector(PFNAME ".udp", dissect_h501_udp, proto_h501);
-  h501_tcp_handle = register_dissector(PFNAME ".tcp", dissect_h501_tcp, proto_h501);
+  h501_pdu_handle = register_dissector("h501", dissect_h501_pdu, proto_h501);
+  h501_udp_handle = register_dissector("h501.udp", dissect_h501_udp, proto_h501);
+  h501_tcp_handle = register_dissector("h501.tcp", dissect_h501_tcp, proto_h501);
 
   /* Register dissection preferences */
   h501_module = prefs_register_protocol(proto_h501, NULL);

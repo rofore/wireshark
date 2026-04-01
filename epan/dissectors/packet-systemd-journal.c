@@ -31,15 +31,12 @@
 #include <epan/expert.h>
 #include <wiretap/wtap.h>
 #include <wsutil/strtoi.h>
+#include <wsutil/array.h>
 
 #include "packet-syslog.h"
 
-#define PNAME  "systemd Journal Entry"
-#define PSNAME "systemd Journal"
-#define PFNAME "systemd_journal"
-
-void proto_reg_handoff_systemd_journal(void);
-void proto_register_systemd_journal(void);
+void event_register_systemd_journal(void);
+void event_reg_handoff_systemd_journal(void);
 
 /* Initialize the protocol and registered fields */
 static int proto_systemd_journal;
@@ -161,14 +158,14 @@ static expert_field ei_unhandled_field_type;
 static expert_field ei_nonbinary_field;
 static expert_field ei_undecoded_field;
 
-static dissector_handle_t sje_handle = NULL;
+static dissector_handle_t sje_handle;
 
 #define MAX_DATA_SIZE 262144 // WTAP_MAX_PACKET_SIZE_STANDARD. Increase if needed.
 
 /* Initialize the subtree pointers */
-static gint ett_systemd_journal_entry;
-static gint ett_systemd_binary_data;
-static gint ett_systemd_unknown_field;
+static int ett_systemd_journal_entry;
+static int ett_systemd_binary_data;
+static int ett_systemd_unknown_field;
 
 // XXX Use a value_string instead?
 typedef struct _journal_field_hf_map {
@@ -277,13 +274,13 @@ static void init_jf_to_hf_map(void) {
         { hf_sj_audit_field_name, "_AUDIT_FIELD_NAME=" },
         { hf_sj_seat_id, "SEAT_ID=" },
         { hf_sj_kernel_usec, "KERNEL_USEC=" },
-        { hf_sj_userspace_usec, "USERSPACE_USEC" },
-        { hf_sj_session_id, "SESSION_ID" },
-        { hf_sj_user_id, "USER_ID" },
-        { hf_sj_leader, "LEADER" },
-        { hf_sj_job_type, "JOB_TYPE" },
-        { hf_sj_job_result, "JOB_RESULT" },
-        { hf_sj_user_invocation_id, "USER_INVOCATION_ID" },
+        { hf_sj_userspace_usec, "USERSPACE_USEC=" },
+        { hf_sj_session_id, "SESSION_ID=" },
+        { hf_sj_user_id, "USER_ID=" },
+        { hf_sj_leader, "LEADER=" },
+        { hf_sj_job_type, "JOB_TYPE=" },
+        { hf_sj_job_result, "JOB_RESULT=" },
+        { hf_sj_user_invocation_id, "USER_INVOCATION_ID=" },
         { hf_sj_systemd_user_slice, "_SYSTEMD_USER_SLICE=" },
         { 0, NULL }
     };
@@ -291,10 +288,10 @@ static void init_jf_to_hf_map(void) {
 }
 
 static void
-dissect_sjle_time_usecs(proto_tree *tree, int hf_idx, tvbuff_t *tvb, int offset, int len) {
-    guint64 rt_ts = 0;
-    char *time_str = tvb_format_text(wmem_packet_scope(), tvb, offset, len);
-    gboolean ok = ws_strtou64(time_str, NULL, &rt_ts);
+dissect_sjle_time_usecs(proto_tree *tree, packet_info* pinfo, int hf_idx, tvbuff_t *tvb, int offset, int len) {
+    uint64_t rt_ts = 0;
+    char *time_str = tvb_format_text(pinfo->pool, tvb, offset, len);
+    bool ok = ws_strtou64(time_str, NULL, &rt_ts);
     if (ok) {
         nstime_t ts;
         ts.secs = (time_t) (rt_ts / 1000000);
@@ -306,27 +303,26 @@ dissect_sjle_time_usecs(proto_tree *tree, int hf_idx, tvbuff_t *tvb, int offset,
 }
 
 static void
-dissect_sjle_uint(proto_tree *tree, int hf_idx, tvbuff_t *tvb, int offset, int len) {
-    guint32 uint_val = (guint32) strtoul(tvb_format_text(wmem_packet_scope(), tvb, offset, len), NULL, 10);
+dissect_sjle_uint(proto_tree *tree, packet_info* pinfo, int hf_idx, tvbuff_t *tvb, int offset, int len) {
+    uint32_t uint_val = (uint32_t) strtoul(tvb_format_text(pinfo->pool, tvb, offset, len), NULL, 10);
     proto_tree_add_uint(tree, hf_idx, tvb, offset, len, uint_val);
 }
 
 static void
-dissect_sjle_int(proto_tree *tree, int hf_idx, tvbuff_t *tvb, int offset, int len) {
-    gint32 int_val = (gint32) strtol(tvb_format_text(wmem_packet_scope(), tvb, offset, len), NULL, 10);
+dissect_sjle_int(proto_tree *tree, packet_info* pinfo, int hf_idx, tvbuff_t *tvb, int offset, int len) {
+    int32_t int_val = (int32_t) strtol(tvb_format_text(pinfo->pool, tvb, offset, len), NULL, 10);
     proto_tree_add_int(tree, hf_idx, tvb, offset, len, int_val);
 }
 
 /* Dissect a line-based journal export entry */
 static int
-dissect_systemd_journal_line_entry(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree,
-        void *data _U_)
+dissect_systemd_journal_line_entry(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
     proto_item *ti;
     proto_tree *sje_tree;
-    int         offset = 0, next_offset = 0;
+    unsigned    offset = 0, next_offset = 0;
 
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "systemd Journal");
     col_clear(pinfo->cinfo, COL_INFO);
     col_set_str(pinfo->cinfo, COL_INFO, "Journal Entry");
 
@@ -334,37 +330,45 @@ dissect_systemd_journal_line_entry(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
     sje_tree = proto_item_add_subtree(ti, ett_systemd_journal_entry);
 
     while (tvb_offset_exists(tvb, offset)) {
-        int line_len = tvb_find_line_end(tvb, offset, -1, &next_offset, FALSE);
+        unsigned line_len;
+        tvb_find_line_end_remaining(tvb, offset, &line_len, &next_offset);
         if (line_len < 3) {
             // Invalid or zero length.
             // XXX Add an expert item for non-empty lines.
             offset = next_offset;
             continue;
         }
-        gboolean found = FALSE;
-        int eq_off = tvb_find_guint8(tvb, offset, line_len, '=') + 1;
-        int val_len = offset + line_len - eq_off;
+        bool found = false;
+        unsigned val_off;
+        if (tvb_find_uint8_length(tvb, offset, line_len, '=', &val_off)) {
+            // Text field.
+            // XXX - We should only need to try the text fields in this case.
+            val_off++;
+        } else {
+            val_off = 0;
+        }
+        unsigned val_len = offset + line_len - val_off;
 
         for (int i = 0; jf_to_hf[i].name; i++) {
-            if (tvb_memeql(tvb, offset, (const guint8*) jf_to_hf[i].name, strlen(jf_to_hf[i].name)) == 0) {
+            if (tvb_memeql(tvb, offset, (const uint8_t*) jf_to_hf[i].name, strlen(jf_to_hf[i].name)) == 0) {
                 int hf_idx = jf_to_hf[i].hfid;
                 switch (proto_registrar_get_ftype(hf_idx)) {
                 case FT_ABSOLUTE_TIME:
                 case FT_RELATIVE_TIME:
-                    dissect_sjle_time_usecs(sje_tree, hf_idx, tvb, eq_off, val_len);
+                    dissect_sjle_time_usecs(sje_tree, pinfo, hf_idx, tvb, val_off, val_len);
                     break;
                 case FT_UINT32:
                 case FT_UINT16:
                 case FT_UINT8:
-                    dissect_sjle_uint(sje_tree, hf_idx, tvb, eq_off, val_len);
+                    dissect_sjle_uint(sje_tree, pinfo, hf_idx, tvb, val_off, val_len);
                     break;
                 case FT_INT32:
                 case FT_INT16:
                 case FT_INT8:
-                    dissect_sjle_int(sje_tree, hf_idx, tvb, eq_off, val_len);
+                    dissect_sjle_int(sje_tree, pinfo, hf_idx, tvb, val_off, val_len);
                     break;
                 case FT_STRING:
-                    proto_tree_add_item(sje_tree, jf_to_hf[i].hfid, tvb, eq_off, val_len, ENC_UTF_8|ENC_NA);
+                    proto_tree_add_item(sje_tree, jf_to_hf[i].hfid, tvb, val_off, val_len, ENC_UTF_8|ENC_NA);
                     break;
                 default:
                 {
@@ -376,18 +380,18 @@ dissect_systemd_journal_line_entry(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
                 }
                 if (hf_idx == hf_sj_message) {
                     col_clear(pinfo->cinfo, COL_INFO);
-                    col_add_str(pinfo->cinfo, COL_INFO, (char *) tvb_get_string_enc(pinfo->pool, tvb, eq_off, val_len, ENC_UTF_8));
+                    col_add_str(pinfo->cinfo, COL_INFO, (char *) tvb_get_string_enc(pinfo->pool, tvb, val_off, val_len, ENC_UTF_8));
                 }
-                found = TRUE;
+                found = true;
             }
         }
 
-        if (!found && eq_off > offset + 1) {
+        if (!found && val_off > offset + 1) {
             proto_item *unk_ti = proto_tree_add_none_format(sje_tree, hf_sj_unknown_field, tvb, offset, line_len,
-                                                            "Unknown text field: %s", tvb_get_string_enc(pinfo->pool, tvb, offset, eq_off - offset - 1, ENC_UTF_8));
+                                                            "Unknown text field: %s", tvb_get_string_enc(pinfo->pool, tvb, offset, val_off - offset - 1, ENC_UTF_8));
             proto_tree *unk_tree = proto_item_add_subtree(unk_ti, ett_systemd_unknown_field);
-            proto_tree_add_item(unk_tree, hf_sj_unknown_field_name, tvb, offset, eq_off - offset - 1, ENC_UTF_8);
-            proto_tree_add_item(unk_tree, hf_sj_unknown_field_value, tvb, eq_off, val_len, ENC_UTF_8);
+            proto_tree_add_item(unk_tree, hf_sj_unknown_field_name, tvb, offset, val_off - offset - 1, ENC_UTF_8);
+            proto_tree_add_item(unk_tree, hf_sj_unknown_field_value, tvb, val_off, val_len, ENC_UTF_8);
             offset = next_offset;
             continue;
         }
@@ -395,27 +399,29 @@ dissect_systemd_journal_line_entry(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
         // Try again, looking for binary fields.
         if (!found) {
             for (int i = 0; jf_to_hf[i].name; i++) {
-                int noeql_len = (int) strlen(jf_to_hf[i].name) - 1;
-                if (tvb_memeql(tvb, offset, (const guint8 *) jf_to_hf[i].name, (size_t) noeql_len) == 0 && tvb_memeql(tvb, offset+noeql_len, (const guint8 *) "\n", 1) == 0) {
+                unsigned noeql_len = (unsigned) strlen(jf_to_hf[i].name) - 1;
+                if (tvb_memeql(tvb, offset, (const uint8_t *) jf_to_hf[i].name, (size_t) noeql_len) == 0 && tvb_memeql(tvb, offset+noeql_len, (const uint8_t *) "\n", 1) == 0) {
                     int hf_idx = jf_to_hf[i].hfid;
-                    guint64 data_len = tvb_get_letoh64(tvb, offset + noeql_len + 1);
-                    int data_off = offset + noeql_len + 1 + 8; // \n + data len
-                    next_offset = data_off + (int) data_len + 1;
+                    uint64_t data_len = tvb_get_letoh64(tvb, offset + noeql_len + 1);
+                    unsigned data_off = offset + noeql_len + 1 + 8; // \n + data len
                     if (proto_registrar_get_ftype(hf_idx) == FT_STRING) {
                         proto_item *bin_ti = proto_tree_add_item(sje_tree, hf_idx, tvb, data_off, (int) data_len, ENC_NA);
                         proto_tree *bin_tree = proto_item_add_subtree(bin_ti, ett_systemd_binary_data);
                         proto_tree_add_item(bin_tree, hf_sj_binary_data_len, tvb, offset + noeql_len + 1, 8, ENC_LITTLE_ENDIAN);
                         if (hf_idx == hf_sj_message) {
                             col_clear(pinfo->cinfo, COL_INFO);
-                            col_add_str(pinfo->cinfo, COL_INFO, tvb_format_text(pinfo->pool, tvb, data_off, (int) data_len));
+                            col_add_str(pinfo->cinfo, COL_INFO, tvb_format_text(pinfo->pool, tvb, data_off, (unsigned) data_len));
                         }
                     } else {
                         proto_item *unk_ti = proto_tree_add_none_format(sje_tree, hf_sj_unknown_field, tvb, offset, line_len,
-                                                                        "Unknown data field: %s", tvb_format_text(pinfo->pool, tvb, offset, eq_off - offset - 1));
+                                                                        "Unknown data field: %s", tvb_format_text(pinfo->pool, tvb, offset, noeql_len));
                         proto_tree *unk_tree = proto_item_add_subtree(unk_ti, ett_systemd_unknown_field);
-                        proto_item *expert_ti = proto_tree_add_item(unk_tree, hf_sj_unknown_field_name, tvb, offset, offset + noeql_len, ENC_UTF_8);
+                        proto_item *expert_ti = proto_tree_add_item(unk_tree, hf_sj_unknown_field_name, tvb, offset, noeql_len, ENC_UTF_8);
                         proto_tree_add_item(unk_tree, hf_sj_unknown_field_data, tvb, data_off, (int) data_len, ENC_UTF_8);
                         expert_add_info(pinfo, expert_ti, &ei_nonbinary_field);
+                    }
+                    if (ckd_add(&next_offset, data_off + 1, data_len)) {
+                        next_offset = tvb_reported_length(tvb);
                     }
                 }
             }
@@ -427,10 +433,10 @@ dissect_systemd_journal_line_entry(tvbuff_t *tvb, packet_info *pinfo _U_, proto_
 }
 
 /*
- * Register the protocol with Wireshark.
+ * Register the protocol with Stratoshark.
  */
 void
-proto_register_systemd_journal(void)
+event_register_systemd_journal(void)
 {
     expert_module_t *expert_systemd_journal;
 
@@ -846,7 +852,7 @@ proto_register_systemd_journal(void)
     };
 
     /* Setup protocol subtree array */
-    static gint *ett[] = {
+    static int *ett[] = {
         &ett_systemd_journal_entry,
         &ett_systemd_binary_data,
         &ett_systemd_unknown_field
@@ -869,7 +875,7 @@ proto_register_systemd_journal(void)
     };
 
     /* Register the protocol name and description */
-    proto_systemd_journal = proto_register_protocol(PNAME, PSNAME, PFNAME);
+    proto_systemd_journal = proto_register_protocol("systemd Journal Entry", "systemd Journal", "systemd_journal");
 
     /* Required function calls to register the header fields and subtrees */
     proto_register_field_array(proto_systemd_journal, hf, array_length(hf));
@@ -886,8 +892,9 @@ proto_register_systemd_journal(void)
 }
 
 #define BLOCK_TYPE_SYSTEMD_JOURNAL_EXPORT 0x0000009
+
 void
-proto_reg_handoff_systemd_journal(void)
+event_reg_handoff_systemd_journal(void)
 {
     int file_type_subtype_systemd_journal;
 

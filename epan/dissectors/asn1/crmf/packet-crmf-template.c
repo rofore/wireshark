@@ -14,16 +14,13 @@
 #include <epan/packet.h>
 #include <epan/oids.h>
 #include <epan/asn1.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-crmf.h"
 #include "packet-cms.h"
 #include "packet-pkix1explicit.h"
 #include "packet-pkix1implicit.h"
-
-#define PNAME  "Certificate Request Message Format"
-#define PSNAME "CRMF"
-#define PFNAME "crmf"
 
 void proto_register_crmf(void);
 void proto_reg_handoff_crmf(void);
@@ -51,12 +48,12 @@ void proto_register_crmf(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
 #include "packet-crmf-ettarr.c"
   };
 
   /* Register protocol */
-  proto_crmf = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_crmf = proto_register_protocol("Certificate Request Message Format", "CRMF", "crmf");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_crmf, hf, array_length(hf));

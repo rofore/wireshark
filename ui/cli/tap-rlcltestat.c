@@ -43,7 +43,7 @@ enum {
     NUM_UE_COLUMNS
 };
 
-static const gchar *ue_titles[] = { "RAT", " UEId",
+static const char *ue_titles[] = { "RAT", " UEId",
                                     "UL Frames", "UL Bytes", "   UL Mbs", "UL ACKs", "UL NACKs", "UL Missed",
                                     "DL Frames", "DL Bytes", "   DL Mbs", "DL ACKs", "DL NACKs", "DL Missed"};
 
@@ -51,35 +51,35 @@ static const gchar *ue_titles[] = { "RAT", " UEId",
 typedef struct rlc_lte_row_data {
     /* Key for matching this row */
     uint8_t  rat;
-    guint16  ueid;
+    uint16_t ueid;
 
-    gboolean is_predefined_data;
+    bool is_predefined_data;
 
-    guint32  UL_frames;
-    guint32  UL_total_bytes;
+    uint32_t UL_frames;
+    uint32_t UL_total_bytes;
     nstime_t UL_time_start;
     nstime_t UL_time_stop;
-    guint32  UL_total_acks;
-    guint32  UL_total_nacks;
-    guint32  UL_total_missing;
+    uint32_t UL_total_acks;
+    uint32_t UL_total_nacks;
+    uint32_t UL_total_missing;
 
-    guint32  DL_frames;
-    guint32  DL_total_bytes;
+    uint32_t DL_frames;
+    uint32_t DL_total_bytes;
     nstime_t DL_time_start;
     nstime_t DL_time_stop;
-    guint32  DL_total_acks;
-    guint32  DL_total_nacks;
-    guint32  DL_total_missing;
+    uint32_t DL_total_acks;
+    uint32_t DL_total_nacks;
+    uint32_t DL_total_missing;
 
 } rlc_lte_row_data;
 
 
 /* Common channel stats (i.e. independent of UEs) */
 typedef struct rlc_lte_common_stats {
-    guint32 bcch_frames;
-    guint32 bcch_bytes;
-    guint32 pcch_frames;
-    guint32 pcch_bytes;
+    uint32_t bcch_frames;
+    uint32_t bcch_bytes;
+    uint32_t pcch_frames;
+    uint32_t pcch_bytes;
 } rlc_lte_common_stats;
 
 
@@ -93,12 +93,11 @@ typedef struct rlc_lte_ep {
 /* Top-level struct for RLC LTE statistics */
 typedef struct rlc_lte_stat_t {
     rlc_lte_ep_t  *ep_list;
-    guint32       total_frames;
+    uint32_t      total_frames;
 
     /* Common stats */
     rlc_lte_common_stats common_stats;
 } rlc_lte_stat_t;
-
 
 
 /* Reset RLC stats */
@@ -111,11 +110,29 @@ rlc_lte_stat_reset(void *phs)
     rlc_lte_stat->total_frames = 0;
     memset(&rlc_lte_stat->common_stats, 0, sizeof(rlc_lte_common_stats));
 
-    if (!list) {
-        return;
+    while (list != NULL) {
+        rlc_lte_ep_t *ptr = list;
+        list = list->next;
+        g_free(ptr);
+    }
+    rlc_lte_stat->ep_list = NULL;
+}
+
+
+/* Free memory used by tap */
+static void
+rlc_lte_stat_finish(void *phs)
+{
+    rlc_lte_stat_t *rlc_lte_stat = (rlc_lte_stat_t *)phs;
+    rlc_lte_ep_t *list = rlc_lte_stat->ep_list;
+
+    while (list != NULL) {
+        rlc_lte_ep_t *ptr = list;
+        list = list->next;
+        g_free(ptr);
     }
 
-    rlc_lte_stat->ep_list = NULL;
+    g_free(rlc_lte_stat);
 }
 
 
@@ -276,7 +293,7 @@ rlc_lte_stat_packet(void *phs, packet_info *pinfo, epan_dissect_t *edt _U_,
 
 
 /* Calculate and return a bandwidth figure, in Mbs */
-static float calculate_bw(nstime_t *start_time, nstime_t *stop_time, guint32 bytes)
+static float calculate_bw(nstime_t *start_time, nstime_t *stop_time, uint32_t bytes)
 {
     /* Can only calculate bandwidth if have time delta */
     if (memcmp(start_time, stop_time, sizeof(nstime_t)) != 0) {
@@ -301,8 +318,8 @@ static float calculate_bw(nstime_t *start_time, nstime_t *stop_time, guint32 byt
 static void
 rlc_lte_stat_draw(void *phs)
 {
-    guint16 number_of_ues = 0;
-    gint i;
+    uint16_t number_of_ues = 0;
+    int i;
 
     /* Look up the statistics struct */
     rlc_lte_stat_t *hs = (rlc_lte_stat_t *)phs;
@@ -359,7 +376,7 @@ rlc_lte_stat_draw(void *phs)
 
 
 /* Create a new RLC LTE stats struct */
-static void rlc_lte_stat_init(const char *opt_arg, void *userdata _U_)
+static bool rlc_lte_stat_init(const char *opt_arg, void *userdata _U_)
 {
     rlc_lte_stat_t    *hs;
     const char        *filter = NULL;
@@ -385,17 +402,18 @@ static void rlc_lte_stat_init(const char *opt_arg, void *userdata _U_)
     /**********************************************/
 
     error_string = register_tap_listener("rlc-3gpp", hs,
-                                         filter, 0,
+                                         filter, TL_REQUIRES_NOTHING,
                                          rlc_lte_stat_reset,
                                          rlc_lte_stat_packet,
                                          rlc_lte_stat_draw,
-                                         NULL);
+                                         rlc_lte_stat_finish);
     if (error_string) {
         g_string_free(error_string, TRUE);
         g_free(hs);
-        exit(1);
+        return false;
     }
 
+    return true;
 }
 
 

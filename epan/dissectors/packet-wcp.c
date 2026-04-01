@@ -92,9 +92,9 @@
 #include <wsutil/pint.h>
 #include <epan/conversation.h>
 #include <epan/etypes.h>
-#include <epan/nlpid.h>
 #include <epan/expert.h>
 #include <epan/exceptions.h>
+#include "packet-osi.h"
 
 #define MAX_WIN_BUF_LEN 0x7fff		/* storage size for decompressed data */
 #define MAX_WCP_BUF_LEN 2048		/* storage size for compressed data */
@@ -104,10 +104,10 @@ void proto_register_wcp(void);
 void proto_reg_handoff_wcp(void);
 
 typedef struct {
-	guint8  *buf_cur;
-	guint8  buffer[MAX_WIN_BUF_LEN];
+	uint8_t *buf_cur;
+	uint8_t buffer[MAX_WIN_BUF_LEN];
 	/* initialized bytes in the buffer (since buf_cur may wrap around) */
-	guint16 initialized;
+	uint16_t initialized;
 } wcp_window_t;
 
 typedef struct {
@@ -117,8 +117,8 @@ typedef struct {
 
 /* XXX do I really want the length in here */
 typedef struct {
-	guint16  len;
-	guint8  buffer[MAX_WCP_BUF_LEN];
+	uint16_t len;
+	uint8_t buffer[MAX_WCP_BUF_LEN];
 } wcp_pdata_t;
 
 
@@ -152,9 +152,9 @@ static int hf_wcp_short_run;
 static int hf_wcp_long_run;
 static int hf_wcp_offset;
 
-static gint ett_wcp;
-static gint ett_wcp_comp_data;
-static gint ett_wcp_field;
+static int ett_wcp;
+static int ett_wcp_comp_data;
+static int ett_wcp_field;
 
 static expert_field ei_wcp_compressed_data_exceeds;
 static expert_field ei_wcp_uncompressed_data_exceeds;
@@ -208,14 +208,14 @@ static const value_string ext_cmd_string[] = {
 
 
 
-static tvbuff_t *wcp_uncompress(tvbuff_t *src_tvb, int offset, packet_info *pinfo, proto_tree *tree);
+static tvbuff_t *wcp_uncompress(tvbuff_t *src_tvb, unsigned offset, packet_info *pinfo, proto_tree *tree);
 static wcp_window_t *get_wcp_window_ptr(packet_info *pinfo);
 
 static void
-dissect_wcp_con_req(tvbuff_t *tvb, int offset, proto_tree *tree) {
+dissect_wcp_con_req(tvbuff_t *tvb, unsigned offset, proto_tree *tree) {
 
 /* WCP connector request message */
-	guint32 alg_cnt;
+	uint32_t alg_cnt;
 
 	proto_tree_add_item(tree, hf_wcp_tid, tvb, offset, 2, ENC_BIG_ENDIAN);
 	proto_tree_add_item(tree, hf_wcp_rev, tvb, offset + 2, 1, ENC_NA);
@@ -232,7 +232,7 @@ dissect_wcp_con_req(tvbuff_t *tvb, int offset, proto_tree *tree) {
 }
 
 static void
-dissect_wcp_con_ack(tvbuff_t *tvb, int offset, proto_tree *tree) {
+dissect_wcp_con_ack(tvbuff_t *tvb, unsigned offset, proto_tree *tree) {
 
 	/* WCP connector ack message */
 
@@ -243,7 +243,7 @@ dissect_wcp_con_ack(tvbuff_t *tvb, int offset, proto_tree *tree) {
 }
 
 static void
-dissect_wcp_init(tvbuff_t *tvb, int offset, proto_tree *tree) {
+dissect_wcp_init(tvbuff_t *tvb, unsigned offset, proto_tree *tree) {
 
 	/* WCP Initiate Request/Ack message */
 
@@ -256,7 +256,7 @@ dissect_wcp_init(tvbuff_t *tvb, int offset, proto_tree *tree) {
 
 
 static void
-dissect_wcp_reset(tvbuff_t *tvb, int offset, proto_tree *tree) {
+dissect_wcp_reset(tvbuff_t *tvb, unsigned offset, proto_tree *tree) {
 
 	/* Process WCP Reset Request/Ack message */
 
@@ -277,14 +277,14 @@ static void wcp_save_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree* tree) {
 		tvb_memcpy(tvb, buf_ptr->buf_cur, 2, len);
 		buf_ptr->buf_cur += len;
 	} else {
-		guint8 *buf_end = buf_ptr->buffer + MAX_WIN_BUF_LEN;
+		uint8_t *buf_end = buf_ptr->buffer + MAX_WIN_BUF_LEN;
 		tvb_memcpy(tvb, buf_ptr->buf_cur, 2, buf_end - buf_ptr->buf_cur);
 		if (buf_ptr->buf_cur + len <= buf_end) {
-			tvb_memcpy(tvb, buf_ptr->buffer, (gint) (buf_end - buf_ptr->buf_cur-2),
+			tvb_memcpy(tvb, buf_ptr->buffer, (int) (buf_end - buf_ptr->buf_cur-2),
 				len - (buf_end - buf_ptr->buf_cur));
 			buf_ptr->buf_cur += len - MAX_WIN_BUF_LEN;
 		} else {
-			proto_tree_add_expert(tree, pinfo, &ei_wcp_buffer_too_long, tvb, 0, -1);
+			proto_tree_add_expert_remaining(tree, pinfo, &ei_wcp_buffer_too_long, tvb, 0);
 		}
 	}
 }
@@ -295,7 +295,7 @@ static int dissect_wcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 	proto_tree	*wcp_tree;
 	proto_item	*ti;
 	int		wcp_header_len;
-	guint16		temp, cmd, ext_cmd, seq;
+	uint16_t		temp, cmd, ext_cmd, seq;
 	tvbuff_t	*next_tvb;
 
 	col_set_str(pinfo->cinfo, COL_PROTOCOL, "WCP");
@@ -377,12 +377,12 @@ static int dissect_wcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 }
 
 
-static guint8 *
-decompressed_entry(guint8 *dst, guint16 data_offset,
-	guint16 data_cnt, int *len, wcp_window_t *buf_ptr)
+static uint8_t *
+decompressed_entry(uint8_t *dst, uint16_t data_offset,
+	uint16_t data_cnt, unsigned *len, wcp_window_t *buf_ptr)
 {
-	const guint8 *src;
-	guint8 *buf_start, *buf_end;
+	const uint8_t *src;
+	uint8_t *buf_start, *buf_end;
 
 	buf_start = buf_ptr->buffer;
 	buf_end = buf_ptr->buffer + MAX_WIN_BUF_LEN;
@@ -439,19 +439,20 @@ wcp_window_t *get_wcp_window_ptr(packet_info *pinfo) {
 }
 
 
-static tvbuff_t *wcp_uncompress(tvbuff_t *src_tvb, int offset, packet_info *pinfo, proto_tree *tree) {
+static tvbuff_t *wcp_uncompress(tvbuff_t *src_tvb, unsigned offset, packet_info *pinfo, proto_tree *tree) {
 
 	/* do the packet data uncompression and load it into the dst buffer */
 
 	proto_tree	*cd_tree, *sub_tree;
 	proto_item	*cd_item, *ti;
 
-	int len, i;
-	int cnt = tvb_reported_length(src_tvb) - 1;/* don't include check byte */
+	unsigned len;
+	int i;
+	unsigned cnt = tvb_reported_length(src_tvb) - 1;/* don't include check byte */
 
-	guint8 *dst, *src, *buf_start, *buf_end, comp_flag_bits = 0;
-	guint16 data_offset, data_cnt;
-	guint8 src_buf[ MAX_WCP_BUF_LEN];
+	uint8_t *dst, *src, *buf_start, *buf_end, comp_flag_bits = 0;
+	uint16_t data_offset, data_cnt;
+	uint8_t src_buf[ MAX_WCP_BUF_LEN];
 	tvbuff_t *tvb;
 	wcp_window_t *buf_ptr = 0;
 	wcp_pdata_t *pdata_ptr;
@@ -478,7 +479,7 @@ static tvbuff_t *wcp_uncompress(tvbuff_t *src_tvb, int offset, packet_info *pinf
 	 * want to mark the buffer of decompressed data as incomplete, so
 	 * that we don't try to use it for decompressing later packets.
 	 */
-	src = (guint8 *)tvb_memcpy(src_tvb, src_buf, offset, cnt - offset);
+	src = (uint8_t *)tvb_memcpy(src_tvb, src_buf, offset, cnt - offset);
 	dst = buf_ptr->buf_cur;
 	len = 0;
 	i = -1;
@@ -500,7 +501,7 @@ static tvbuff_t *wcp_uncompress(tvbuff_t *src_tvb, int offset, packet_info *pinf
 					 */
 					return NULL;
 				}
-				data_offset = pntoh16(src) & WCP_OFFSET_MASK;
+				data_offset = pntohu16(src) & WCP_OFFSET_MASK;
 				if ((*src & 0xf0) == 0x10) {
 					/*
 					 * The count of bytes to copy from
@@ -745,7 +746,7 @@ proto_register_wcp(void)
 	};
 
 
-	static gint *ett[] = {
+	static int *ett[] = {
 		&ett_wcp,
 		&ett_wcp_comp_data,
 		&ett_wcp_field,

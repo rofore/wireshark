@@ -1,7 +1,7 @@
 /* Do not modify this file. Changes will be overwritten.                      */
 /* Generated automatically by the ASN.1 to Wireshark dissector compiler       */
 /* packet-cdt.c                                                               */
-/* asn2wrs.py -b -L -p cdt -c ./cdt.cnf -s ./packet-cdt-template -D . -O ../.. cdt.asn */
+/* asn2wrs.py -b -q -L -p cdt -c ./cdt.cnf -s ./packet-cdt-template -D . -O ../.. cdt.asn */
 
 /* packet-cdt.c
  *
@@ -24,7 +24,7 @@
 #include <epan/oids.h>
 #include <epan/expert.h>
 #include <epan/asn1.h>
-
+#include <wsutil/array.h>
 #include "packet-ber.h"
 #include "packet-p1.h"
 
@@ -36,17 +36,13 @@
 #define CDT_P3         3
 #define CDT_P7         4
 
-#define PNAME  "Compressed Data Type"
-#define PSNAME "CDT"
-#define PFNAME "cdt"
-
 void proto_register_cdt(void);
 void proto_reg_handoff_cdt(void);
 
-static proto_tree *top_tree = NULL;
-static proto_item *cdt_item = NULL;
+static proto_tree *top_tree;
+static proto_item *cdt_item;
 
-static guint32 content_type = 0;
+static uint32_t content_type;
 
 /* Initialize the protocol and registered fields */
 static int proto_cdt;
@@ -61,10 +57,10 @@ static int hf_cdt_contentType_OID;                /* T_contentType_OID */
 static int hf_cdt_compressedContent;              /* CompressedContent */
 
 /* Initialize the subtree pointers */
-static gint ett_cdt_CompressedData;
-static gint ett_cdt_CompressionAlgorithmIdentifier;
-static gint ett_cdt_CompressedContentInfo;
-static gint ett_cdt_T_contentType;
+static int ett_cdt_CompressedData;
+static int ett_cdt_CompressionAlgorithmIdentifier;
+static int ett_cdt_CompressedContentInfo;
+static int ett_cdt_T_contentType;
 
 static expert_field ei_cdt_unable_compress_content;
 static expert_field ei_cdt_unable_uncompress_content;
@@ -76,19 +72,19 @@ static const value_string cdt_AlgorithmID_ShortForm_vals[] = {
 };
 
 
-static int
-dissect_cdt_AlgorithmID_ShortForm(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-  guint32 value;
+static unsigned
+dissect_cdt_AlgorithmID_ShortForm(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  uint32_t value;
 
     offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 &value);
 
   proto_item_append_text (cdt_item, ", %s",
-                          val_to_str (value, cdt_AlgorithmID_ShortForm_vals,
+                          val_to_str_const(value, cdt_AlgorithmID_ShortForm_vals,
                                       "unknown"));
 
   col_append_fstr (actx->pinfo->cinfo, COL_INFO, "%s ",
-                   val_to_str (value, cdt_AlgorithmID_ShortForm_vals,
+                   val_to_str_const(value, cdt_AlgorithmID_ShortForm_vals,
                                "unknown"));
 
 
@@ -97,8 +93,8 @@ dissect_cdt_AlgorithmID_ShortForm(bool implicit_tag _U_, tvbuff_t *tvb _U_, int 
 
 
 
-static int
-dissect_cdt_OBJECT_IDENTIFIER(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_cdt_OBJECT_IDENTIFIER(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_object_identifier(implicit_tag, actx, tree, tvb, offset, hf_index, NULL);
 
   return offset;
@@ -117,8 +113,8 @@ static const ber_choice_t CompressionAlgorithmIdentifier_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_cdt_CompressionAlgorithmIdentifier(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_cdt_CompressionAlgorithmIdentifier(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  CompressionAlgorithmIdentifier_choice, hf_index, ett_cdt_CompressionAlgorithmIdentifier,
                                  NULL);
@@ -137,18 +133,18 @@ static const value_string cdt_ContentType_ShortForm_vals[] = {
 };
 
 
-static int
-dissect_cdt_ContentType_ShortForm(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_cdt_ContentType_ShortForm(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
 
     offset = dissect_ber_integer(implicit_tag, actx, tree, tvb, offset, hf_index,
                                                 &content_type);
 
   proto_item_append_text (cdt_item, ", %s",
-                          val_to_str (content_type, cdt_ContentType_ShortForm_vals,
+                          val_to_str_const(content_type, cdt_ContentType_ShortForm_vals,
                                       "unknown"));
 
   col_append_fstr (actx->pinfo->cinfo, COL_INFO, "%s ",
-                   val_to_str (content_type, cdt_ContentType_ShortForm_vals,
+                   val_to_str_const(content_type, cdt_ContentType_ShortForm_vals,
                                "unknown"));
 
 
@@ -157,8 +153,8 @@ dissect_cdt_ContentType_ShortForm(bool implicit_tag _U_, tvbuff_t *tvb _U_, int 
 
 
 
-static int
-dissect_cdt_T_contentType_OID(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_cdt_T_contentType_OID(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   const char *obj_id = NULL;
 
     offset = dissect_ber_object_identifier_str(implicit_tag, actx, tree, tvb, offset, hf_index, &obj_id);
@@ -192,8 +188,8 @@ static const ber_choice_t T_contentType_choice[] = {
   { 0, NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_cdt_T_contentType(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_cdt_T_contentType(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_choice(actx, tree, tvb, offset,
                                  T_contentType_choice, hf_index, ett_cdt_T_contentType,
                                  NULL);
@@ -203,27 +199,27 @@ dissect_cdt_T_contentType(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _
 
 
 
-static int
-dissect_cdt_CompressedContent(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_cdt_CompressedContent(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   tvbuff_t   *next_tvb = NULL, *compr_tvb = NULL;
-  int         save_offset = offset;
+  unsigned    save_offset = offset;
 
     offset = dissect_ber_octet_string(implicit_tag, actx, tree, tvb, offset, hf_index,
                                        &compr_tvb);
 
   if (compr_tvb == NULL) {
-    proto_tree_add_expert(top_tree, actx->pinfo, &ei_cdt_unable_compress_content,
-							tvb, save_offset, -1);
+    proto_tree_add_expert_remaining(top_tree, actx->pinfo, &ei_cdt_unable_compress_content,
+							tvb, save_offset);
     col_append_str (actx->pinfo->cinfo, COL_INFO,
                     "[Error: Unable to get compressed content]");
     return offset;
   }
 
-  next_tvb = tvb_child_uncompress (tvb, compr_tvb, 0, tvb_reported_length (compr_tvb));
+  next_tvb = tvb_child_uncompress_zlib(tvb, compr_tvb, 0, tvb_reported_length (compr_tvb));
 
   if (next_tvb == NULL) {
-    proto_tree_add_expert(top_tree, actx->pinfo, &ei_cdt_unable_uncompress_content,
-							tvb, save_offset, -1);
+    proto_tree_add_expert_remaining(top_tree, actx->pinfo, &ei_cdt_unable_uncompress_content,
+							tvb, save_offset);
     col_append_str (actx->pinfo->cinfo, COL_INFO,
                     "[Error: Unable to uncompress content]");
     return offset;
@@ -257,8 +253,8 @@ static const ber_sequence_t CompressedContentInfo_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-static int
-dissect_cdt_CompressedContentInfo(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+static unsigned
+dissect_cdt_CompressedContentInfo(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    CompressedContentInfo_sequence, hf_index, ett_cdt_CompressedContentInfo);
 
@@ -272,8 +268,8 @@ static const ber_sequence_t CompressedData_sequence[] = {
   { NULL, 0, 0, 0, NULL }
 };
 
-int
-dissect_cdt_CompressedData(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+unsigned
+dissect_cdt_CompressedData(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   content_type = 0;
 
     offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
@@ -287,10 +283,10 @@ dissect_cdt_CompressedData(bool implicit_tag _U_, tvbuff_t *tvb _U_, int offset 
 /*--- PDUs ---*/
 
 static int dissect_CompressedData_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_) {
-  int offset = 0;
+  unsigned offset = 0;
   asn1_ctx_t asn1_ctx;
-  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
-  offset = dissect_cdt_CompressedData(FALSE, tvb, offset, &asn1_ctx, tree, hf_cdt_CompressedData_PDU);
+  asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
+  offset = dissect_cdt_CompressedData(false, tvb, offset, &asn1_ctx, tree, hf_cdt_CompressedData_PDU);
   return offset;
 }
 
@@ -364,7 +360,7 @@ void proto_register_cdt (void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_cdt_CompressedData,
     &ett_cdt_CompressionAlgorithmIdentifier,
     &ett_cdt_CompressedContentInfo,
@@ -379,7 +375,7 @@ void proto_register_cdt (void) {
   expert_module_t* expert_cdt;
 
   /* Register protocol */
-  proto_cdt = proto_register_protocol (PNAME, PSNAME, PFNAME);
+  proto_cdt = proto_register_protocol ("Compressed Data Type", "CDT", "cdt");
 
   /* Register fields and subtrees */
   proto_register_field_array (proto_cdt, hf, array_length(hf));

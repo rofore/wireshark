@@ -1,30 +1,6 @@
 /* lpcre2.c - Lua binding of PCRE2 library */
-/*
- * Copyright (C) Reuben Thomas 2000-2020
- * Copyright (C) Shmuel Zeigerman 2004-2020
-
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated
- * documentation files (the "Software"), to deal in the
- * Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute,
- * sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
-
- * The above copyright notice and this permission notice shall
- * be included in all copies or substantial portions of the
- * Software.
-
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
- * KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
- * WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- * OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
- * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+/* See Copyright Notice in the file LICENSE */
+/* SPDX-License-Identifier: MIT */
 
 #include <wireshark.h>
 DIAG_OFF_CLANG(shorten-64-to-32)
@@ -254,7 +230,7 @@ static int compile_regex (lua_State *L, const TArgComp *argC, TPcre2 **pud) {
 
   if (argC->locale) {
     char old_locale[256];
-    g_strlcpy (old_locale, setlocale (LC_CTYPE, NULL), sizeof(old_locale));  /* store the locale */
+    (void) g_strlcpy (old_locale, setlocale (LC_CTYPE, NULL), sizeof(old_locale));  /* store the locale */
     if (NULL == setlocale (LC_CTYPE, argC->locale))   /* set new locale */
       return luaL_error (L, "cannot set locale");
     ud->tables = pcre2_maketables (NULL); /* make tables with new locale */ //### argument NULL
@@ -301,11 +277,11 @@ static void do_named_subpatterns (lua_State *L, TPcre2 *ud, const char *text) {
   PCRE2_SPTR tabptr;
 
   /* do named subpatterns - NJG */
-  pcre2_pattern_info (ud->pr, PCRE2_INFO_NAMECOUNT, &namecount);
+  (void) pcre2_pattern_info (ud->pr, PCRE2_INFO_NAMECOUNT, &namecount);
   if (namecount <= 0)
     return;
-  pcre2_pattern_info (ud->pr, PCRE2_INFO_NAMETABLE, &name_table);
-  pcre2_pattern_info (ud->pr, PCRE2_INFO_NAMEENTRYSIZE, &name_entry_size);
+  (void) pcre2_pattern_info (ud->pr, PCRE2_INFO_NAMETABLE, &name_table);
+  (void) pcre2_pattern_info (ud->pr, PCRE2_INFO_NAMEENTRYSIZE, &name_entry_size);
   tabptr = name_table;
   for (i = 0; i < namecount; i++) {
     int n = (tabptr[0] << 8) | tabptr[1]; /* number of the capturing parenthesis */
@@ -432,7 +408,7 @@ static int Lpcre2_jit_compile (lua_State *L) {
 #define SET_INFO_FIELD(L,ud,what,name,valtype) { \
   valtype val; \
   if (0 == pcre2_pattern_info (ud->pr, what, &val)) { \
-    lua_pushnumber (L, val); \
+    lua_pushinteger (L, val); \
     lua_setfield (L, -2, name); \
   } \
 }

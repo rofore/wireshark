@@ -16,11 +16,10 @@
 
 #include "config.h"
 
-#include <stdio.h>    /* for sscanf() */
-
 #include <epan/packet.h>
 #include <epan/expert.h>
 #include <epan/prefs.h>
+#include <wsutil/strtoi.h>
 #include "packet-tcp.h"
 
 void proto_register_git(void);
@@ -32,20 +31,16 @@ static int proto_git;
 static expert_field ei_git_bad_pkt_len;
 static expert_field ei_git_malformed;
 
-static gint ett_git;
+static int ett_git;
 
-static gint hf_git_protocol_version;
-static gint hf_git_packet_type;
-static gint hf_git_packet_len;
-static gint hf_git_packet_data;
-static gint hf_git_sideband_control_code;
-static gint hf_git_upload_pack_adv;
-static gint hf_git_upload_pack_req;
-static gint hf_git_upload_pack_res;
-
-#define PNAME  "Git Smart Protocol"
-#define PSNAME "Git"
-#define PFNAME "git"
+static int hf_git_protocol_version;
+static int hf_git_packet_type;
+static int hf_git_packet_len;
+static int hf_git_packet_data;
+static int hf_git_sideband_control_code;
+static int hf_git_upload_pack_adv;
+static int hf_git_upload_pack_req;
+static int hf_git_upload_pack_res;
 
 #define TCP_PORT_GIT    9418
 
@@ -73,24 +68,22 @@ static const value_string sideband_vals[] = {
 };
 
 /* desegmentation of Git over TCP */
-static gboolean git_desegment = TRUE;
+static bool git_desegment = true;
 
-static gboolean get_packet_length(tvbuff_t *tvb, int offset,
-                                  guint16 *length)
+static bool get_packet_length(tvbuff_t *tvb, packet_info* pinfo, unsigned offset,
+                                  uint16_t *length)
 {
-  guint8 *lenstr;
+  char *lenstr = (char*)tvb_get_string_enc(pinfo->pool, tvb, offset, 4, ENC_ASCII);
 
-  lenstr = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, 4, ENC_ASCII);
-
-  return (sscanf(lenstr, "%hx", length) == 1);
+  return ws_hexstrtou16(lenstr, NULL, length);
 }
 
-static guint
-get_git_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *data _U_)
+static unsigned
+get_git_pdu_len(packet_info *pinfo, tvbuff_t *tvb, int offset, void *data _U_)
 {
-  guint16 plen;
+  uint16_t plen;
 
-  if (!get_packet_length(tvb, offset, &plen))
+  if (!get_packet_length(tvb, pinfo, offset, &plen))
     return 0; /* No idea what this is */
 
   return plen < 4
@@ -110,15 +103,15 @@ get_git_pdu_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *data _U
  * offset, and returns to the caller for subsequent processing of the
  * remainder of the data.
 */
-static gboolean
+static bool
 dissect_pkt_line(tvbuff_t *tvb, packet_info *pinfo, proto_tree *git_tree,
-                 int *offset)
+                 unsigned *offset)
 {
-  guint16 plen;
+  uint16_t plen;
 
   // what type of pkt-line is it?
-  if (!get_packet_length(tvb, *offset, &plen))
-    return FALSE;
+  if (!get_packet_length(tvb, pinfo, *offset, &plen))
+    return false;
   if (plen < 4) {   // a special packet (e.g., flush-pkt)
     proto_item *ti =
         proto_tree_add_uint(git_tree, hf_git_packet_type, tvb,
@@ -127,7 +120,7 @@ dissect_pkt_line(tvbuff_t *tvb, packet_info *pinfo, proto_tree *git_tree,
 
     if (!try_val_to_str(plen, packet_type_vals))
       expert_add_info(pinfo, ti, &ei_git_bad_pkt_len);
-    return TRUE;
+    return true;
   }
 
   proto_tree_add_uint(git_tree, hf_git_packet_len, tvb, *offset, 4, plen);
@@ -154,7 +147,7 @@ dissect_pkt_line(tvbuff_t *tvb, packet_info *pinfo, proto_tree *git_tree,
    * lacking that, let's assume for now that all pkt-lines starting with \1, \2, or \3
    * are using sideband.
    */
-  int sideband_code = tvb_get_guint8(tvb, *offset);
+  int sideband_code = tvb_get_uint8(tvb, *offset);
 
   if (1 <= sideband_code && sideband_code <= 3) {
     proto_tree_add_uint(git_tree, hf_git_sideband_control_code, tvb, *offset, 1,
@@ -165,7 +158,7 @@ dissect_pkt_line(tvbuff_t *tvb, packet_info *pinfo, proto_tree *git_tree,
 
   proto_tree_add_item(git_tree, hf_git_packet_data, tvb, *offset, plen, ENC_NA);
   *offset += plen;
-  return TRUE;
+  return true;
 }
 
 static int
@@ -173,11 +166,11 @@ dissect_git_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
 {
   proto_tree             *git_tree;
   proto_item             *ti;
-  int offset = 0;
+  unsigned offset = 0;
 
-  col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+  col_set_str(pinfo->cinfo, COL_PROTOCOL, "Git");
 
-  col_set_str(pinfo->cinfo, COL_INFO, PNAME);
+  col_set_str(pinfo->cinfo, COL_INFO, "Git Smart Protocol");
 
   ti = proto_tree_add_item(tree, proto_git, tvb, offset, -1, ENC_NA);
   git_tree = proto_item_add_subtree(ti, ett_git);
@@ -201,17 +194,17 @@ dissect_git_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data 
  * dissectors, adds the packs to the git subtree and returns the amount
  * of consumed bytes in the tvb buffer.
 */
-static int
+static unsigned
 dissect_http_pkt_lines(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int hfindex)
 {
   proto_tree             *git_tree;
   proto_item             *ti;
-  int offset = 0;
-  int total_len = 0;
+  unsigned offset = 0;
+  unsigned total_len = 0;
 
-  col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);
+  col_set_str(pinfo->cinfo, COL_PROTOCOL, "Git");
 
-  col_set_str(pinfo->cinfo, COL_INFO, PNAME);
+  col_set_str(pinfo->cinfo, COL_INFO, "Git Smart Protocol");
 
   ti = proto_tree_add_item(tree, proto_git, tvb, offset, -1, ENC_NA);
   git_tree = proto_item_add_subtree(ti, ett_git);
@@ -223,7 +216,7 @@ dissect_http_pkt_lines(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int 
   while (offset < total_len) {
     /* Add expert info if there is trouble parsing part-way through */
     if (!dissect_pkt_line(tvb, pinfo, git_tree, &offset)) {
-      proto_tree_add_expert(git_tree, pinfo, &ei_git_malformed, tvb, offset, -1);
+      proto_tree_add_expert_remaining(git_tree, pinfo, &ei_git_malformed, tvb, offset);
       break;
     }
   }
@@ -296,7 +289,7 @@ proto_register_git(void)
     },
   };
 
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_git,
   };
 
@@ -314,14 +307,14 @@ proto_register_git(void)
   module_t *git_module;
   expert_module_t *expert_git;
 
-  proto_git = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_git = proto_register_protocol("Git Smart Protocol", "Git", "git");
   proto_register_field_array(proto_git, hf, array_length(hf));
   proto_register_subtree_array(ett, array_length(ett));
 
   expert_git = expert_register_protocol(proto_git);
   expert_register_field_array(expert_git, ei, array_length(ei));
 
-  git_handle = register_dissector(PFNAME, dissect_git, proto_git);
+  git_handle = register_dissector("git", dissect_git, proto_git);
 
   git_module = prefs_register_protocol(proto_git, NULL);
 
@@ -339,20 +332,23 @@ proto_reg_handoff_git(void)
    * Add the dissectors for GIT over HTTP
    *
    * Reference documentation at
-   * https://www.kernel.org/pub/software/scm/git/docs//technical/http-protocol.txt
+   * https://git-scm.com/docs/http-protocol
    */
   dissector_handle_t git_upload_pack_adv_handle;
   dissector_handle_t git_upload_pack_req_handle;
   dissector_handle_t git_upload_pack_res_handle;
 
-  git_upload_pack_adv_handle = create_dissector_handle(dissect_git_upload_pack_adv,
-                        proto_git);
+  git_upload_pack_adv_handle = create_dissector_handle_with_name_and_description(
+                        dissect_git_upload_pack_adv, proto_git, "git.http_adv",
+                        "Git Advertisement");
 
-  git_upload_pack_req_handle = create_dissector_handle(dissect_git_upload_pack_req,
-                        proto_git);
+  git_upload_pack_req_handle = create_dissector_handle_with_name_and_description(
+                        dissect_git_upload_pack_req, proto_git, "git.http_req",
+                        "Git Request");
 
-  git_upload_pack_res_handle = create_dissector_handle(dissect_git_upload_pack_res,
-                        proto_git);
+  git_upload_pack_res_handle = create_dissector_handle_with_name_and_description(
+                        dissect_git_upload_pack_res, proto_git, "git.http_res",
+                        "Git Result");
 
   dissector_add_string("media_type",
                         "application/x-git-upload-pack-advertisement",

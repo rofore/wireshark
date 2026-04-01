@@ -31,13 +31,15 @@ function(ASN2WRS)
 	endforeach()
 
 	if(NOT ENABLE_DEBUG_A2W)
-		set(A2W_FLAGS ${A2W_FLAGS} -L)
+		set(A2W_FLAGS ${A2W_FLAGS} -q -L)
 	endif()
 
 	# Creates a dissector in the source directory and store the timestamp.
 	add_custom_command(
 		OUTPUT packet-${PROTOCOL_NAME}-stamp
-		COMMAND "${Python3_EXECUTABLE}"
+		COMMAND
+			"${CMAKE_COMMAND}" -E env PYTHONUTF8=1
+			"${Python3_EXECUTABLE}"
 			${CMAKE_SOURCE_DIR}/tools/asn2wrs.py
 			${A2W_FLAGS}
 			${PROTO_OPT}

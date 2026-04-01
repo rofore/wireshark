@@ -28,6 +28,7 @@
 #include "ui/capture.h"
 #include "capture/capture_ifinfo.h"
 #include <capture/capture_sync.h>
+#include "capture/iface_monitor.h"
 #include "ui/capture_info.h"
 #include "ui/capture_ui_utils.h"
 #include "ui/iface_lists.h"
@@ -42,11 +43,12 @@
 #include "ui/simple_dialog.h"
 #include "ui/ws_ui_util.h"
 
-#include "wsutil/file_util.h"
-#include "wsutil/str_util.h"
+#include <app/application_flavor.h>
+#include <wsutil/file_util.h>
 #include <wsutil/filesystem.h>
-#include <wsutil/wslog.h>
+#include <wsutil/str_util.h>
 #include <wsutil/ws_assert.h>
+#include <wsutil/wslog.h>
 
 typedef struct if_stat_cache_item_s {
     char *name;
@@ -62,10 +64,10 @@ struct if_stat_cache_s {
 /* this callback mechanism should possibly be replaced by the g_signal_...() stuff (if I only would know how :-) */
 typedef struct {
     capture_callback_t cb_fct;
-    gpointer user_data;
+    void *user_data;
 } capture_callback_data_t;
 
-static GList *capture_callbacks = NULL;
+static GList *capture_callbacks;
 
 static void
 capture_callback_invoke(int event, capture_session *cap_session)
@@ -85,7 +87,7 @@ capture_callback_invoke(int event, capture_session *cap_session)
 
 
 void
-capture_callback_add(capture_callback_t func, gpointer user_data)
+capture_callback_add(capture_callback_t func, void *user_data)
 {
     capture_callback_data_t *cb;
 
@@ -97,7 +99,7 @@ capture_callback_add(capture_callback_t func, gpointer user_data)
 }
 
 void
-capture_callback_remove(capture_callback_t func, gpointer user_data)
+capture_callback_remove(capture_callback_t func, void *user_data)
 {
     capture_callback_data_t *cb;
     GList *cb_item = capture_callbacks;
@@ -118,9 +120,9 @@ capture_callback_remove(capture_callback_t func, gpointer user_data)
 /**
  * Start a capture.
  *
- * @return TRUE if the capture starts successfully, FALSE otherwise.
+ * @return true if the capture starts successfully, false otherwise.
  */
-gboolean
+bool
 capture_start(capture_options *capture_opts, GPtrArray *capture_comments,
               capture_session *cap_session, info_data_t* cap_data,
               void(*update_cb)(void))
@@ -133,9 +135,11 @@ capture_start(capture_options *capture_opts, GPtrArray *capture_comments,
     source = get_iface_list_string(capture_opts, IFLIST_SHOW_FILTER);
     cf_set_tempfile_source((capture_file *)cap_session->cf, source->str);
     g_string_free(source, TRUE);
+    iface_mon_enable(false);
     /* try to start the capture child process */
     if (!sync_pipe_start(capture_opts, capture_comments, cap_session,
                          cap_data, update_cb)) {
+        iface_mon_enable(true);
         /* We failed to start the capture child. */
         if(capture_opts->save_file != NULL) {
             g_free(capture_opts->save_file);
@@ -144,7 +148,7 @@ capture_start(capture_options *capture_opts, GPtrArray *capture_comments,
 
         ws_message("Capture Start failed.");
         cap_session->state = CAPTURE_STOPPED;
-        return FALSE;
+        return false;
     }
 
     // Do we need data structures for ignoring duplicate frames?
@@ -161,8 +165,7 @@ capture_start(capture_options *capture_opts, GPtrArray *capture_comments,
     /* spawn/exec of the capture child, without waiting for any response from it */
     capture_callback_invoke(capture_cb_capture_prepared, cap_session);
 
-    wtap_rec_init(&cap_session->rec);
-    ws_buffer_init(&cap_session->buf, 1514);
+    wtap_rec_init(&cap_session->rec, DEFAULT_INIT_BUFFER_SIZE_2048);
 
     cap_session->wtap = NULL;
 
@@ -182,7 +185,7 @@ capture_start(capture_options *capture_opts, GPtrArray *capture_comments,
         capture_info_ui_create(&cap_data->ui, cap_session);
     }
 
-    return TRUE;
+    return true;
 }
 
 
@@ -195,7 +198,7 @@ capture_stop(capture_session *cap_session)
 
     if (!extcap_session_stop(cap_session)) {
         extcap_request_stop(cap_session);
-        cap_session->capture_opts->stop_after_extcaps = TRUE;
+        cap_session->capture_opts->stop_after_extcaps = true;
     } else {
         /* stop the capture child gracefully */
         sync_pipe_stop(cap_session);
@@ -212,10 +215,32 @@ capture_kill_child(capture_session *cap_session)
     sync_pipe_kill(cap_session->fork_child);
 }
 
+#ifdef _WIN32
+  #define NO_PACKETS_CAPTURED_PLATFORM_HELP \
+            "\n\n" \
+            "Wireless (Wi-Fi/WLAN):\n" \
+            "Try to switch off promiscuous mode in the Capture Options."
+#else
+  #define NO_PACKETS_CAPTURED_PLATFORM_HELP
+#endif
+
+static void
+capture_input_no_packets(capture_session *cap_session)
+{
+    simple_message_box(ESD_TYPE_INFO, NULL,
+            "Help about capturing can be found at "
+            WS_WIKI_URL("CaptureSetup")
+            NO_PACKETS_CAPTURED_PLATFORM_HELP,
+            "No packets captured. "
+            "As no data was captured, closing the %scapture file.",
+            (cf_is_tempfile((capture_file *)cap_session->cf)) ? "temporary " : "");
+    cf_close((capture_file *)cap_session->cf);
+}
+
 /* We've succeeded in doing a (non real-time) capture; try to read it into a new capture file */
-static gboolean
-capture_input_read_all(capture_session *cap_session, gboolean is_tempfile,
-                       gboolean drops_known, guint32 drops)
+static bool
+capture_input_read_all(capture_session *cap_session, bool is_tempfile,
+                       bool drops_known, uint32_t drops)
 {
     capture_options *capture_opts = cap_session->capture_opts;
     int err;
@@ -223,7 +248,7 @@ capture_input_read_all(capture_session *cap_session, gboolean is_tempfile,
     /* Capture succeeded; attempt to open the capture file. */
     if (cf_open((capture_file *)cap_session->cf, capture_opts->save_file, WTAP_TYPE_AUTO, is_tempfile, &err) != CF_OK) {
         /* We're not doing a capture any more, so we don't have a save file. */
-        return FALSE;
+        return false;
     }
 
     /* Set the read filter to NULL. */
@@ -249,7 +274,7 @@ capture_input_read_all(capture_session *cap_session, gboolean is_tempfile,
        thus not have to set them here - "cf_read()" will get them from
        the file and use them. */
     if (drops_known) {
-        cf_set_drops_known((capture_file *)cap_session->cf, TRUE);
+        cf_set_drops_known((capture_file *)cap_session->cf, true);
 
         /* XXX - on some systems, libpcap doesn't bother filling in
            "ps_ifdrop" - it doesn't even set it to zero - so we don't
@@ -263,7 +288,7 @@ capture_input_read_all(capture_session *cap_session, gboolean is_tempfile,
     }
 
     /* read in the packet data */
-    switch (cf_read((capture_file *)cap_session->cf, /*reloading=*/FALSE)) {
+    switch (cf_read((capture_file *)cap_session->cf, /*reloading=*/false)) {
 
         case CF_READ_OK:
         case CF_READ_ERROR:
@@ -273,38 +298,23 @@ capture_input_read_all(capture_session *cap_session, gboolean is_tempfile,
             break;
 
         case CF_READ_ABORTED:
-            /* User wants to quit program. Exit by leaving the main loop,
-               so that any quit functions we registered get called. */
-            exit_application(0);
-            return FALSE;
+            /* The user asked to abort the read, but that might be to
+               restart the capture, so let the caller decide whether
+               to exit. */
+            //exit_application(0);
+            return false;
     }
 
-    /* if we didn't capture even a single packet, close the file again */
+    /* if we didn't capture even a single packet, report that and
+       close the file again */
     if(cap_session->count == 0 && !capture_opts->restart) {
-        simple_dialog(ESD_TYPE_INFO, ESD_BTN_OK,
-                "%sNo packets captured.%s\n"
-                "\n"
-                "As no data was captured, closing the %scapture file.\n"
-                "\n"
-                "\n"
-                "Help about capturing can be found at\n"
-                "\n"
-                "       " WS_WIKI_URL("CaptureSetup")
-#ifdef _WIN32
-                "\n\n"
-                "Wireless (Wi-Fi/WLAN):\n"
-                "Try to switch off promiscuous mode in the Capture Options"
-#endif
-                "",
-                simple_dialog_primary_start(), simple_dialog_primary_end(),
-                (cf_is_tempfile((capture_file *)cap_session->cf)) ? "temporary " : "");
-        cf_close((capture_file *)cap_session->cf);
+        capture_input_no_packets(cap_session);
     }
-    return TRUE;
+    return true;
 }
 
 static const char *
-cf_open_error_message(int err, gchar *err_info)
+cf_open_error_message(const char* app_name, int err, char *err_info)
 {
     const char *errmsg;
     static char errmsg_errno[1024 + 1];
@@ -319,19 +329,26 @@ cf_open_error_message(int err, gchar *err_info)
 
         case WTAP_ERR_FILE_UNKNOWN_FORMAT:
             /* Seen only when opening a capture file for reading. */
-            errmsg = "The file \"%s\" isn't a capture file in a format Wireshark understands.";
+            snprintf(errmsg_errno, sizeof(errmsg_errno),
+                "The file \"%%s\" isn't a capture file in a format %s understands.",
+                app_name);
+            errmsg = errmsg_errno;
             break;
 
         case WTAP_ERR_UNSUPPORTED:
             snprintf(errmsg_errno, sizeof(errmsg_errno),
-                       "The file \"%%s\" contains record data that Wireshark doesn't support.\n"
-                       "(%s)", err_info != NULL ? err_info : "no information supplied");
+                "The file \"%%s\" contains record data that %s doesn't support.\n"
+                "(%s)", app_name,
+                err_info != NULL ? err_info : "no information supplied");
             g_free(err_info);
             errmsg = errmsg_errno;
             break;
 
         case WTAP_ERR_ENCAP_PER_PACKET_UNSUPPORTED:
-            errmsg = "The file \"%s\" is a capture for a network type that Wireshark doesn't support.";
+            snprintf(errmsg_errno, sizeof(errmsg_errno),
+                "The file \"%%s\" is a capture for a network type that %s doesn't support.",
+                app_name);
+            errmsg = errmsg_errno;
             break;
 
         case WTAP_ERR_BAD_FILE:
@@ -375,6 +392,14 @@ cf_open_error_message(int err, gchar *err_info)
             errmsg = errmsg_errno;
             break;
 
+        case WTAP_ERR_REC_MALFORMED:
+            snprintf(errmsg_errno, sizeof(errmsg_errno), "%%s contains a malformed record.\n"
+                "(%s)",
+                err_info != NULL ? err_info : "no information supplied");
+            g_free(err_info);
+            errmsg = errmsg_errno;
+            break;
+
         default:
             snprintf(errmsg_errno, sizeof(errmsg_errno),
                        "The file \"%%s\" could not be opened: %s.",
@@ -384,19 +409,19 @@ cf_open_error_message(int err, gchar *err_info)
         }
     }
     else
-        errmsg = file_open_error_message(err, FALSE);
+        errmsg = file_open_error_message(err, false);
     return errmsg;
 }
 
 /* capture child tells us we have a new (or the first) capture file */
 static bool
-capture_input_new_file(capture_session *cap_session, gchar *new_file)
+capture_input_new_file(capture_session *cap_session, char *new_file)
 {
     capture_options *capture_opts = cap_session->capture_opts;
-    gboolean is_tempfile;
+    bool is_tempfile;
     int  err;
-    gchar *err_info;
-    gchar *err_msg;
+    char *err_info;
+    char *err_msg;
 
     if(cap_session->state == CAPTURE_PREPARING) {
         ws_message("Capture started");
@@ -412,20 +437,20 @@ capture_input_new_file(capture_session *cap_session, gchar *new_file)
         if (((capture_file*)cap_session->cf)->state == FILE_READ_PENDING) {
             capture_callback_invoke(capture_cb_capture_fixed_finished, cap_session);
         } else if (((capture_file*)cap_session->cf)->state != FILE_CLOSED) {
-            cap_session->session_will_restart = TRUE;
+            cap_session->session_will_restart = true;
             capture_callback_invoke(capture_cb_capture_update_finished, cap_session);
             cf_finish_tail((capture_file *)cap_session->cf,
-                           &cap_session->rec, &cap_session->buf, &err,
+                           &cap_session->rec, &err,
                            &cap_session->frame_dup_cache, cap_session->frame_cksum);
             cf_close((capture_file *)cap_session->cf);
         }
         g_free(capture_opts->save_file);
-        is_tempfile = FALSE;
-        cf_set_tempfile((capture_file *)cap_session->cf, FALSE);
+        is_tempfile = false;
+        cf_set_tempfile((capture_file *)cap_session->cf, false);
     } else {
         /* we didn't have a save_file before; must be a tempfile */
-        is_tempfile = TRUE;
-        cf_set_tempfile((capture_file *)cap_session->cf, TRUE);
+        is_tempfile = true;
+        cf_set_tempfile((capture_file *)cap_session->cf, true);
     }
 
     /* save the new filename */
@@ -442,9 +467,11 @@ capture_input_new_file(capture_session *cap_session, gchar *new_file)
                    for debugging purposes. */
                 g_free(capture_opts->save_file);
                 capture_opts->save_file = NULL;
-                return FALSE;
+                return false;
         }
     } else {
+        /* A new file, so we don't have any pending packets to read. */
+        cap_session->count_pending = 0;
         capture_callback_invoke(capture_cb_capture_prepared, cap_session);
     }
 
@@ -453,13 +480,13 @@ capture_input_new_file(capture_session *cap_session, gchar *new_file)
             wtap_close(cap_session->wtap);
         }
 
-        cap_session->wtap = wtap_open_offline(new_file, WTAP_TYPE_AUTO, &err, &err_info, FALSE);
+        cap_session->wtap = wtap_open_offline(new_file, WTAP_TYPE_AUTO, &err, &err_info, false, application_configuration_environment_prefix());
         if (!cap_session->wtap) {
-            err_msg = ws_strdup_printf(cf_open_error_message(err, err_info),
+            err_msg = ws_strdup_printf(cf_open_error_message(application_flavor_name_proper(), err, err_info),
                                       new_file);
             ws_warning("capture_input_new_file: %d (%s)", err, err_msg);
             g_free(err_msg);
-            return FALSE;
+            return false;
         }
     }
 
@@ -470,20 +497,7 @@ capture_input_new_file(capture_session *cap_session, gchar *new_file)
     }
     cap_session->state = CAPTURE_RUNNING;
 
-    return TRUE;
-}
-
-static void
-capture_info_packet(info_data_t* cap_info, gint wtap_linktype, const guchar *pd, guint32 caplen, union wtap_pseudo_header *pseudo_header)
-{
-    capture_packet_info_t cpinfo;
-
-    /* Setup the capture packet structure */
-    cpinfo.counts = cap_info->counts.counts_hash;
-
-    cap_info->counts.total++;
-    if (!try_capture_dissector("wtap_encap", wtap_linktype, pd, 0, caplen, &cpinfo, pseudo_header))
-        cap_info->counts.other++;
+    return true;
 }
 
 /* new packets arrived */
@@ -491,39 +505,44 @@ static void
 capture_info_new_packets(int to_read, wtap *wth, info_data_t* cap_info)
 {
     int err;
-    gchar *err_info;
-    gint64 data_offset;
+    char *err_info;
+    int64_t data_offset;
     wtap_rec rec;
-    Buffer buf;
-    union wtap_pseudo_header *pseudo_header;
-    int wtap_linktype;
 
     cap_info->ui.new_packets = to_read;
 
     /*ws_warning("new packets: %u", to_read);*/
 
-    wtap_rec_init(&rec);
-    ws_buffer_init(&buf, 1514);
+    wtap_rec_init(&rec, DEFAULT_INIT_BUFFER_SIZE_2048);
     while (to_read > 0) {
         wtap_cleareof(wth);
-        if (wtap_read(wth, &rec, &buf, &err, &err_info, &data_offset)) {
-            if (rec.rec_type == REC_TYPE_PACKET) {
-                pseudo_header = &rec.rec_header.packet_header.pseudo_header;
-                wtap_linktype = rec.rec_header.packet_header.pkt_encap;
-
-                capture_info_packet(cap_info, wtap_linktype,
-                    ws_buffer_start_ptr(&buf),
-                    rec.rec_header.packet_header.caplen,
-                    pseudo_header);
-
-                /*ws_warning("new packet");*/
-                to_read--;
-            }
-            wtap_rec_reset(&rec);
+        if (!wtap_read(wth, &rec, &err, &err_info, &data_offset)) {
+            /* Read failed. capture_input_new_packets should handle
+             * aborting the capture, etc. if necessary. */
+            break;
         }
+        if (rec.rec_type == REC_TYPE_PACKET) {
+            capture_packet_info_t cpinfo;
+
+            /* Setup the capture packet structure */
+            cpinfo.counts = cap_info->counts.counts_hash;
+
+            cap_info->counts.total++;
+            if (!try_capture_dissector("wtap_encap",
+                                        rec.rec_header.packet_header.pkt_encap,
+                                        ws_buffer_start_ptr(&rec.data),
+                                        0,
+                                        rec.rec_header.packet_header.caplen,
+                                        &cpinfo,
+                                        &rec.rec_header.packet_header.pseudo_header))
+                cap_info->counts.other++;
+
+            /*ws_warning("new packet");*/
+            to_read--;
+        }
+        wtap_rec_reset(&rec);
     }
     wtap_rec_cleanup(&rec);
-    ws_buffer_free(&buf);
 
     capture_info_ui_update(&cap_info->ui);
 }
@@ -556,7 +575,7 @@ capture_input_new_packets(capture_session *cap_session, int to_read)
         to_read += cap_session->count_pending;
         cap_session->count_pending = 0;
         switch (cf_continue_tail((capture_file *)cap_session->cf, to_read,
-                                 &cap_session->rec, &cap_session->buf, &err,
+                                 &cap_session->rec, &err,
                                  &cap_session->frame_dup_cache, cap_session->frame_cksum)) {
 
             case CF_READ_OK:
@@ -590,7 +609,7 @@ capture_input_new_packets(capture_session *cap_session, int to_read)
 /* Capture child told us how many dropped packets it counted.
  */
 static void
-capture_input_drops(capture_session *cap_session, guint32 dropped, const char* interface_name)
+capture_input_drops(capture_session *cap_session, uint32_t dropped, const char* interface_name)
 {
     if (interface_name != NULL) {
         ws_info("%u packet%s dropped from %s", dropped, plurality(dropped, "", "s"), interface_name);
@@ -600,7 +619,7 @@ capture_input_drops(capture_session *cap_session, guint32 dropped, const char* i
 
     ws_assert(cap_session->state == CAPTURE_RUNNING);
 
-    cf_set_drops_known((capture_file *)cap_session->cf, TRUE);
+    cf_set_drops_known((capture_file *)cap_session->cf, true);
     cf_set_drops((capture_file *)cap_session->cf, dropped);
 }
 
@@ -615,8 +634,8 @@ static void
 capture_input_error(capture_session *cap_session _U_, char *error_msg,
                     char *secondary_error_msg)
 {
-    gchar *safe_error_msg;
-    gchar *safe_secondary_error_msg;
+    char *safe_error_msg;
+    char *safe_secondary_error_msg;
 
     /* The primary message might be an empty string, e.g. when the error was
      * from extcap. (The extcap stderr is gathered when the session closes
@@ -631,15 +650,12 @@ capture_input_error(capture_session *cap_session _U_, char *error_msg,
     if (secondary_error_msg != NULL && *secondary_error_msg != '\0') {
         /* We have both primary and secondary messages. */
         safe_secondary_error_msg = simple_dialog_format_message(secondary_error_msg);
-        simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "%s%s%s\n\n%s",
-                simple_dialog_primary_start(), safe_error_msg,
-                simple_dialog_primary_end(), safe_secondary_error_msg);
+        simple_message_box(ESD_TYPE_ERROR, NULL, safe_secondary_error_msg,
+                           "%s", safe_error_msg);
         g_free(safe_secondary_error_msg);
     } else {
         /* We have only a primary message. */
-        simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "%s%s%s",
-                simple_dialog_primary_start(), safe_error_msg,
-                simple_dialog_primary_end());
+        simple_message_box(ESD_TYPE_ERROR, NULL, NULL, "%s", safe_error_msg);
     }
     g_free(safe_error_msg);
 
@@ -650,14 +666,15 @@ capture_input_error(capture_session *cap_session _U_, char *error_msg,
    capture filter when starting/running the capture.
  */
 static void
-capture_input_cfilter_error(capture_session *cap_session, guint i,
+capture_input_cfilter_error(capture_session *cap_session, unsigned i,
                             const char *error_message)
 {
     capture_options *capture_opts = cap_session->capture_opts;
     dfilter_t *rfcode = NULL;
-    gchar *safe_cfilter;
-    gchar *safe_descr;
-    gchar *safe_cfilter_error_msg;
+    char *safe_cfilter;
+    char *safe_descr;
+    char *safe_cfilter_error_msg;
+    const char *secondary_error_msg;
     interface_options *interface_opts;
 
     ws_message("Capture filter error message from child: \"%s\"", error_message);
@@ -671,28 +688,21 @@ capture_input_cfilter_error(capture_session *cap_session, guint i,
     safe_cfilter_error_msg = simple_dialog_format_message(error_message);
     /* Did the user try a display filter? */
     if (dfilter_compile(interface_opts->cfilter, &rfcode, NULL) && rfcode != NULL) {
-        simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
-                "%sInvalid capture filter \"%s\" for interface %s.%s\n"
-                "\n"
-                "That string looks like a valid display filter; however, it isn't a valid\n"
-                "capture filter (%s).\n"
+        secondary_error_msg =
+                "That string looks like a valid display filter.\n"
                 "\n"
                 "Note that display filters and capture filters don't have the same syntax,\n"
                 "so you can't use most display filter expressions as capture filters.\n"
                 "\n"
-                "See the User's Guide for a description of the capture filter syntax.",
-                simple_dialog_primary_start(), safe_cfilter, safe_descr,
-                simple_dialog_primary_end(), safe_cfilter_error_msg);
-        dfilter_free(rfcode);
+                "See the User's Guide for a description of the capture filter syntax.";
     } else {
-        simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK,
-                "%sInvalid capture filter \"%s\" for interface %s.%s\n"
-                "\n"
-                "That string isn't a valid capture filter (%s).\n"
-                "See the User's Guide for a description of the capture filter syntax.",
-                simple_dialog_primary_start(), safe_cfilter, safe_descr,
-                simple_dialog_primary_end(), safe_cfilter_error_msg);
+        secondary_error_msg =
+                "See the User's Guide for a description of the capture filter syntax.";
     }
+    simple_message_box(ESD_TYPE_ERROR, NULL,
+                       secondary_error_msg,
+                       "\"%s\" is not a valid capture filter for interface \"%s\" (%s).",
+                       safe_cfilter, safe_descr, safe_cfilter_error_msg);
     g_free(safe_cfilter_error_msg);
     g_free(safe_descr);
     g_free(safe_cfilter);
@@ -702,7 +712,7 @@ capture_input_cfilter_error(capture_session *cap_session, guint i,
 
 /* capture child closed its side of the pipe, do the required cleanup */
 static void
-capture_input_closed(capture_session *cap_session, gchar *msg)
+capture_input_closed(capture_session *cap_session, char *msg)
 {
     capture_options *capture_opts = cap_session->capture_opts;
     int  err;
@@ -743,7 +753,6 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
     }
 
     wtap_rec_cleanup(&cap_session->rec);
-    ws_buffer_free(&cap_session->buf);
     if(cap_session->state == CAPTURE_PREPARING) {
         /* We started the capture child, but we didn't manage to start
            the capture process; note that the attempt to start it
@@ -758,7 +767,7 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
 
             /* Read what remains of the capture file. */
             status = cf_finish_tail((capture_file *)cap_session->cf,
-                                    &cap_session->rec, &cap_session->buf, &err,
+                                    &cap_session->rec, &err,
                                     &cap_session->frame_dup_cache, cap_session->frame_cksum);
 
             // The real-time reading of the pcap is done. Now we can clear the
@@ -774,7 +783,7 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
             /* Tell the GUI we are not doing a capture any more.
                Must be done after the cf_finish_tail(), so file lengths are
                correctly displayed */
-            cap_session->session_will_restart = FALSE;
+            cap_session->session_will_restart = false;
             capture_callback_invoke(capture_cb_capture_update_finished, cap_session);
 
             /* Finish the capture. */
@@ -782,24 +791,7 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
 
                 case CF_READ_OK:
                     if (cap_session->count == 0 && !capture_opts->restart) {
-                        simple_dialog(ESD_TYPE_INFO, ESD_BTN_OK,
-                                "%sNo packets captured.%s\n"
-                                "\n"
-                                "As no data was captured, closing the %scapture file.\n"
-                                "\n"
-                                "\n"
-                                "Help about capturing can be found at\n"
-                                "\n"
-                                "       " WS_WIKI_URL("CaptureSetup")
-#ifdef _WIN32
-                                "\n\n"
-                                "Wireless (Wi-Fi/WLAN):\n"
-                                "Try to switch off promiscuous mode in the Capture Options."
-#endif
-                                "",
-                                simple_dialog_primary_start(), simple_dialog_primary_end(),
-                                cf_is_tempfile((capture_file *)cap_session->cf) ? "temporary " : "");
-                        cf_close((capture_file *)cap_session->cf);
+                        capture_input_no_packets(cap_session);
                     }
                     break;
                 case CF_READ_ERROR:
@@ -809,9 +801,10 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
                     break;
 
                 case CF_READ_ABORTED:
-                    /* Exit by leaving the main loop, so that any quit functions
-                       we registered get called. */
-                    exit_application(0);
+                    /* The user asked to abort the read, but that might be to
+                       restart the capture, so let the caller decide whether
+                       to exit. */
+                    //exit_application(0);
                     break;
             }
         } else if (((capture_file*)cap_session->cf)->state == FILE_READ_PENDING) {
@@ -823,6 +816,19 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
                 capture_input_read_all(cap_session, cf_is_tempfile((capture_file *)cap_session->cf),
                         cf_get_drops_known((capture_file *)cap_session->cf), cf_get_drops((capture_file *)cap_session->cf));
             }
+        } else {
+            /* First, tell the GUI we are not capturing nor stopping a capture
+               anymore. We need to do this if we're aborting the capture but
+               not quitting the program (e.g., restarting the capture.) */
+            capture_callback_invoke(capture_cb_capture_update_finished, cap_session);
+
+            if (cap_session->frame_cksum != NULL) {
+                fifo_string_cache_free(&cap_session->frame_dup_cache);
+                g_checksum_free(cap_session->frame_cksum);
+                cap_session->frame_cksum = NULL;
+            }
+
+            cf_close((capture_file *)cap_session->cf);
         }
     }
 
@@ -842,7 +848,7 @@ capture_input_closed(capture_session *cap_session, gchar *msg)
 
     /* does the user wants to restart the current capture? */
     if(capture_opts->restart) {
-        capture_opts->restart = FALSE;
+        capture_opts->restart = false;
 
         /* If we have a ring buffer, the original save file has been overwritten
            with the "ring filename".  Restore it before starting again */
@@ -885,10 +891,10 @@ capture_stat_start(capture_options *capture_opts)
 {
     int stat_fd;
     ws_process_id fork_child;
-    gchar *msg;
+    char *msg;
     if_stat_cache_t *sc = g_new0(if_stat_cache_t, 1);
     if_stat_cache_item_t *sc_item;
-    guint i;
+    unsigned i;
     interface_t *device;
 
     sc->stat_fd = -1;
@@ -913,7 +919,7 @@ capture_stat_start(capture_options *capture_opts)
      * mechanism, so opening all the devices and presenting packet
      * counts might not always be a good idea.
      */
-    if (sync_interface_stats_open(&stat_fd, &fork_child, NULL, &msg, NULL) == 0) {
+    if (sync_interface_stats_open(capture_opts->app_name, &stat_fd, &fork_child, NULL, &msg, NULL) == 0) {
         sc->stat_fd = stat_fd;
         sc->fork_child = fork_child;
 
@@ -935,11 +941,11 @@ capture_stat_start(capture_options *capture_opts)
 }
 
 if_stat_cache_t *
-capture_interface_stat_start(capture_options *capture_opts _U_, GList **if_list)
+capture_interface_stat_start(capture_options *capture_opts, GList **if_list)
 {
     int stat_fd;
     ws_process_id fork_child;
-    gchar *msg;
+    char *msg;
     if_stat_cache_t *sc = g_new0(if_stat_cache_t, 1);
     if_stat_cache_item_t *sc_item;
     char *data = NULL;
@@ -966,8 +972,13 @@ capture_interface_stat_start(capture_options *capture_opts _U_, GList **if_list)
      * mechanism, so opening all the devices and presenting packet
      * counts might not always be a good idea.
      */
+    /* XXX - We should use capture_opts to control whether we request
+     * the monitor_mode version of the supported link-types for interfaces.
+     */
     int status;
-    status = sync_interface_stats_open(&stat_fd, &fork_child, &data, &msg, NULL);
+    iface_mon_enable(false);
+    status = sync_interface_stats_open(capture_opts->app_name, &stat_fd, &fork_child, &data, &msg, NULL);
+    iface_mon_enable(true);
     /* In order to initialize the stat cache (below), we need to have
      * filled in capture_opts->all_ifaces
      *
@@ -1025,8 +1036,8 @@ capture_interface_stat_start(capture_options *capture_opts _U_, GList **if_list)
 static void
 capture_stat_cache_update(if_stat_cache_t *sc)
 {
-    gchar stat_line[MAX_STAT_LINE_LEN] = "";
-    gchar **stat_parts;
+    char stat_line[MAX_STAT_LINE_LEN] = "";
+    char **stat_parts;
     GList *sc_entry;
     if_stat_cache_item_t *sc_item;
 
@@ -1053,14 +1064,14 @@ capture_stat_cache_update(if_stat_cache_t *sc)
     }
 }
 
-gboolean
+bool
 capture_stats(if_stat_cache_t *sc, char *ifname, struct pcap_stat *ps)
 {
     GList *sc_entry;
     if_stat_cache_item_t *sc_item;
 
     if (!sc || sc->fork_child == WS_INVALID_PID || !ifname || !ps) {
-        return FALSE;
+        return false;
     }
 
     capture_stat_cache_update(sc);
@@ -1068,10 +1079,10 @@ capture_stats(if_stat_cache_t *sc, char *ifname, struct pcap_stat *ps)
         sc_item = (if_stat_cache_item_t *)sc_entry->data;
         if (strcmp(sc_item->name, ifname) == 0) {
             memcpy(ps, &sc_item->ps, sizeof(struct pcap_stat));
-            return TRUE;
+            return true;
         }
     }
-    return FALSE;
+    return false;
 }
 
 void
@@ -1080,7 +1091,7 @@ capture_stat_stop(if_stat_cache_t *sc)
     GList *sc_entry;
     if_stat_cache_item_t *sc_item;
     int ret;
-    gchar *msg;
+    char *msg;
 
     if (!sc) {
         return;

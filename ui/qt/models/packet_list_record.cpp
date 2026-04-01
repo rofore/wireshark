@@ -14,17 +14,15 @@
 #include <epan/epan_dissect.h>
 #include <epan/column.h>
 #include <epan/conversation.h>
-#include <epan/wmem_scopes.h>
-
 #include <epan/color_filters.h>
-
-#include "frame_tvbuff.h"
+#include <epan/wmem_scopes.h>
+#include <wsutil/wmem/wmem_list.h>
 
 #include <ui/qt/utils/qt_ui_utils.h>
 
 #include <QStringList>
 
-QCache<guint32, QStringList> PacketListRecord::col_text_cache_(500);
+QCache<uint32_t, QStringList> PacketListRecord::col_text_cache_(500);
 QMap<int, int> PacketListRecord::cinfo_column_;
 unsigned PacketListRecord::rows_color_ver_ = 1;
 
@@ -35,12 +33,17 @@ PacketListRecord::PacketListRecord(frame_data *frameData) :
     color_ver_(0),
     colorized_(false),
     conv_index_(0),
-    read_failed_(false)
+    read_failed_(false),
+    row_(0),
+    color_filters_(NULL),
+    color_filter_count_(0)
 {
 }
 
 PacketListRecord::~PacketListRecord()
 {
+    // Free the GSList but don't free the color_filter_t* (they're global)
+    g_slist_free(color_filters_);
 }
 
 void PacketListRecord::ensureColorized(capture_file *cap_file)
@@ -67,7 +70,7 @@ const QString PacketListRecord::columnString(capture_file *cap_file, int column,
     // packet_list_store.c:packet_list_get_value
     Q_ASSERT(fdata_);
 
-    if (!cap_file || column < 0 || column >= cap_file->cinfo.num_cols) {
+    if (!cap_file || column < 0 || (unsigned)column >= cap_file->cinfo.num_cols) {
         return QString();
     }
 
@@ -98,7 +101,7 @@ void PacketListRecord::resetColumns(column_info *cinfo)
     }
 
     cinfo_column_.clear();
-    int i, j;
+    unsigned i, j;
     for (i = 0, j = 0; i < cinfo->num_cols; i++) {
         if (!col_based_on_frame_data(cinfo, i)) {
             cinfo_column_[i] = j;
@@ -112,9 +115,8 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
     // packet_list_store.c:packet_list_dissect_and_cache_record
     epan_dissect_t edt;
     column_info *cinfo = NULL;
-    gboolean create_proto_tree;
-    wtap_rec rec; /* Record metadata */
-    Buffer buf;   /* Record data */
+    bool create_proto_tree;
+    wtap_rec rec; /* Record information */
 
     if (!cap_file) {
         return;
@@ -124,12 +126,11 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
         cinfo = &cap_file->cinfo;
     }
 
-    wtap_rec_init(&rec);
-    ws_buffer_init(&buf, 1514);
+    wtap_rec_init(&rec, DEFAULT_INIT_BUFFER_SIZE_2048);
     if (read_failed_) {
-        read_failed_ = !cf_read_record_no_alert(cap_file, fdata_, &rec, &buf);
+        read_failed_ = !cf_read_record_no_alert(cap_file, fdata_, &rec);
     } else {
-        read_failed_ = !cf_read_record(cap_file, fdata_, &rec, &buf);
+        read_failed_ = !cf_read_record(cap_file, fdata_, &rec);
     }
 
     if (read_failed_) {
@@ -144,7 +145,7 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
          * error message.
          */
         if (dissect_columns) {
-            col_fill_in_error(cinfo, fdata_, FALSE, FALSE /* fill_fd_columns */);
+            col_fill_in_error(cinfo, fdata_, false, false /* fill_fd_columns */);
 
             cacheColumnStrings(cinfo);
         }
@@ -152,7 +153,6 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
             fdata_->color_filter = NULL;
             colorized_ = true;
         }
-        ws_buffer_free(&buf);
         wtap_rec_cleanup(&rec);
         return;    /* error reading the record */
     }
@@ -175,7 +175,7 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
 
     epan_dissect_init(&edt, cap_file->epan,
                       create_proto_tree,
-                      FALSE /* proto_tree_visible */);
+                      false /* proto_tree_visible */);
 
     /* Re-color when the coloring rules are changed via the UI. */
     if (dissect_color) {
@@ -189,32 +189,51 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
      * XXX - need to catch an OutOfMemoryError exception and
      * attempt to recover from it.
      */
-    epan_dissect_run(&edt, cap_file->cd_t, &rec,
-                     frame_tvbuff_new_buffer(&cap_file->provider, fdata_, &buf),
-                     fdata_, cinfo);
+    epan_dissect_run(&edt, cap_file->cd_t, &rec, fdata_, cinfo);
 
     if (dissect_columns) {
         /* "Stringify" non frame_data vals */
-        epan_dissect_fill_in_columns(&edt, FALSE, FALSE /* fill_fd_columns */);
+        epan_dissect_fill_in_columns(&edt, false, false /* fill_fd_columns */);
         cacheColumnStrings(cinfo);
     }
 
     if (dissect_color) {
         colorized_ = true;
         color_ver_ = rows_color_ver_;
+
+        // Free previous color list
+        g_slist_free(color_filters_);
+        color_filters_ = NULL;
+        color_filter_count_ = 0;
+
+        // Get all matching colors if any multi-color feature is enabled
+        if (prefs.gui_packet_list_multi_color_mode != PACKET_LIST_MULTI_COLOR_MODE_OFF ||
+            prefs.gui_packet_list_multi_color_details) {
+            wmem_list_t *wm_matches = NULL;
+            fdata_->color_filter = color_filters_colorize_packet_all(&edt, wmem_file_scope(), &wm_matches);
+            if (wm_matches) {
+                for (wmem_list_frame_t *lf = wmem_list_head(wm_matches); lf != NULL; lf = wmem_list_frame_next(lf)) {
+                    color_filters_ = g_slist_append(color_filters_, wmem_list_frame_data(lf));
+                    color_filter_count_++;
+                }
+                wmem_destroy_list(wm_matches);
+            }
+        } else {
+            color_filter_count_ = fdata_->color_filter ? 1 : 0;
+        }
     }
 
-    struct conversation * conv = find_conversation_pinfo(&edt.pi, 0);
+    struct conversation * conv = find_conversation_pinfo_ro(&edt.pi, 0);
+
     conv_index_ = ! conv ? 0 : conv->conv_index;
 
     epan_dissect_cleanup(&edt);
-    ws_buffer_free(&buf);
     wtap_rec_cleanup(&rec);
 }
 
 void PacketListRecord::cacheColumnStrings(column_info *cinfo)
 {
-    // packet_list_store.c:packet_list_change_record(PacketList *packet_list, PacketListRecord *record, gint col, column_info *cinfo)
+    // packet_list_store.c:packet_list_change_record(PacketList *packet_list, PacketListRecord *record, int col, column_info *cinfo)
     if (!cinfo) {
         return;
     }
@@ -224,13 +243,13 @@ void PacketListRecord::cacheColumnStrings(column_info *cinfo)
     lines_ = 1;
     line_count_changed_ = false;
 
-    for (int column = 0; column < cinfo->num_cols; ++column) {
+    for (unsigned column = 0; column < cinfo->num_cols; ++column) {
         int col_lines = 1;
 
         QString col_str;
         int text_col = cinfo_column_.value(column, -1);
         if (text_col < 0) {
-            col_fill_in_frame_data(fdata_, cinfo, column, FALSE);
+            col_fill_in_frame_data(fdata_, cinfo, column, false);
         }
 
         col_str = QString(get_column_text(cinfo, column));

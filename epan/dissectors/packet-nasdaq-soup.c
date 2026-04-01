@@ -47,10 +47,10 @@ static dissector_handle_t nasdaq_soup_handle;
 static dissector_handle_t nasdaq_itch_handle;
 
 /* desegmentation of Nasdaq Soup */
-static gboolean nasdaq_soup_desegment = TRUE;
+static bool nasdaq_soup_desegment = true;
 
 /* Initialize the subtree pointers */
-static gint ett_nasdaq_soup;
+static int ett_nasdaq_soup;
 
 static int hf_nasdaq_soup_packet_type;
 static int hf_nasdaq_soup_message;
@@ -65,11 +65,11 @@ static int hf_nasdaq_soup_reject_code;
 static void
 dissect_nasdaq_soup_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, proto_tree *tree, int offset, int linelen)
 {
-    guint8   nasdaq_soup_type;
+    uint8_t  nasdaq_soup_type;
     tvbuff_t *new_tvb = NULL;
 
-    nasdaq_soup_type = tvb_get_guint8(tvb, offset);
-    proto_tree_add_item(tree, hf_nasdaq_soup_packet_type, tvb, offset, 1, ENC_ASCII|ENC_NA);
+    nasdaq_soup_type = tvb_get_uint8(tvb, offset);
+    proto_tree_add_item(tree, hf_nasdaq_soup_packet_type, tvb, offset, 1, ENC_ASCII);
     offset++;
 
     switch (nasdaq_soup_type) {
@@ -85,7 +85,7 @@ dissect_nasdaq_soup_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent
         offset += 10;
         break;
     case 'J': /* login reject */
-        proto_tree_add_item(tree, hf_nasdaq_soup_reject_code, tvb, offset, 1, ENC_ASCII|ENC_NA);
+        proto_tree_add_item(tree, hf_nasdaq_soup_reject_code, tvb, offset, 1, ENC_ASCII);
         offset++;
         break;
 
@@ -138,16 +138,15 @@ dissect_nasdaq_soup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* d
 {
     proto_item *ti;
     proto_tree *nasdaq_soup_tree = NULL;
-    guint8 nasdaq_soup_type;
-    int  linelen;
-    gint next_offset;
-    int  offset = 0;
-    gint counter = 0;
+    uint8_t nasdaq_soup_type;
+    unsigned linelen;
+    unsigned next_offset;
+    unsigned offset = 0;
+    unsigned counter = 0;
 
     while (tvb_offset_exists(tvb, offset)) {
       /* there's only a \n no \r */
-      linelen = tvb_find_line_end(tvb, offset, -1, &next_offset, nasdaq_soup_desegment && pinfo->can_desegment);
-      if (linelen == -1) {
+      if (!tvb_find_line_end_remaining(tvb, offset, &linelen, &next_offset)) {
         /*
          * We didn't find a line ending, and we're doing desegmentation;
          * tell the TCP dissector where the data for this message starts
@@ -160,7 +159,7 @@ dissect_nasdaq_soup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* d
         return tvb_captured_length(tvb);
       }
 
-      nasdaq_soup_type = tvb_get_guint8(tvb, offset);
+      nasdaq_soup_type = tvb_get_uint8(tvb, offset);
       if (counter == 0) {
         col_set_str(pinfo->cinfo, COL_PROTOCOL, "Nasdaq-SOUP");
         col_clear(pinfo->cinfo, COL_INFO);
@@ -169,7 +168,7 @@ dissect_nasdaq_soup(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* d
         col_append_str(pinfo->cinfo, COL_INFO, "; ");
         col_set_fence(pinfo->cinfo, COL_INFO);
       }
-      col_append_str(pinfo->cinfo, COL_INFO, val_to_str(nasdaq_soup_type, message_types_val, "Unknown packet type (0x%02x)"));
+      col_append_str(pinfo->cinfo, COL_INFO, val_to_str(pinfo->pool, nasdaq_soup_type, message_types_val, "Unknown packet type (0x%02x)"));
 
       counter++;
       ti = proto_tree_add_item(tree, proto_nasdaq_soup, tvb, offset, linelen +1, ENC_NA);
@@ -235,7 +234,7 @@ proto_register_nasdaq_soup(void)
     };
 
     /* Setup protocol subtree array */
-    static gint *ett[] = {
+    static int *ett[] = {
         &ett_nasdaq_soup
     };
 

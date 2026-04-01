@@ -1,5 +1,5 @@
 /* packet-disp.c
- * Routines for X.525 (X.500 Directory Shadow Asbtract Service) and X.519 DISP packet dissection
+ * Routines for X.525 (X.500 Directory Shadow Abstract Service) and X.519 DISP packet dissection
  * Graeme Lunt 2005
  *
  * Wireshark - Network traffic analyzer
@@ -17,6 +17,7 @@
 #include <epan/oids.h>
 #include <epan/asn1.h>
 #include <epan/proto_data.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-acse.h"
@@ -33,13 +34,6 @@
 #include "packet-dsp.h"
 #include "packet-disp.h"
 
-
-/* we don't have a separate dissector for X519 -
-   and most of DISP is defined in X525 */
-#define PNAME  "X.519 Directory Information Shadowing Protocol"
-#define PSNAME "DISP"
-#define PFNAME "disp"
-
 void proto_register_disp(void);
 void proto_reg_handoff_disp(void);
 
@@ -49,7 +43,7 @@ static int proto_disp;
 #include "packet-disp-hf.c"
 
 /* Initialize the subtree pointers */
-static gint ett_disp;
+static int ett_disp;
 #include "packet-disp-ett.c"
 
 static expert_field ei_disp_unsupported_opcode;
@@ -57,7 +51,7 @@ static expert_field ei_disp_unsupported_errcode;
 static expert_field ei_disp_unsupported_pdu;
 static expert_field ei_disp_zero_pdu;
 
-static dissector_handle_t disp_handle = NULL;
+static dissector_handle_t disp_handle;
 
 #include "packet-disp-fn.c"
 
@@ -67,12 +61,12 @@ static dissector_handle_t disp_handle = NULL;
 static int
 dissect_disp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* data)
 {
-	int offset = 0;
-	int old_offset;
+    unsigned offset = 0;
+    unsigned old_offset;
 	proto_item *item;
 	proto_tree *tree;
 	struct SESSION_DATA_STRUCTURE* session;
-	int (*disp_dissector)(bool implicit_tag _U_, tvbuff_t *tvb, int offset, asn1_ctx_t *actx, proto_tree *tree, int hf_index _U_) = NULL;
+	unsigned (*disp_dissector)(bool implicit_tag _U_, tvbuff_t *tvb, unsigned offset, asn1_ctx_t *actx, proto_tree *tree, int hf_index _U_) = NULL;
 	const char *disp_op_name;
 	asn1_ctx_t asn1_ctx;
 
@@ -81,7 +75,7 @@ dissect_disp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 		return 0;
 	session  = (struct SESSION_DATA_STRUCTURE*)data;
 
-	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
+	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, true, pinfo);
 
 	asn1_ctx.private_data = session;
 
@@ -119,7 +113,7 @@ dissect_disp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 	    disp_op_name = "Coordinate-Shadow-Update-Argument";
 	    break;
 	  default:
-	    proto_tree_add_expert_format(tree, pinfo, &ei_disp_unsupported_opcode, tvb, offset, -1,
+	    proto_tree_add_expert_format_remaining(tree, pinfo, &ei_disp_unsupported_opcode, tvb, offset,
 	        "Unsupported DISP opcode (%d)", session->ros_op & ROS_OP_OPCODE_MASK);
 	    break;
 	  }
@@ -139,7 +133,7 @@ dissect_disp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 	    disp_op_name = "Coordinate-Shadow-Update-Result";
 	    break;
 	  default:
-	    proto_tree_add_expert_format(tree, pinfo, &ei_disp_unsupported_opcode, tvb, offset, -1,
+	    proto_tree_add_expert_format_remaining(tree, pinfo, &ei_disp_unsupported_opcode, tvb, offset,
 	        "Unsupported DISP opcode (%d)", session->ros_op & ROS_OP_OPCODE_MASK);
 	    break;
 	  }
@@ -151,13 +145,13 @@ dissect_disp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 	    disp_op_name = "Shadow-Error";
 	    break;
 	  default:
-	    proto_tree_add_expert_format(tree, pinfo, &ei_disp_unsupported_errcode, tvb, offset, -1,
+	    proto_tree_add_expert_format_remaining(tree, pinfo, &ei_disp_unsupported_errcode, tvb, offset,
 	            "Unsupported DISP errcode (%d)", session->ros_op & ROS_OP_OPCODE_MASK);
 	    break;
 	  }
 	  break;
 	default:
-	  proto_tree_add_expert(tree, pinfo, &ei_disp_unsupported_pdu, tvb, offset, -1);
+	  proto_tree_add_expert_remaining(tree, pinfo, &ei_disp_unsupported_pdu, tvb, offset);
 	  return tvb_captured_length(tvb);
 	}
 
@@ -166,9 +160,9 @@ dissect_disp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
 
 	  while (tvb_reported_length_remaining(tvb, offset) > 0){
 	    old_offset=offset;
-	    offset=(*disp_dissector)(FALSE, tvb, offset, &asn1_ctx, tree, -1);
+	    offset=(*disp_dissector)(false, tvb, offset, &asn1_ctx, tree, -1);
 	    if(offset == old_offset){
-	      proto_tree_add_expert(tree, pinfo, &ei_disp_zero_pdu, tvb, offset, -1);
+	      proto_tree_add_expert_remaining(tree, pinfo, &ei_disp_zero_pdu, tvb, offset);
 	      break;
 	    }
 	  }
@@ -188,7 +182,7 @@ void proto_register_disp(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_disp,
 #include "packet-disp-ettarr.c"
   };
@@ -204,7 +198,7 @@ void proto_register_disp(void) {
   expert_module_t* expert_disp;
 
   /* Register protocol */
-  proto_disp = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_disp = proto_register_protocol("X.519 Directory Information Shadowing Protocol", "DISP", "disp");
   disp_handle = register_dissector("disp", dissect_disp, proto_disp);
 
   /* Register fields and subtrees */
@@ -238,9 +232,9 @@ void proto_reg_handoff_disp(void) {
   oid_add_from_string("id-ac-reliable-shadow-supplier-initiated","2.5.3.7");
 
   /* ABSTRACT SYNTAXES */
-  register_ros_oid_dissector_handle("2.5.9.3", disp_handle, 0, "id-as-directory-shadow", FALSE);
-  register_rtse_oid_dissector_handle("2.5.9.5", disp_handle, 0, "id-as-directory-reliable-shadow", FALSE);
-  register_rtse_oid_dissector_handle("2.5.9.6", disp_handle, 0, "id-as-directory-reliable-binding", FALSE);
+  register_ros_oid_dissector_handle("2.5.9.3", disp_handle, 0, "id-as-directory-shadow", false);
+  register_rtse_oid_dissector_handle("2.5.9.5", disp_handle, 0, "id-as-directory-reliable-shadow", false);
+  register_rtse_oid_dissector_handle("2.5.9.6", disp_handle, 0, "id-as-directory-reliable-binding", false);
 
   /* OPERATIONAL BINDING */
   oid_add_from_string("id-op-binding-shadow","2.5.1.0.5.1");

@@ -20,23 +20,15 @@
 #include <epan/strutil.h>
 #include <epan/asn1.h>
 #include <epan/prefs.h>
-#include <epan/sctpppids.h>
 #include <epan/expert.h>
+#include <wsutil/array.h>
 
 #include "packet-ber.h"
 #include "packet-per.h"
 #include "packet-e212.h"
 #include "packet-sccp.h"
 #include "packet-lcsap.h"
-
-#ifdef _MSC_VER
-/* disable: "warning C4146: unary minus operator applied to unsigned type, result still unsigned" */
-#pragma warning(disable:4146)
-#endif
-
-#define PNAME  "LCS Application Protocol"
-#define PSNAME "LCSAP"
-#define PFNAME "lcsap"
+#include "packet-sctp.h"
 
 void proto_register_lcsap(void);
 void proto_reg_handoff_lcsap(void);
@@ -65,10 +57,10 @@ static int ett_lcsap_civic_address;
 static expert_field ei_lcsap_civic_data_not_xml;
 
 /* Global variables */
-static guint32 ProcedureCode;
-static guint32 ProtocolIE_ID;
-static guint32 ProtocolExtensionID;
-static guint32 PayloadType = -1;
+static uint32_t ProcedureCode;
+static uint32_t ProtocolIE_ID;
+static uint32_t ProtocolExtensionID;
+static uint32_t PayloadType = -1;
 
 /* Dissector handles */
 static dissector_handle_t lcsap_handle;
@@ -275,7 +267,7 @@ void proto_register_lcsap(void) {
   };
 
   /* List of subtrees */
-  static gint *ett[] = {
+  static int *ett[] = {
     &ett_lcsap,
     &ett_lcsap_plmnd_id,
     &ett_lcsap_imsi,
@@ -293,7 +285,7 @@ void proto_register_lcsap(void) {
 
 
   /* Register protocol */
-  proto_lcsap = proto_register_protocol(PNAME, PSNAME, PFNAME);
+  proto_lcsap = proto_register_protocol("LCS Application Protocol", "LCSAP", "lcsap");
 
   /* Register fields and subtrees */
   proto_register_field_array(proto_lcsap, hf, array_length(hf));
