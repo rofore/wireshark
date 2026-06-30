@@ -200,7 +200,7 @@ static dissector_handle_t diameter_avps_handle;
 static dissector_handle_t peap_handle;
 static dissector_handle_t teap_handle;
 
-static dissector_handle_t isakmp_handle;
+static dissector_handle_t ike_handle;
 
 const value_string eap_code_vals[] = {
   { EAP_REQUEST,  "Request" },
@@ -1201,9 +1201,11 @@ dissect_eap_sim(proto_tree *eap_tree, tvbuff_t *tvb, packet_info* pinfo, unsigne
     aoffset += 1;
     aleft   -= 1;
 
-    if (aleft <= 0)
+    pi = proto_tree_add_item(attr_tree, hf_eap_sim_subtype_length, tvb, aoffset, 1, ENC_BIG_ENDIAN);
+    if (length == 0) {
+      expert_add_info(pinfo, pi, &ei_eap_bad_length);
       break;
-    proto_tree_add_item(attr_tree, hf_eap_sim_subtype_length, tvb, aoffset, 1, ENC_BIG_ENDIAN);
+    }
     aoffset += 1;
     aleft   -= 1;
 
@@ -2555,7 +2557,7 @@ skip_tls_dissector:
              */
           } else {
             next_tvb = tvb_new_subset_length(tvb, offset, size);
-            unsigned tmp = call_dissector(isakmp_handle, next_tvb, pinfo, eap_tree);
+            unsigned tmp = call_dissector(ike_handle, next_tvb, pinfo, eap_tree);
             size -= tmp;
             offset += tmp;
 
@@ -3431,6 +3433,7 @@ proto_register_eap(void)
     proto_eap, FT_UINT24,
     BASE_HEX);
 
+  register_external_value_string_ext("eap_type_vals_ext", &eap_type_vals_ext);
 }
 
 void
@@ -3444,7 +3447,7 @@ proto_reg_handoff_eap(void)
   peap_handle = find_dissector_add_dependency("peap", proto_eap);
   teap_handle = find_dissector_add_dependency("teap", proto_eap);
 
-  isakmp_handle = find_dissector_add_dependency("isakmp", proto_eap);
+  ike_handle = find_dissector_add_dependency("ike", proto_eap);
 
   dissector_add_uint("ppp.protocol", PPP_EAP, eap_handle);
   dissector_add_uint("eapol.type", EAPOL_EAP, eap_handle);

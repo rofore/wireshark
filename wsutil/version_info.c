@@ -417,15 +417,19 @@ get_compiler_info(GString *str)
 			 * though the MSVC compiler toolset in VS2017 delivers many new
 			 * features and conformance improvements it is a minor version,
 			 * compatible update from 14.00 in VS2015 to 14.10 in VS2017.
+			 *
+			 * https://learn.microsoft.com/en-us/cpp/overview/compiler-versions
 			 */
 			#if COMPILER_MINOR_VERSION < 10
 				#define VS_VERSION	"2015"
 			#elif COMPILER_MINOR_VERSION < 20
 				#define VS_VERSION	"2017"
 			#elif COMPILER_MINOR_VERSION < 30
-			#define VS_VERSION	"2019"
-			#else
+				#define VS_VERSION	"2019"
+			#elif COMPILER_MINOR_VERSION < 50
 				#define VS_VERSION	"2022"
+			#else
+				#define VS_VERSION	"2026"
 			#endif
 		#else
 			/*
@@ -441,7 +445,7 @@ get_compiler_info(GString *str)
 		 * COMPILER_BUILD_NUMBER, and _MSC_BUILD, the last of which is
 		 * "the revision number element of the compiler's version number",
 		 * which I guess is not to be confused with the build number,
-		 * the _BUILD in the name nonwithstanding.
+		 * the _BUILD in the name notwithstanding.
 		 */
 		g_string_append_printf(str, "Microsoft Visual Studio " VS_VERSION " (VC++ %d.%d, build %d)",
 			VCPP_MAJOR_VERSION, COMPILER_MINOR_VERSION, COMPILER_BUILD_NUMBER);

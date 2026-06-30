@@ -59,13 +59,13 @@ static int ett_rdp_drdynvc_softsync_channels;
 static int ett_rdp_drdynvc_softsync_channel;
 static int ett_rdp_drdynvc_softsync_dvc;
 
-dissector_handle_t egfx_handle;
-dissector_handle_t rail_handle;
-dissector_handle_t cliprdr_handle;
-dissector_handle_t rdpdr_handle;
-dissector_handle_t snd_handle;
-dissector_handle_t ear_handle;
-dissector_handle_t ecam_handle;
+static dissector_handle_t egfx_handle;
+static dissector_handle_t rail_handle;
+static dissector_handle_t cliprdr_handle;
+static dissector_handle_t rdpdr_handle;
+static dissector_handle_t snd_handle;
+static dissector_handle_t ear_handle;
+static dissector_handle_t ecam_handle;
 
 enum {
 	DRDYNVC_CREATE_REQUEST_PDU = 0x01,
@@ -327,7 +327,7 @@ dissect_rdp_drdynvc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, 
 {
 	proto_item *item;
 	proto_tree *tree;
-	int offset = 0;
+	unsigned offset = 0;
 	uint8_t cbIdSpCmd, cmdId;
 	uint8_t cbId, Len;
 	bool haveChannelId, havePri, haveLen;
@@ -539,7 +539,7 @@ dissect_rdp_drdynvc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, 
 						wmem_array_append(pendingPacket->currentPacket, tvb_get_ptr(input, offset2, payloadLen), payloadLen);
 					} else {
 						if (pendingPacket->pendingLen || pendingPacket->chunks)
-							printf("(%d) looks like we have a non completed packet...\n", pinfo->num);
+							printf("(%u) looks like we have a non completed packet...\n", pinfo->num);
 						if (pendingPacket->chunks)
 							wmem_destroy_array(pendingPacket->chunks);
 						memset(pendingPacket, 0, sizeof(*pendingPacket));
@@ -621,7 +621,7 @@ dissect_rdp_drdynvc(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, 
 						/* we have a fragmented packet in progress */
 						if ((uint32_t)payloadLen > pendingPacket->pendingLen) {
 							// TODO: error
-							printf("num=%d error payload too big\n", pinfo->num);
+							printf("num=%u error payload too big\n", pinfo->num);
 							return offset;
 						}
 

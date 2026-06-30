@@ -1344,7 +1344,7 @@ ssh_dissect_ssh1(tvbuff_t *tvb, packet_info *pinfo,
     }
 
     if (plen >= SSH_MAX_PACKET_LEN) {
-        if (ssh1_tree && plen > 0) {
+        if (ssh1_tree) {
               proto_tree_add_uint_format(ssh1_tree, hf_ssh_packet_length, tvb,
                 offset, 4, plen, "Overly large length %x", plen);
         }
@@ -1931,6 +1931,7 @@ ssh_dissect_kex_ecdh(uint8_t msg_code, tvbuff_t *tvb,
      *   - PQ server ciphertext: 1568 bytes
      *   - nistp384 pubkey:      97 bytes
      *
+     * OpenSSH uses `sntrup761x25519-sha512@openssh.com` as an (old) alias for `sntrup761x25519-sha512`
      *
      * This matches how OpenSSH serializes the hybrid key material, and allows Wireshark
      * to compute the correct key exchange hash and derive session keys accurately.
@@ -2019,7 +2020,6 @@ ssh_dissect_kex_pq_hybrid(uint8_t msg_code, tvbuff_t *tvb,
             ws_debug("ExpertInfo: Invalid PQ client key length at offset %d: %u", offset, bad_len);
 
             return offset + 4;
-            ws_debug("CLIENT INIT validate PQ client key length - offset: %d", offset); // debug trace offset
         }
 
         // PQ-hybrid KEMs cannot use ssh_add_tree_string => manual dissection
@@ -2039,7 +2039,7 @@ ssh_dissect_kex_pq_hybrid(uint8_t msg_code, tvbuff_t *tvb,
 
         uint32_t pq_len;
         uint32_t t_len;
-        if (strcmp(kex_name, "sntrup761x25519-sha512") == 0) {
+        if (g_str_has_prefix(kex_name, "sntrup761x25519-sha512")) {
             pq_len = 1158;
             t_len = 32;
         } else if (strcmp(kex_name, "mlkem768x25519-sha256") == 0) {
@@ -2146,7 +2146,6 @@ ssh_dissect_kex_pq_hybrid(uint8_t msg_code, tvbuff_t *tvb,
             ws_debug("ExpertInfo: Invalid PQ server key length at offset %d: %u", offset, bad_len);
 
             return offset + 4;
-            ws_debug("SERVER REPLY validate PQ server key length - offset: %d", offset); // debug trace offset
         }
 
         // Select encryption and MAC based on negotiated algorithms.
@@ -2172,7 +2171,7 @@ ssh_dissect_kex_pq_hybrid(uint8_t msg_code, tvbuff_t *tvb,
 
         uint32_t pq_len;
         uint32_t t_len;
-        if (strcmp(kex_name, "sntrup761x25519-sha512") == 0) {
+        if (g_str_has_prefix(kex_name, "sntrup761x25519-sha512")) {
             pq_len = 1039;
             t_len = 32;
         } else if (strcmp(kex_name, "mlkem768x25519-sha256") == 0) {
@@ -2438,7 +2437,7 @@ static void ssh_set_kex_specific_dissector(struct ssh_flow_data *global_data)
     {
         global_data->kex_specific_dissector = ssh_dissect_kex_dh;
     }
-    else if (strcmp(kex_name, "sntrup761x25519-sha512") == 0 ||
+    else if (g_str_has_prefix(kex_name, "sntrup761x25519-sha512") ||
         strcmp(kex_name, "mlkem768x25519-sha256") == 0 ||
         strcmp(kex_name, "mlkem768nistp256-sha256") == 0 ||
         strcmp(kex_name, "mlkem1024nistp384-sha384") == 0)
@@ -2775,7 +2774,7 @@ ssh_keylog_process_line(const char *line)
         cookie = split[0];
         key = split[1];
     } else {
-        ws_debug("ssh keylog: invalid format");
+        ws_info("ssh keylog: invalid format");
         g_strfreev(split);
         return;
     }
@@ -2783,17 +2782,27 @@ ssh_keylog_process_line(const char *line)
     key_len = strlen(key);
     cookie_len = strlen(cookie);
     if(key_len & 1){
-        ws_debug("ssh keylog: invalid format (key should at least be even!)");
+        ws_info("ssh keylog: invalid format (key should at least be even!)");
         g_strfreev(split);
         return;
     }
     if(cookie_len & 1){
-        ws_debug("ssh keylog: invalid format (cookie should at least be even!)");
+        ws_info("ssh keylog: invalid format (cookie should at least be even!)");
         g_strfreev(split);
         return;
     }
     ssh_bignum * bn_cookie = ssh_kex_make_bignum(NULL, (unsigned)(cookie_len/2));
+    if (bn_cookie == NULL) {
+        ws_info("ssh keylog: invalid format (invalid cookie length %zu)", cookie_len);
+        g_strfreev(split);
+        return;
+    }
     ssh_bignum * bn_priv   = ssh_kex_make_bignum(NULL, (unsigned)(key_len/2));
+    if (bn_priv == NULL) {
+        ws_info("ssh keylog: invalid format (invalid key length %zu)", key_len);
+        g_strfreev(split);
+        return;
+    }
     uint8_t c;
     for (size_t i = 0; i < key_len/2; i ++) {
         char v0 = key[i * 2];
@@ -3982,7 +3991,7 @@ ssh_decrypt_packet(tvbuff_t *tvb, packet_info *pinfo,
             // uses the sequence number as an initialisation vector (IV) to
             // generate its per-packet MAC key and is otherwise stateless
             // between packets," we need no special handling here.
-            // https://www.ietf.org/id/draft-miller-sshm-strict-kex-01.html
+            // https://datatracker.ietf.org/doc/draft-miller-sshm-strict-kex/
             //
             if (ssh_desegment && pinfo->can_desegment) {
                 pinfo->desegment_offset = offset;
@@ -4321,7 +4330,7 @@ ssh_decrypt_chacha20(gcry_cipher_hd_t hd,
     // chacha20 uses a different cipher handle for the packet payload & length
     // the payload uses a block counter
     if (counter) {
-        unsigned char ctr[8] = {1,0,0,0,0,0,0,0};
+        const unsigned char ctr[8] = {1,0,0,0,0,0,0,0};
         memcpy(iv, ctr, 8);
         memcpy(iv+8, seq, 8);
     }
@@ -4336,7 +4345,7 @@ ssh_dissect_decrypted_packet(tvbuff_t *tvb, packet_info *pinfo,
         struct ssh_peer_data *peer_data, proto_tree *tree,
         ssh_message_info_t *message)
 {
-    int offset = 0;      // TODO:
+    unsigned offset = 0;      // TODO:
     int dissected_len = 0;
     tvbuff_t* payload_tvb;
 
@@ -5369,7 +5378,7 @@ ssh_dissect_term_modes(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree)
 {
     proto_item *ti;
     proto_tree *term_mode_tree, *subtree;
-    int offset = 0;
+    unsigned offset = 0;
     uint32_t opcode, value, idx;
     bool boolval;
 
@@ -5845,7 +5854,7 @@ ssh_dissect_public_key_blob(tvbuff_t *tvb, packet_info *pinfo, proto_item *tree)
     uint32_t slen;
     const char* key_type;
 
-    int offset = 0;
+    unsigned offset = 0;
     proto_tree *blob_tree = NULL;
     proto_item *blob_item = NULL;
 

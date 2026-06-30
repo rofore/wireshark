@@ -27,6 +27,7 @@
 
 #include "packet-zbee.h"
 #include "packet-zbee-aps.h"
+#include "packet-zbee-nwk.h"
 #include "packet-zbee-zcl.h"
 #include "packet-zbee-security.h"
 
@@ -13651,11 +13652,6 @@ static int hf_zbee_zcl_gp_attr_gps_secur_lvl_fld_min_gpd_secur_lvl;
 static int hf_zbee_zcl_gp_attr_gps_secur_lvl_fld_protection_with_gp_link_key;
 static int hf_zbee_zcl_gp_attr_gps_secur_lvl_fld_involve_tc;
 
-/* reuse ZGPD command names */
-extern value_string_ext zbee_nwk_gp_cmd_names_ext;
-/* reuse devices table from ZGPD parser */
-extern const value_string zbee_nwk_gp_device_ids_names[];
-
 /*************************/
 /* Function Declarations */
 /*************************/
@@ -16866,7 +16862,9 @@ proto_register_zbee_zcl_touchlink(void)
         &ett_zbee_zcl_touchlink_info,
         &ett_zbee_zcl_touchlink_keybits,
         &ett_zbee_zcl_touchlink_groups,
+        &ett_zbee_zcl_touchlink_device_record,
         &ett_zbee_zcl_touchlink_device_records,
+        &ett_zbee_zcl_touchlink_endpoint,
         &ett_zbee_zcl_touchlink_endpoints,
     };
 

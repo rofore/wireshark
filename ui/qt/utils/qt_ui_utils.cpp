@@ -207,12 +207,7 @@ QString join_lines(const QString multiline_string) {
 }
 
 void smooth_font_size(QFont &font) {
-#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
     QList<int> size_list = QFontDatabase::smoothSizes(font.family(), font.styleName());
-#else
-    QFontDatabase fdb;
-    QList<int> size_list = fdb.smoothSizes(font.family(), font.styleName());
-#endif
 
     if (size_list.size() < 2) return;
 
@@ -314,13 +309,6 @@ bool rect_on_screen(const QRect &rect)
     }
 
     return false;
-}
-
-void set_action_shortcuts_visible_in_context_menu(QList<QAction *> actions)
-{
-    // For QT_VERSION >= 5.13.0 we call styleHints()->setShowShortcutsInContextMenus(true)
-    // in WiresharkApplication.
-    Q_UNUSED(actions)
 }
 
 QVector<rtpstream_id_t *>qvector_rtpstream_ids_copy(QVector<rtpstream_id_t *> stream_ids)

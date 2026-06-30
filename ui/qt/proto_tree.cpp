@@ -19,9 +19,10 @@
 #include <epan/epan_dissect.h>
 #include <epan/color_filters.h>
 #include <epan/dissectors/packet-frame.h>
-#include <cfile.h>
+#include <epan/cfile.h>
 
 #include <ui/qt/utils/color_utils.h>
+#include <ui/qt/utils/font_manager.h>
 #include <ui/qt/utils/variant_pointer.h>
 #include <ui/qt/utils/wireshark_mime_data.h>
 #include <ui/qt/widgets/drag_label.h>
@@ -62,12 +63,15 @@ ProtoTree::ProtoTree(QWidget *parent, epan_dissect_t *edt_fixed) :
     cap_file_(NULL),
     edt_(edt_fixed)
 {
-    setAccessibleName(tr("Packet details"));
-    setAccessibleDescription(tr("Tree view of the selected packet's fields"));
     // Leave the uniformRowHeights property as-is (false) since items might have
     // have multiple lines (e.g. packet or event comments). If this slows things
     // down too much we should add a custom delegate which handles SizeHintRole.
     setHeaderHidden(true);
+    setFocusPolicy(Qt::StrongFocus);
+
+#ifdef Q_OS_MAC
+    setAttribute(Qt::WA_MacShowFocusRect, true);
+#endif
 
     setStyleSheet(QStringLiteral(
         "QTreeView:item:hover {"
@@ -79,6 +83,9 @@ ProtoTree::ProtoTree(QWidget *parent, epan_dissect_t *edt_fixed) :
     int one_em = fontMetrics().height();
     setMinimumSize(one_em, one_em);
 
+    verticalScrollBar()->setFocusPolicy(Qt::NoFocus);
+    horizontalScrollBar()->setFocusPolicy(Qt::NoFocus);
+
     setModel(proto_tree_model_);
 
     connect(this, &ProtoTree::expanded, this, &ProtoTree::syncExpanded);
@@ -86,11 +93,20 @@ ProtoTree::ProtoTree(QWidget *parent, epan_dissect_t *edt_fixed) :
     connect(this, &ProtoTree::clicked, this, &ProtoTree::itemClicked);
     connect(this, &ProtoTree::doubleClicked, this, &ProtoTree::itemDoubleClicked);
 
+    // Own the font: seed it now and follow the FontManager for later changes.
+    connect(FontManager::instance(), &FontManager::monospaceFontChanged, this, &ProtoTree::setMonospaceFont);
+    setMonospaceFont(FontManager::zoomedMonospaceFont());
+
     // resizeColumnToContents checks 1000 items by default. The user might
     // have scrolled to an area with a different width at this point.
     connect(verticalScrollBar(), &QScrollBar::sliderReleased, this, &ProtoTree::updateContentWidth);
 
-    connect(mainApp, &MainApplication::appInitialized, this, &ProtoTree::connectToMainWindow);
+    // Only the main-window tree follows the main window's field/frame
+    // selection. A fixed-edt tree (the packet dialog) shows one frozen packet
+    // and wires its own selection signals, so it must not connect here.
+    if (!edt_) {
+        mainApp->whenInitialized(this, [this]() { connectToMainWindow(); });
+    }
 
     viewport()->installEventFilter(this);
 }
@@ -102,13 +118,13 @@ void ProtoTree::clear() {
 
 void ProtoTree::connectToMainWindow()
 {
-    if (mainApp->mainWindow())
-    {
-        connect(mainApp->mainWindow(), &MainWindow::fieldSelected,
-                this, &ProtoTree::selectedFieldChanged);
-        connect(mainApp->mainWindow(), &MainWindow::framesSelected,
-                this, &ProtoTree::selectedFrameChanged);
-    }
+    // Reached only for the main-window tree, and only once the app is
+    // initialized (the window is shown by then), so mainWindow() is non-null.
+    MainWindow *main_window = mainApp->mainWindow();
+    connect(main_window, &MainWindow::fieldSelected,
+            this, &ProtoTree::selectedFieldChanged);
+    connect(main_window, &MainWindow::framesSelected,
+            this, &ProtoTree::selectedFrameChanged);
 }
 
 void ProtoTree::ctxCopyVisibleItems()
@@ -335,6 +351,29 @@ void ProtoTree::contextMenuEvent(QContextMenuEvent *event)
 
     ctx_menu->addMenu(PlotAction::createMenu(finfo->headerInfo(), ctx_menu));
 
+    // Checks for the Distribution menu (enabled according to the AGG_FT value)
+    /* XXX - ensure we are consistent with the Distribution Dialog. Move to a function ? */
+    bool isDistributable = false;
+    switch(finfo->headerInfo().type) {
+        case FT_IPv4:
+        case FT_IPv6:
+            isDistributable = true;
+            break;
+
+        default:
+            if (FT_IS_STRING(finfo->headerInfo().type) ||
+                FT_IS_INTEGER(finfo->headerInfo().type)) {
+                isDistributable = true;
+            }
+            break;
+    }
+
+    /* add Distribution menu */
+    action = ctx_menu->addAction(tr("Distribution"), [this, finfo]() {
+        emit showDistributionDialog(finfo->headerInfo().abbreviation);
+    });
+    action->setEnabled(isDistributable);
+
     submenu = ctx_menu->addMenu(tr("Copy"));
     submenu->setToolTipsVisible(true);
     submenu->addAction(tr("All Visible Items"), this, &ProtoTree::ctxCopyVisibleItems);
@@ -413,6 +452,21 @@ void ProtoTree::contextMenuEvent(QContextMenuEvent *event)
             this, SIGNAL(editProtocolPreference(pref_t*,module_t*)));
 
     ctx_menu->addMenu(proto_prefs_menu);
+
+    main_menu_item = window()->findChild<QMenu *>("menuTcpStreamGraphs");
+    if (main_menu_item) {
+        QList<QAction *> enabled_actions;
+        foreach (QAction *a, main_menu_item->actions()) {
+            if (!a->isSeparator() && a->isEnabled())
+                enabled_actions << a;
+        }
+        if (!enabled_actions.isEmpty()) {
+            submenu = new QMenu(main_menu_item->title(), ctx_menu);
+            foreach (QAction *a, enabled_actions)
+                submenu->addAction(a);
+            ctx_menu->addMenu(submenu);
+        }
+    }
 
     // Add actions for coloring rule fields
     bool is_color_rule_name = fi && fi->hfinfo &&
@@ -517,6 +571,28 @@ void ProtoTree::keyReleaseEvent(QKeyEvent *event)
             break;
         default:
             break;
+    }
+}
+
+void ProtoTree::focusInEvent(QFocusEvent *event)
+{
+    QTreeView::focusInEvent(event);
+
+    if (event->reason() == Qt::TabFocusReason || event->reason() == Qt::BacktabFocusReason) {
+        if (model() && model()->rowCount() > 0 && selectionModel()) {
+            if (!selectionModel()->hasSelection()) {
+                QModelIndex first = model()->index(0, 0);
+                if (first.isValid()) {
+                    selectionModel()->setCurrentIndex(first, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                    setCurrentIndex(first);
+                }
+            }
+
+            // ALWAYS scroll to the current index if we have one
+            if (currentIndex().isValid()) {
+                scrollTo(currentIndex());
+            }
+        }
     }
 }
 

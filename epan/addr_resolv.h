@@ -16,10 +16,7 @@
  * If you need the buffer to remain for a longer scope than packet lifetime
  * you must copy the content to an wmem_file_scope() buffer.
  */
-
-#ifndef __RESOLV_H__
-#define __RESOLV_H__
-
+#pragma once
 #include <epan/address.h>
 #include <epan/tvbuff.h>
 #include <wsutil/inet_cidr.h>
@@ -32,7 +29,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 #ifndef MAXNAMELEN
-#define MAXNAMELEN  	64	/* max name length (most names: DNS labels, services, eth) */
+#define MAXNAMELEN  	64	    /* max name length (most names: DNS labels, services, eth) */
 #endif
 
 #ifndef MAXVLANNAMELEN
@@ -80,14 +77,19 @@ typedef struct hashwka hashwka_t;
 struct hashmanuf;
 typedef struct hashmanuf hashmanuf_t;
 
+/**
+ * @brief Composite key used to look up a service name by port number and transport protocol type.
+ */
 typedef struct _serv_port_key {
-    uint16_t          port;
-    port_type         type;
+    uint16_t  port; /**< Transport layer port number */
+    port_type type; /**< Transport protocol type (e.g. TCP, UDP, SCTP) identifying the port's namespace */
 } serv_port_key_t;
 
-/* Used for manually edited DNS resolved names */
+/**
+ * @brief Stores a manually edited DNS-resolved hostname for an address.
+ */
 typedef struct _resolved_name {
-    char             name[MAXDNSNAMELEN];
+    char name[MAXDNSNAMELEN]; /**< Null-terminated hostname string, up to MAXDNSNAMELEN bytes including the terminator */
 } resolved_name_t;
 
 /*
@@ -106,13 +108,6 @@ typedef struct _resolved_name {
  * Flag controlling what names to resolve.
  */
 WS_DLL_PUBLIC e_addr_resolve gbl_resolv_flags;
-
-/* global variables */
-
-extern char *g_ethers_path;
-extern char *g_ipxnets_path;
-extern char *g_pethers_path;
-extern char *g_pipxnets_path;
 
 /* Functions in addr_resolv.c */
 
@@ -305,7 +300,22 @@ WS_DLL_PUBLIC int port_with_resolution_to_str_buf(char *buf, unsigned long buf_s
 
 /* Setup name resolution preferences */
 struct pref_module;
+
+/**
+ * @brief Disable all forms of name resolution.
+ *
+ * Sets all relevant global resolution flags (`gbl_resolv_flags`) to `false`,
+ * effectively disabling hostname, service name, and other symbolic resolution
+ * features. This is typically used to improve performance or enforce numeric-only
+ * addressing in network captures.
+ *
+ * @param nameres Pointer to the preferences module for name resolution, used to register preferences.
+ */
 extern void addr_resolve_pref_init(struct pref_module *nameres);
+
+/**
+ * @brief Apply name resolution preferences.
+ */
 extern void addr_resolve_pref_apply(void);
 
 /**
@@ -971,7 +981,7 @@ unsigned ipv6_oat_hash(const void *key);
  *
  * @param v1 Pointer to the first IPv6 address.
  * @param v2 Pointer to the second IPv6 address.
- * @return TRUE if equal, FALSE otherwise.
+ * @return true if equal, false otherwise.
  */
 WS_DLL_LOCAL
 gboolean ipv6_equal(const void *v1, const void *v2);
@@ -997,5 +1007,3 @@ WS_DLL_PUBLIC const char *tac_name_lookup(const unsigned addr);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-
-#endif /* __RESOLV_H__ */

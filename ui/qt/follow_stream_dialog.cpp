@@ -16,16 +16,11 @@
 #include "epan/follow.h"
 #include "epan/prefs.h"
 #include "epan/addr_resolv.h"
-#include "epan/charsets.h"
-#include "epan/epan_dissect.h"
-#include "epan/tap.h"
 
-#include "ui/simple_dialog.h"
 #include <ui/recent.h>
 #include <wsutil/utf8_entities.h>
 #include <wsutil/ws_assert.h>
 
-#include "wsutil/file_util.h"
 #include "wsutil/str_util.h"
 #include "wsutil/report_message.h"
 
@@ -33,6 +28,7 @@
 
 #include <ui/qt/utils/color_utils.h>
 #include <ui/qt/utils/qt_ui_utils.h>
+#include <ui/qt/utils/theme_manager.h>
 
 #include "progress_frame.h"
 
@@ -155,6 +151,16 @@ FollowStreamDialog::FollowStreamDialog(QWidget &parent, CaptureFile &cf, int pro
 
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &FollowStreamDialog::buttonBoxRejected);
 
+    // QTextDocument freezes each span's QTextCharFormat at insert time, so a
+    // theme flip cannot retint already-rendered text.  Rebuild the stream
+    // (and the hint, which also embeds theme colors).  No-op until a stream
+    // has actually been followed — readStream short-circuits if follow_info_
+    // is empty.
+    connect(ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() {
+        readStream();
+        fillHintLabel();
+    });
+
     fillHintLabel();
 }
 
@@ -194,12 +200,16 @@ QString FollowStreamDialog::labelHint(int pkt)
             hint = tr("Packet %1. ").arg(pkt);
         }
 
+        ThemeManager *tm = ThemeManager::instance();
+        QColor clientBg = tm->color(ThemeManager::ConversationClient);
+        QColor clientFg = tm->color(ThemeManager::ConversationClientText);
+        QColor serverBg = tm->color(ThemeManager::ConversationServer);
+        QColor serverFg = tm->color(ThemeManager::ConversationServerText);
+
         hint += tr("%Ln <span style=\"color: %1; background-color:%2\">client</span> pkt(s), ", "", client_packet_count_)
-                .arg(ColorUtils::fromColorT(prefs.st_client_fg).name(),
-                ColorUtils::fromColorT(prefs.st_client_bg).name())
+                .arg(clientFg.name(), clientBg.name())
                 + tr("%Ln <span style=\"color: %1; background-color:%2\">server</span> pkt(s), ", "", server_packet_count_)
-                .arg(ColorUtils::fromColorT(prefs.st_server_fg).name(),
-                ColorUtils::fromColorT(prefs.st_server_bg).name())
+                .arg(serverFg.name(), serverBg.name())
                 + tr("%Ln turn(s).", "", turns_);
 
     return hint;
@@ -665,11 +675,7 @@ void FollowStreamDialog::keyPressEvent(QKeyEvent *event)
 // Causes buffer to detach/deep copy *only* if a character has to be
 // replaced.
 static inline void sanitize_buffer(QByteArray &buffer, size_t nchars) {
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    for (int i = 0; i < (int)nchars; i++) {
-#else
     for (qsizetype i = 0; i < (qsizetype)nchars; i++) {
-#endif
         if (buffer.at(i) == '\n' || buffer.at(i) == '\r' || buffer.at(i) == '\t')
             continue;
         if (! g_ascii_isprint((unsigned char)buffer.at(i))) {
@@ -1063,6 +1069,7 @@ bool FollowStreamDialog::follow(QString previous_filter, bool use_stream_index, 
         filter_out_filter_ = QStringLiteral("!(%1)").arg(follow_filter);
     }
 
+    follow_info_.stream_id = stream_num;
     follow_info_.substream_id = sub_stream_num;
 
     /* data will be passed via tap callback*/
@@ -1103,6 +1110,8 @@ bool FollowStreamDialog::follow(QString previous_filter, bool use_stream_index, 
         ui->subStreamNumberSpinBox->setVisible(true);
         ui->subStreamNumberLabel->setVisible(true);
     } else {
+        follow_info_.substream_id = SUBSTREAM_UNUSED;
+
         /* disable substream spin box for protocols without substreams */
         ui->subStreamNumberSpinBox->blockSignals(true);
         ui->subStreamNumberSpinBox->setEnabled(false);

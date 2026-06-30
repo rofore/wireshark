@@ -3839,6 +3839,12 @@ dissect_gsm_map_Ext_TeleserviceCode(bool implicit_tag _U_, tvbuff_t *tvb _U_, un
 
 /* --- Module MAP-ExtensionDataTypes --- --- ---                              */
 
+/*--- Cyclic dependencies ---*/
+
+/* PrivateExtension/extType -> PrivateExtension/extType */
+static unsigned dissect_gsm_map_T_extType(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
+
+
 
 
 static unsigned
@@ -3855,6 +3861,8 @@ dissect_gsm_map_T_extId(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offse
 
 static unsigned
 dissect_gsm_map_T_extType(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  // PrivateExtension/extType -> PrivateExtension/extType
+  increment_dissection_depth_by_n(actx->pinfo, 1);
   proto_tree *ext_tree;
   ext_tree = proto_tree_add_subtree(tree, tvb, offset, -1, ett_gsm_map_extension_data, NULL, "Extension Data");
   if (actx->external.direct_ref_present){
@@ -3865,6 +3873,7 @@ dissect_gsm_map_T_extType(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned off
   }
 
 
+  decrement_dissection_depth_by_n(actx->pinfo, 1);
   return offset;
 }
 
@@ -12096,8 +12105,7 @@ dissect_gsm_map_ms_PDP_Type(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned o
 
   if (!parameter_tvb)
     return offset;
-  proto_tree_add_item(tree, hf_gsm_map_pdp_type_org, parameter_tvb, 0,1,ENC_BIG_ENDIAN);
-  pdp_type_org = tvb_get_uint8(parameter_tvb,1);
+  proto_tree_add_item_ret_uint8(tree, hf_gsm_map_pdp_type_org, parameter_tvb, 0,1,ENC_BIG_ENDIAN, &pdp_type_org);
   switch (pdp_type_org){
     case 0: /* ETSI */
       proto_tree_add_item(tree, hf_gsm_map_etsi_pdp_type_number, parameter_tvb, 0,1,ENC_BIG_ENDIAN);

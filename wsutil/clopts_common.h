@@ -112,14 +112,6 @@ get_positive_int64(const char* string, const char* name, int64_t* number);
 WS_DLL_PUBLIC bool
 get_uint32(const char *string, const char *name, uint32_t* number);
 
-WS_DEPRECATED_X("Use get_uint32 instead")
-static inline uint32_t
-get_guint32(const char *string, const char *name) {
-    uint32_t number = 0;
-    get_uint32(string, name, &number);
-    return number;
-}
-
 /**
  * @brief Parses a string as a non-zero unsigned 32-bit integer.
  *
@@ -134,14 +126,6 @@ get_guint32(const char *string, const char *name) {
  */
 WS_DLL_PUBLIC bool
 get_nonzero_uint32(const char *string, const char *name, uint32_t* number);
-
-WS_DEPRECATED_X("Use get_nonzero_uint32 instead")
-static inline uint32_t
-get_nonzero_guint32(const char *string, const char *name) {
-    uint32_t number = 0;
-    get_nonzero_uint32(string, name, &number);
-    return number;
-}
 
 /**
  * @brief Parses a string as an unsigned 64-bit integer.

@@ -8,7 +8,7 @@
 #
 
 if(EXTCAP_ANDROIDDUMP_LIBPCAP)
-	set(ANDROIDDUMP_USE_LIBPCAP 1)
+	set(ANDROIDDUMP_USE_LIBPCAP 1 PARENT_SCOPE)
 endif()
 
 if(LIBSSH_FOUND)
@@ -91,8 +91,12 @@ macro(set_extlog_executable_properties _executable)
 	set_common_executable_properties(${_executable} Stratoshark)
 endmacro()
 
+add_compile_options("${WERROR_COMMON_FLAGS}")
+
 add_custom_target(extcaps)
 
+# XXX - Should this be a shared library, and the headers installed as public
+# headers, for development of extcaps outside the source tree?
 add_library(extcap-base OBJECT extcap-base.c)
 if(LIBSSH_FOUND)
 	add_library(ssh-base OBJECT ssh-base.c)
@@ -106,10 +110,8 @@ if(BUILD_androiddump)
 	if(EXTCAP_ANDROIDDUMP_LIBPCAP)
 		if(HAVE_LIBPCAP)
 			set(androiddump_LIBS
-				ui
-				wiretap
 				wsutil
-				${WIN_WS2_32_LIBRARY}
+				${SOCKET_LIBRARY}
 				$<$<BOOL:${PCAP_FOUND}>:pcap::pcap>
 			)
 		else()
@@ -121,7 +123,7 @@ if(BUILD_androiddump)
 			wiretap
 			wsutil
 			${CMAKE_DL_LIBS}
-			${WIN_WS2_32_LIBRARY}
+			${SOCKET_LIBRARY}
 		)
 	endif()
 	set(androiddump_FILES
@@ -143,7 +145,7 @@ if(BUILD_sshdump AND LIBSSH_FOUND)
 	set(sshdump_LIBS
 		wsutil
 		${CMAKE_DL_LIBS}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 		${LIBSSH_LIBRARIES}
 	)
 	set(sshdump_FILES
@@ -170,7 +172,7 @@ if(BUILD_ciscodump AND LIBSSH_FOUND)
 		writecap
 		wsutil
 		${CMAKE_DL_LIBS}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 		${LIBSSH_LIBRARIES}
 	)
 	set(ciscodump_FILES
@@ -197,7 +199,7 @@ if(BUILD_wifidump AND LIBSSH_FOUND)
 		writecap
 		wsutil
 		${CMAKE_DL_LIBS}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 		${LIBSSH_LIBRARIES}
 	)
 	set(wifidump_FILES
@@ -247,8 +249,7 @@ if(BUILD_udpdump)
 	set(udpdump_LIBS
 		wsutil
 		${CMAKE_DL_LIBS}
-		${WIN_WS2_32_LIBRARY}
-		wsutil
+		${SOCKET_LIBRARY}
 		writecap
 	)
 	set(udpdump_FILES
@@ -272,7 +273,7 @@ if(BUILD_randpktdump)
 		wiretap
 		wsutil
 		${CMAKE_DL_LIBS}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 	)
 	set(randpktdump_FILES
 		$<TARGET_OBJECTS:cli_main>
@@ -298,7 +299,7 @@ if(BUILD_etwdump AND WIN32)
 		wevtapi
 		rpcrt4
 		${CMAKE_DL_LIBS}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 	)
 	set(etwdump_FILES
 		$<TARGET_OBJECTS:cli_main>
@@ -358,8 +359,6 @@ if(BUILD_dumpcalls AND SINSP_FOUND)
 	set_extlog_executable_properties(dumpcalls)
 	target_link_libraries(dumpcalls ${dumpcalls_LIBS})
 	target_include_directories(dumpcalls SYSTEM PRIVATE ${SINSP_INCLUDE_DIRS})
-	# libsinsp requires C++ 17
-	set_target_properties(dumpcalls PROPERTIES CXX_STANDARD 17)
 	if(WIN32)
 		# libsinsp/dumper.h includes libscap/scap_savefile_api.h, which includes
 		# libscap/scap_zlib.h.
@@ -387,8 +386,6 @@ if(BUILD_falcodump AND SINSP_FOUND)
 	set_extlog_executable_properties(falcodump)
 	target_link_libraries(falcodump ${falcodump_LIBS})
 	target_include_directories(falcodump SYSTEM PRIVATE ${SINSP_INCLUDE_DIRS})
-	# libsinsp requires C++ 17
-	set_target_properties(falcodump PROPERTIES CXX_STANDARD 17)
 	if(WIN32)
 		# libsinsp/dumper.h includes libscap/scap_savefile_api.h, which includes
 		# libscap/scap_zlib.h.
@@ -402,7 +399,7 @@ if(BUILD_sshdig AND LIBSSH_FOUND)
 	set(sshdig_LIBS
 		wsutil
 		${CMAKE_DL_LIBS}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 		${LIBSSH_LIBRARIES}
 	)
 	set(sshdig_FILES

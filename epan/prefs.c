@@ -33,7 +33,6 @@
 #include <epan/strutil.h>
 #include <epan/column.h>
 #include <epan/decode_as.h>
-#include <ui/capture_opts.h>
 #include <wsutil/file_util.h>
 #include <wsutil/report_message.h>
 #include <wsutil/wslog.h>
@@ -75,7 +74,6 @@ static int find_val_for_string(const char *needle, const enum_val_t *haystack, i
 static char *gpf_path;
 static char *cols_hidden_list;
 static char *cols_hidden_fmt_list;
-static bool gui_theme_is_dark;
 
 e_prefs prefs;
 
@@ -129,13 +127,6 @@ static const enum_val_t gui_update_channel[] = {
     {NULL, NULL, -1}
 };
 
-static const enum_val_t gui_selection_style[] = {
-    {"DEFAULT", "DEFAULT",   COLOR_STYLE_DEFAULT},
-    {"FLAT",    "FLAT",      COLOR_STYLE_FLAT},
-    {"GRADIENT", "GRADIENT", COLOR_STYLE_GRADIENT},
-    {NULL, NULL, -1}
-};
-
 static const enum_val_t gui_packet_list_multi_color_modes[] = {
     {"off",            "Off",               PACKET_LIST_MULTI_COLOR_MODE_OFF},
     {"scrollbar_only", "Scrollbar Only",    PACKET_LIST_MULTI_COLOR_MODE_SCROLLBAR_ONLY},
@@ -148,13 +139,6 @@ static const enum_val_t gui_packet_list_multi_color_separators[] = {
     {"vertical",  "Vertical",  PACKET_LIST_MULTI_COLOR_SEPARATOR_VERTICAL},
     {"diagonal",  "Diagonal",  PACKET_LIST_MULTI_COLOR_SEPARATOR_DIAGONAL},
     {"bubble",    "Bubble",    PACKET_LIST_MULTI_COLOR_SEPARATOR_BUBBLE},
-    {NULL, NULL, -1}
-};
-
-static const enum_val_t gui_color_scheme[] = {
-    {"system",  "System Default",   COLOR_SCHEME_DEFAULT},
-    {"light",   "Light Mode",       COLOR_SCHEME_LIGHT},
-    {"dark",    "Dark Mode",        COLOR_SCHEME_DARK},
     {NULL, NULL, -1}
 };
 
@@ -437,6 +421,11 @@ prefs_cleanup(void)
     /* Clean the uats */
     uat_cleanup();
 
+    /*
+     * Unload any loaded MIBs.
+     */
+    oids_cleanup();
+
     /* Shut down mmdbresolve */
     maxmind_db_pref_cleanup();
 
@@ -445,11 +434,6 @@ prefs_cleanup(void)
     gpf_path = NULL;
     g_regex_unref(prefs_regex);
     prefs_regex = NULL;
-}
-
-void prefs_set_gui_theme_is_dark(bool is_dark)
-{
-    gui_theme_is_dark = is_dark;
 }
 
 static void
@@ -799,7 +783,7 @@ prefs_register_protocol_obsolete(int id)
  *
  * "description" is a longer human-readable description of the tap.
  */
-module_t *stats_module;
+static module_t *stats_module;
 
 module_t *
 prefs_register_stat(const char *name, const char *title,
@@ -819,7 +803,7 @@ prefs_register_stat(const char *name, const char *title,
  *
  * "description" is a longer human-readable description of the codec.
  */
-module_t *codecs_module;
+static module_t *codecs_module;
 
 module_t *
 prefs_register_codec(const char *name, const char *title,
@@ -3387,50 +3371,12 @@ prefs_register_modules(void)
     unsigned gui_color_effect_flags = gui_effect_flags | PREF_EFFECT_GUI_COLOR;
     prefs_set_module_effect_flags(gui_color_module, gui_color_effect_flags);
 
-    prefs_register_enum_preference(gui_color_module, "color_scheme", "Color scheme", "Color scheme",
-        &prefs.gui_color_scheme, gui_color_scheme, false);
-
-    prefs_register_color_preference(gui_color_module, "active_frame.fg", "Foreground color for an active selected item",
-        "Foreground color for an active selected item", &prefs.gui_active_fg);
-
-    prefs_register_color_preference(gui_color_module, "active_frame.bg", "Background color for an active selected item",
-        "Background color for an active selected item", &prefs.gui_active_bg);
-
-    prefs_register_enum_preference(gui_color_module, "active_frame.style", "Color style for an active selected item",
-        "Color style for an active selected item", &prefs.gui_active_style, gui_selection_style, false);
-
-    prefs_register_color_preference(gui_color_module, "inactive_frame.fg", "Foreground color for an inactive selected item",
-        "Foreground color for an inactive selected item", &prefs.gui_inactive_fg);
-
-    prefs_register_color_preference(gui_color_module, "inactive_frame.bg", "Background color for an inactive selected item",
-        "Background color for an inactive selected item", &prefs.gui_inactive_bg);
-
-    prefs_register_enum_preference(gui_color_module, "inactive_frame.style", "Color style for an inactive selected item",
-        "Color style for an inactive selected item", &prefs.gui_inactive_style, gui_selection_style, false);
-
-    prefs_register_color_preference(gui_color_module, "marked_frame.fg", "Color preferences for a marked frame",
-        "Color preferences for a marked frame", &prefs.gui_marked_fg);
-
-    prefs_register_color_preference(gui_color_module, "marked_frame.bg", "Color preferences for a marked frame",
-        "Color preferences for a marked frame", &prefs.gui_marked_bg);
-
-    prefs_register_color_preference(gui_color_module, "ignored_frame.fg", "Color preferences for a ignored frame",
-        "Color preferences for a ignored frame", &prefs.gui_ignored_fg);
-
-    prefs_register_color_preference(gui_color_module, "ignored_frame.bg", "Color preferences for a ignored frame",
-        "Color preferences for a ignored frame", &prefs.gui_ignored_bg);
-
-    prefs_register_color_preference(gui_color_module, "stream.client.fg", "TCP stream window color preference",
-        "TCP stream window color preference", &prefs.st_client_fg);
-
-    prefs_register_color_preference(gui_color_module, "stream.client.bg", "TCP stream window color preference",
-        "TCP stream window color preference", &prefs.st_client_bg);
-
-    prefs_register_color_preference(gui_color_module, "stream.server.fg", "TCP stream window color preference",
-        "TCP stream window color preference", &prefs.st_server_fg);
-
-    prefs_register_color_preference(gui_color_module, "stream.server.bg", "TCP stream window color preference",
-        "TCP stream window color preference", &prefs.st_server_bg);
+    /* The appearance mode moved to global recent_common storage
+       (recent.gui_color_scheme) so it no longer flips when switching
+       profiles.  Keep the old per-profile key registered as obsolete so
+       existing preferences files load without an "unknown preference"
+       warning. */
+    prefs_register_obsolete_preference(gui_color_module, "color_scheme");
 
     custom_cbs.free_cb = free_string_like_preference;
     custom_cbs.reset_cb = reset_string_like_preference;
@@ -3453,21 +3399,6 @@ prefs_register_modules(void)
     register_string_like_preference(gui_column_module, "colorized_frame.bg", "Colorized Background",
         "Filter Colorized Background",
         &prefs.gui_colorized_bg, PREF_CUSTOM, &custom_cbs, true);
-
-    prefs_register_color_preference(gui_color_module, "color_filter_fg.valid", "Valid color filter foreground",
-        "Valid color filter foreground", &prefs.gui_filter_valid_fg);
-    prefs_register_color_preference(gui_color_module, "color_filter_bg.valid", "Valid color filter background",
-        "Valid color filter background", &prefs.gui_filter_valid_bg);
-
-    prefs_register_color_preference(gui_color_module, "color_filter_fg.invalid", "Invalid color filter foreground",
-        "Invalid color filter foreground", &prefs.gui_filter_invalid_fg);
-    prefs_register_color_preference(gui_color_module, "color_filter_bg.invalid", "Invalid color filter background",
-        "Invalid color filter background", &prefs.gui_filter_invalid_bg);
-
-    prefs_register_color_preference(gui_color_module, "color_filter_fg.deprecated", "Deprecated color filter foreground",
-        "Deprecated color filter foreground", &prefs.gui_filter_deprecated_fg);
-    prefs_register_color_preference(gui_color_module, "color_filter_bg.deprecated", "Deprecated color filter background",
-        "Deprecated color filter background", &prefs.gui_filter_deprecated_bg);
 
     prefs_register_enum_preference(gui_module, "fileopen.style",
                        "Where to start the File Open dialog box",
@@ -3950,9 +3881,6 @@ prefs_register_modules(void)
                                    10,
                                    &prefs.capture_update_interval);
 
-    prefs_register_bool_preference(capture_module, "enable_aggregation_view", "Enable aggregation view",
-        "Enable Aggregation View for real-time capturing", &prefs.enable_aggregation);
-
     prefs_register_bool_preference(capture_module, "no_interface_load", "Don't load interfaces on startup",
         "Don't automatically load capture interfaces on startup", &prefs.capture_no_interface_load);
 
@@ -4376,90 +4304,10 @@ prefs_set_global_defaults(wmem_allocator_t* pref_scope, const char** col_fmt, in
     /* We try to find the best font in the Qt code */
     wmem_free(pref_scope, prefs.gui_font_name);
     prefs.gui_font_name              = wmem_strdup(pref_scope, "");
-    prefs.gui_active_fg.red          =         0;
-    prefs.gui_active_fg.green        =         0;
-    prefs.gui_active_fg.blue         =         0;
-    prefs.gui_active_bg.red          =     52223;
-    prefs.gui_active_bg.green        =     59647;
-    prefs.gui_active_bg.blue         =     65535;
-    prefs.gui_active_style           = COLOR_STYLE_DEFAULT;
-    prefs.gui_inactive_fg.red        =         0;
-    prefs.gui_inactive_fg.green      =         0;
-    prefs.gui_inactive_fg.blue       =         0;
-    prefs.gui_inactive_bg.red        =     61439;
-    prefs.gui_inactive_bg.green      =     61439;
-    prefs.gui_inactive_bg.blue       =     61439;
-    prefs.gui_inactive_style         = COLOR_STYLE_DEFAULT;
-    prefs.gui_marked_fg.red          =     65535;
-    prefs.gui_marked_fg.green        =     65535;
-    prefs.gui_marked_fg.blue         =     65535;
-    prefs.gui_marked_bg.red          =         0;
-    prefs.gui_marked_bg.green        =      8224;
-    prefs.gui_marked_bg.blue         =     10794;
-    prefs.gui_ignored_fg.red         =     32767;
-    prefs.gui_ignored_fg.green       =     32767;
-    prefs.gui_ignored_fg.blue        =     32767;
-    prefs.gui_ignored_bg.red         =     65535;
-    prefs.gui_ignored_bg.green       =     65535;
-    prefs.gui_ignored_bg.blue        =     65535;
     wmem_free(pref_scope, prefs.gui_colorized_fg);
     prefs.gui_colorized_fg           = wmem_strdup(pref_scope, "000000,000000,000000,000000,000000,000000,000000,000000,000000,000000");
     wmem_free(pref_scope, prefs.gui_colorized_bg);
     prefs.gui_colorized_bg           = wmem_strdup(pref_scope, "ffc0c0,ffc0ff,e0c0e0,c0c0ff,c0e0e0,c0ffff,c0ffc0,ffffc0,e0e0c0,e0e0e0");
-    prefs.st_client_fg.red           = 32767;
-    prefs.st_client_fg.green         =     0;
-    prefs.st_client_fg.blue          =     0;
-    prefs.st_client_bg.red           = 64507;
-    prefs.st_client_bg.green         = 60909;
-    prefs.st_client_bg.blue          = 60909;
-    prefs.st_server_fg.red           =     0;
-    prefs.st_server_fg.green         =     0;
-    prefs.st_server_fg.blue          = 32767;
-    prefs.st_server_bg.red           = 60909;
-    prefs.st_server_bg.green         = 60909;
-    prefs.st_server_bg.blue          = 64507;
-
-    if (gui_theme_is_dark) {
-        // Green, red and yellow with HSV V = 84
-        prefs.gui_filter_valid_bg.red         = 0x0000; /* dark green */
-        prefs.gui_filter_valid_bg.green       = 0x66ff;
-        prefs.gui_filter_valid_bg.blue        = 0x0000;
-        prefs.gui_filter_valid_fg.red         = 0xFFFF;
-        prefs.gui_filter_valid_fg.green       = 0xFFFF;
-        prefs.gui_filter_valid_fg.blue        = 0xFFFF;
-        prefs.gui_filter_invalid_bg.red       = 0x66FF; /* dark red */
-        prefs.gui_filter_invalid_bg.green     = 0x0000;
-        prefs.gui_filter_invalid_bg.blue      = 0x0000;
-        prefs.gui_filter_invalid_fg.red       = 0xFFFF;
-        prefs.gui_filter_invalid_fg.green     = 0xFFFF;
-        prefs.gui_filter_invalid_fg.blue      = 0xFFFF;
-        prefs.gui_filter_deprecated_bg.red    = 0x66FF; /* dark yellow / olive */
-        prefs.gui_filter_deprecated_bg.green  = 0x66FF;
-        prefs.gui_filter_deprecated_bg.blue   = 0x0000;
-        prefs.gui_filter_deprecated_fg.red    = 0xFFFF;
-        prefs.gui_filter_deprecated_fg.green  = 0xFFFF;
-        prefs.gui_filter_deprecated_fg.blue   = 0xFFFF;
-    } else {
-        // Green, red and yellow with HSV V = 20
-        prefs.gui_filter_valid_bg.red         = 0xAFFF; /* light green */
-        prefs.gui_filter_valid_bg.green       = 0xFFFF;
-        prefs.gui_filter_valid_bg.blue        = 0xAFFF;
-        prefs.gui_filter_valid_fg.red         = 0x0000;
-        prefs.gui_filter_valid_fg.green       = 0x0000;
-        prefs.gui_filter_valid_fg.blue        = 0x0000;
-        prefs.gui_filter_invalid_bg.red       = 0xFFFF; /* light red */
-        prefs.gui_filter_invalid_bg.green     = 0xAFFF;
-        prefs.gui_filter_invalid_bg.blue      = 0xAFFF;
-        prefs.gui_filter_invalid_fg.red       = 0x0000;
-        prefs.gui_filter_invalid_fg.green     = 0x0000;
-        prefs.gui_filter_invalid_fg.blue      = 0x0000;
-        prefs.gui_filter_deprecated_bg.red    = 0xFFFF; /* light yellow */
-        prefs.gui_filter_deprecated_bg.green  = 0xFFFF;
-        prefs.gui_filter_deprecated_bg.blue   = 0xAFFF;
-        prefs.gui_filter_deprecated_fg.red    = 0x0000;
-        prefs.gui_filter_deprecated_fg.green  = 0x0000;
-        prefs.gui_filter_deprecated_fg.blue   = 0x0000;
-    }
 
     prefs.gui_geometry_save_position = true;
     prefs.gui_geometry_save_size     = true;
@@ -4540,7 +4388,6 @@ prefs_set_global_defaults(wmem_allocator_t* pref_scope, const char** col_fmt, in
     prefs.capture_update_interval       = DEFAULT_UPDATE_INTERVAL;
     prefs.capture_no_extcap             = false;
     prefs.capture_show_info             = false;
-    prefs.enable_aggregation            = false;
 
     if (!prefs.capture_columns) {
         /* First time through */
@@ -4705,7 +4552,8 @@ prefs_reset(const char* app_env_var_prefix, const char** col_fmt, int num_cols)
     /*
      * Unload any loaded MIBs.
      */
-    oids_cleanup();
+    /* XXX - oids_cleanup not tested/supported at non-shutdown yet */
+    //oids_cleanup();
 
     /*
      * Reload all UAT preferences.
@@ -4812,7 +4660,8 @@ read_prefs(const char* app_env_var_prefix)
     FILE        *pf;
 
     /* clean up libsmi structures before reading prefs */
-    oids_cleanup();
+    /* XXX - oids_cleanup not tested/supported at non-shutdown yet */
+    // oids_cleanup();
 
 #ifdef _WIN32
     read_registry();

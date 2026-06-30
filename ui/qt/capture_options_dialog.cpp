@@ -12,12 +12,17 @@
 #include <wireshark.h>
 
 #include "capture_options_dialog.h"
-#include <ui/qt/widgets/capture_filter_combo.h>
+#include <ui/qt/widgets/capture_filter_entry.h>
+#include <ui/qt/widgets/filter_edit.h>
+#include <ui/qt/models/capture_filter_validator.h>
 #include <ui_capture_options_dialog.h>
 #include "compiled_filter_output.h"
 #include "manage_interfaces_dialog.h"
 
 #include "main_application.h"
+#include <ui/qt/main_window.h>
+#include <ui/qt/manager/interface_list_manager.h>
+#include <ui/qt/manager/interface_statistics.h>
 
 #include "extcap.h"
 
@@ -25,7 +30,6 @@
 
 #include <QAbstractItemModel>
 #include <QMessageBox>
-#include <QTimer>
 
 #include "ringbuffer.h"
 #include "ui/capture_opts.h"
@@ -55,15 +59,12 @@
 // - Set a size hint for item delegates.
 // - Make promiscuous and monitor mode checkboxes.
 // - Fix InterfaceTreeDelegate method names.
-// - You can edit filters via the main CaptureFilterCombo and via each
+// - You can edit filters via the main capture-filter field and via each
 //   individual interface row. We should probably do one or the other.
-// - There might be a point in having the separate combo boxes in the
-//   individual interface row, if their CaptureFilterCombos actually
-//   called recent_get_cfilter_list with the interface name to get the
-//   separate list of recent capture filters for that interface, but
+// - There might be a point in having the separate per-interface row editors,
+//   if they actually called recent_get_cfilter_list with the interface name to
+//   get the separate list of recent capture filters for that interface, but
 //   they don't.
-
-const int stat_update_interval_ = 1000; // ms
 
 /*
  * Symbolic names for column indices.
@@ -98,6 +99,17 @@ static interface_t *find_device_by_if_name(const QString &interface_name)
     return NULL;
 }
 
+/* The window's InterfaceStatistics facade is the single source of truth for the
+ * traffic sparklines (received + dropped series, with gap markers). Returns NULL
+ * before the manager exists. */
+static InterfaceStatistics *interfaceStatistics()
+{
+    MainWindow *mainWindow = mainApp->mainWindow();
+    if (mainWindow && mainWindow->interfaceListManager())
+        return mainWindow->interfaceListManager()->statistics();
+    return NULL;
+}
+
 class InterfaceTreeWidgetItem : public QTreeWidgetItem
 {
 public:
@@ -105,7 +117,10 @@ public:
     bool operator< (const QTreeWidgetItem &other) const;
     QVariant data(int column, int role) const;
     void setData(int column, int role, const QVariant &value);
-    QList<int> points;
+
+    /* Identifies the interface whose history this row renders. Empty for rows
+     * with no live stats (e.g. extcap), which then draw a blank sparkline. */
+    QString stat_name_;
 
     void updateInterfaceColumns(interface_t *device)
     {
@@ -192,9 +207,6 @@ CaptureOptionsDialog::CaptureOptionsDialog(QWidget *parent) :
     loadGeometry();
     setWindowTitle(mainApp->windowTitleString(tr("Capture Options")));
 
-    stat_timer_ = NULL;
-    stat_cache_ = NULL;
-
     ui->buttonBox->button(QDialogButtonBox::Ok)->setText(tr("Start"));
 
     // Start out with the list *not* sorted, so they show up in the order
@@ -232,14 +244,14 @@ CaptureOptionsDialog::CaptureOptionsDialog(QWidget *parent) :
     // Changes in interface selections or capture filters should be propagated
     // to the main welcome screen where they will be applied to the global
     // capture options.
-    connect(this, &CaptureOptionsDialog::interfacesChanged, ui->captureFilterComboBox, &CaptureFilterCombo::interfacesChanged);
-    connect(ui->captureFilterComboBox, &CaptureFilterCombo::captureFilterSyntaxChanged, this, &CaptureOptionsDialog::updateWidgets);
-    connect(ui->captureFilterComboBox->lineEdit(), &QLineEdit::textEdited, this, &CaptureOptionsDialog::filterEdited);
-    connect(ui->captureFilterComboBox->lineEdit(), &QLineEdit::textEdited, this, &CaptureOptionsDialog::captureFilterTextEdited);
-    connect(&interface_item_delegate_, &InterfaceTreeDelegate::filterChanged, ui->captureFilterComboBox->lineEdit(), &QLineEdit::setText);
+    connect(this, &CaptureOptionsDialog::interfacesChanged, ui->captureFilterComboBox, &CaptureFilterEntry::recheck);
+    connect(ui->captureFilterComboBox, &CaptureFilterEntry::captureFilterSyntaxChanged, this, &CaptureOptionsDialog::updateWidgets);
+    connect(ui->captureFilterComboBox, &QLineEdit::textEdited, this, &CaptureOptionsDialog::filterEdited);
+    connect(ui->captureFilterComboBox, &QLineEdit::textEdited, this, &CaptureOptionsDialog::captureFilterTextEdited);
+    connect(&interface_item_delegate_, &InterfaceTreeDelegate::filterChanged, ui->captureFilterComboBox, &QLineEdit::setText);
     connect(&interface_item_delegate_, &InterfaceTreeDelegate::filterChanged, this, &CaptureOptionsDialog::captureFilterTextEdited);
     connect(this, &CaptureOptionsDialog::ifsChanged, this, &CaptureOptionsDialog::refreshInterfaceList);
-    connect(mainApp, &MainApplication::localInterfaceListChanged, this, &CaptureOptionsDialog::updateLocalInterfaces);
+    mainApp->whenInitialized(this, [this]() { connectInterfaceListManager(); });
     connect(ui->browseButton, &QPushButton::clicked, this, &CaptureOptionsDialog::browseButtonClicked);
     connect(ui->interfaceTree, &QTreeWidget::itemClicked, this, &CaptureOptionsDialog::itemClicked);
     connect(ui->interfaceTree, &QTreeWidget::itemDoubleClicked, this, &CaptureOptionsDialog::itemDoubleClicked);
@@ -262,13 +274,8 @@ CaptureOptionsDialog::CaptureOptionsDialog(QWidget *parent) :
     ui->MBSpinBox->setMaximum(2000000000);
     ui->stopMBSpinBox->setMaximum(2000000000);
 
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    connect(ui->MBComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CaptureOptionsDialog::MBComboBoxIndexChanged);
-    connect(ui->stopMBComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CaptureOptionsDialog::stopMBComboBoxIndexChanged);
-#else
     connect(ui->MBComboBox, &QComboBox::currentIndexChanged, this, &CaptureOptionsDialog::MBComboBoxIndexChanged);
     connect(ui->stopMBComboBox, &QComboBox::currentIndexChanged, this, &CaptureOptionsDialog::stopMBComboBoxIndexChanged);
-#endif
 
     ui->tabWidget->setCurrentIndex(0);
 
@@ -355,7 +362,7 @@ void CaptureOptionsDialog::filterEdited()
     QList<QTreeWidgetItem*> si = ui->interfaceTree->selectedItems();
 
     foreach (QTreeWidgetItem *ti, si) {
-        ti->setText(col_filter_, ui->captureFilterComboBox->lineEdit()->text());
+        ti->setText(col_filter_, ui->captureFilterComboBox->text());
     }
 
     if (si.count() > 0) {
@@ -366,14 +373,10 @@ void CaptureOptionsDialog::filterEdited()
 
 void CaptureOptionsDialog::updateWidgets()
 {
-    SyntaxLineEdit *sle = qobject_cast<SyntaxLineEdit *>(ui->captureFilterComboBox->lineEdit());
-    if (!sle) {
-        return;
-    }
-
     bool can_capture = false;
 
-    if (ui->interfaceTree->selectedItems().count() > 0 && sle->syntaxState() != SyntaxLineEdit::Invalid) {
+    if (ui->interfaceTree->selectedItems().count() > 0 &&
+        ui->captureFilterComboBox->state() != FilterEdit::SyntaxState::Invalid) {
         can_capture = true;
     }
 
@@ -466,7 +469,7 @@ void CaptureOptionsDialog::interfaceItemChanged(QTreeWidgetItem *item, int colum
                                        device->remote_opts.remote_host_opts.auth_password);
         }
     #endif
-        caps = capture_get_if_capabilities(global_capture_opts.app_name, device->name, monitor_mode, auth_str, NULL, NULL, main_window_update);
+        caps = capture_get_if_capabilities(device->name, monitor_mode, auth_str, NULL, NULL, main_window_update);
         g_free(auth_str);
 
         if (caps != Q_NULLPTR) {
@@ -693,7 +696,7 @@ void CaptureOptionsDialog::on_buttonBox_accepted()
         }
 #endif /* HAVE_LIBPCAP */
 
-        emit setFilterValid(true, ui->captureFilterComboBox->lineEdit()->text());
+        emit setFilterValid(true, ui->captureFilterComboBox->text());
         accept();
     }
 }
@@ -867,8 +870,10 @@ void CaptureOptionsDialog::updateInterfaces(capture_options* capture_opts)
 
             ti->setText(col_interface_, device->display_name);
             ti->setData(col_interface_, Qt::UserRole, QString(device->name));
+            // Non-extcap rows render live traffic from InterfaceStatistics,
+            // keyed by interface name; extcap interfaces have no -S stats.
             if (device->if_info.type != IF_EXTCAP)
-                ti->setData(col_traffic_, Qt::UserRole, QVariant::fromValue(ti->points));
+                ti->stat_name_ = device->name;
 
             if (device->no_addresses > 0) {
                 QString addr_str = tr("%1: %2").arg(device->no_addresses > 1 ? tr("Addresses") : tr("Address")).arg(device->addresses);
@@ -948,13 +953,6 @@ void CaptureOptionsDialog::updateInterfaces(capture_options* capture_opts)
     }
 
     updateWidgets();
-
-    if (!stat_timer_) {
-        updateStatistics();
-        stat_timer_ = new QTimer(this);
-        connect(stat_timer_, &QTimer::timeout, this, &CaptureOptionsDialog::updateStatistics);
-        stat_timer_->start(stat_update_interval_);
-    }
 }
 
 void CaptureOptionsDialog::showEvent(QShowEvent *)
@@ -968,34 +966,35 @@ void CaptureOptionsDialog::refreshInterfaceList()
     emit interfaceListChanged();
 }
 
+void CaptureOptionsDialog::connectInterfaceListManager()
+{
+    MainWindow *mainWindow = mainApp->mainWindow();
+    if (!mainWindow || !mainWindow->interfaceListManager())
+        return;
+
+    InterfaceListManager *manager = mainWindow->interfaceListManager();
+    connect(manager, &InterfaceListManager::interfaceListChanged,
+            this, &CaptureOptionsDialog::updateLocalInterfaces, Qt::UniqueConnection);
+
+    // The facade owns the dumpcap -S stream; the dialog only renders. Repaint
+    // the sparklines whenever it samples or an interface's activity flips.
+    if (InterfaceStatistics *stats = manager->statistics()) {
+        connect(stats, &InterfaceStatistics::statisticsUpdated,
+                this, &CaptureOptionsDialog::redrawStatistics, Qt::UniqueConnection);
+        connect(stats, &InterfaceStatistics::activityChanged,
+                this, &CaptureOptionsDialog::redrawStatistics, Qt::UniqueConnection);
+    }
+}
+
 void CaptureOptionsDialog::updateLocalInterfaces()
 {
     updateInterfaces(&global_capture_opts);
 }
 
-void CaptureOptionsDialog::updateStatistics(void)
+void CaptureOptionsDialog::redrawStatistics()
 {
-    interface_t *device;
-
-    disconnect(ui->interfaceTree, &QTreeWidget::itemChanged, this, &CaptureOptionsDialog::interfaceItemChanged);
-    for (int row = 0; row < ui->interfaceTree->topLevelItemCount(); row++) {
-
-        for (unsigned if_idx = 0; if_idx < global_capture_opts.all_ifaces->len; if_idx++) {
-            QTreeWidgetItem *ti = ui->interfaceTree->topLevelItem(row);
-            if (!ti) {
-                continue;
-            }
-            device = &g_array_index(global_capture_opts.all_ifaces, interface_t, if_idx);
-            QString device_name = ti->text(col_interface_);
-            if (device_name.compare(device->display_name) || device->hidden || device->if_info.type == IF_PIPE) {
-                continue;
-            }
-            QList<int> points = ti->data(col_traffic_, Qt::UserRole).value<QList<int> >();
-            points.append(device->packet_diff);
-            ti->setData(col_traffic_, Qt::UserRole, QVariant::fromValue(points));
-        }
-    }
-    connect(ui->interfaceTree, &QTreeWidget::itemChanged, this, &CaptureOptionsDialog::interfaceItemChanged);
+    // History lives in InterfaceStatistics and is pulled on demand by
+    // InterfaceTreeWidgetItem::data(); a viewport repaint is all that's needed.
     ui->interfaceTree->viewport()->update();
 }
 
@@ -1007,11 +1006,7 @@ void CaptureOptionsDialog::on_compileBPF_clicked()
         QString device_name = ti->data(col_interface_, Qt::UserRole).toString();
         device = getDeviceByName(device_name);
         if (!device) continue;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
         interfaces.emplaceBack(device);
-#else
-        interfaces.append(device);
-#endif
     }
 
     CompiledFilterOutput *cfo = new CompiledFilterOutput(this, interfaces);
@@ -1328,15 +1323,15 @@ bool CaptureOptionsDialog::saveOptionsToPreferences(capture_options* capture_opt
 void CaptureOptionsDialog::updateSelectedFilter()
 {
     // Should match MainWelcome::interfaceSelected.
-    QPair <const QString, bool> sf_pair = CaptureFilterEdit::getSelectedFilter();
+    QPair <const QString, bool> sf_pair = CaptureFilterEntry::getSelectedFilter();
     const QString user_filter = sf_pair.first;
     bool conflict = sf_pair.second;
 
     if (conflict) {
-        ui->captureFilterComboBox->lineEdit()->clear();
+        ui->captureFilterComboBox->clear();
         ui->captureFilterComboBox->setConflict(true);
     } else {
-        ui->captureFilterComboBox->lineEdit()->setText(user_filter);
+        ui->captureFilterComboBox->setText(user_filter);
     }
 }
 
@@ -1396,9 +1391,18 @@ bool InterfaceTreeWidgetItem::operator< (const QTreeWidgetItem &other) const {
 
 QVariant InterfaceTreeWidgetItem::data(int column, int role) const
 {
-    // See setData for the special col_traffic_ treatment.
-    if (column == col_traffic_ && role == Qt::UserRole) {
-        return QVariant::fromValue(points);
+    // The traffic sparkline pulls live history straight from the
+    // InterfaceStatistics facade on read (mirrors InterfaceTreeModel::data):
+    // the received series via Qt::UserRole, the dropped series via
+    // SecondaryPointsRole. Points are surfaced only for active interfaces, so
+    // quiet rows draw a blank sparkline like the welcome page.
+    if (column == col_traffic_ && (role == Qt::UserRole || role == SparkLineDelegate::SecondaryPointsRole)) {
+        InterfaceStatistics *stats = interfaceStatistics();
+        if (stats && !stat_name_.isEmpty() && stats->isActive(stat_name_)) {
+            return QVariant::fromValue(role == Qt::UserRole ? stats->pointsFor(stat_name_)
+                                                            : stats->droppedPointsFor(stat_name_));
+        }
+        return QVariant::fromValue(QList<int>());
     }
 
     if (column == col_snaplen_ && role == Qt::DisplayRole) {
@@ -1413,15 +1417,6 @@ QVariant InterfaceTreeWidgetItem::data(int column, int role) const
 
 void InterfaceTreeWidgetItem::setData(int column, int role, const QVariant &value)
 {
-    // Workaround for closing editors on updates to the points list: normally
-    // QTreeWidgetItem::setData emits dataChanged when the value (list) changes.
-    // We could store a pointer to the list, or just have this hack that does
-    // not emit dataChanged.
-    if (column == col_traffic_ && role == Qt::UserRole) {
-        points = value.value<QList<int> >();
-        return;
-    }
-
     QTreeWidgetItem::setData(column, role, value);
 }
 
@@ -1499,11 +1494,7 @@ QWidget* InterfaceTreeDelegate::createEditor(QWidget *parent, const QStyleOption
             sb->setValue(snap);
             sb->setWrapping(true);
             sb->setSpecialValueText(tr("default"));
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
             connect(sb, &QSpinBox::valueChanged, this, &InterfaceTreeDelegate::snapshotLengthChanged);
-#else
-            connect(sb, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &InterfaceTreeDelegate::snapshotLengthChanged);
-#endif
             w = (QWidget*) sb;
             break;
         }
@@ -1513,20 +1504,18 @@ QWidget* InterfaceTreeDelegate::createEditor(QWidget *parent, const QStyleOption
             sb->setRange(1, WTAP_MAX_PACKET_SIZE_STANDARD);
             sb->setValue(buffer);
             sb->setWrapping(true);
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
             connect(sb, &QSpinBox::valueChanged, this, &InterfaceTreeDelegate::bufferSizeChanged);
-#else
-            connect(sb, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &InterfaceTreeDelegate::bufferSizeChanged);
-#endif
             w = (QWidget*) sb;
             break;
         }
         case col_filter_:
         {
-            // XXX: Should this take the interface name, so that the history
-            // list is taken from the interface-specific recent cfilter list?
-            CaptureFilterCombo *cf = new CaptureFilterCombo(parent, true);
-            connect(cf->lineEdit(), &QLineEdit::textEdited, this, &InterfaceTreeDelegate::filterChanged);
+            // A plain (chrome-less) capture-filter edit: validity tinting via the
+            // capture validator, but none of the bookmark/history in-line actions
+            // the main field has, since this is an inline table-cell editor.
+            FilterEdit *cf = new FilterEdit(parent);
+            cf->setValidator(new CaptureFilterValidator(cf));
+            connect(cf, &QLineEdit::textEdited, this, &InterfaceTreeDelegate::filterChanged);
             w = (QWidget*) cf;
         }
         default:

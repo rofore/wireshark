@@ -36,6 +36,10 @@
 #include <wsutil/ws_pipe.h>
 #include <wsutil/ws_assert.h>
 #include <wsutil/file_compressed.h>
+#include <wsutil/filesystem.h>
+
+#include <epan/prefs.h>
+
 #include <app/application_flavor.h>
 
 #ifdef _WIN32
@@ -49,10 +53,9 @@ static bool capture_opts_output_to_pipe(const char *save_file, bool *is_pipe);
 
 
 void
-capture_opts_init(capture_options *capture_opts, const char* app_name, GList *(*get_iface_list)(int *, char **))
+capture_opts_init(capture_options *capture_opts, GList *(*get_iface_list)(int *, char **))
 {
     capture_opts->get_iface_list                  = get_iface_list;
-    capture_opts->app_name                        = app_name;
     capture_opts->ifaces                          = g_array_new(FALSE, FALSE, sizeof(interface_options));
     capture_opts->all_ifaces                      = g_array_new(FALSE, FALSE, sizeof(interface_t));
     capture_opts->num_selected                    = 0;
@@ -238,7 +241,6 @@ capture_opts_log(const char *log_domain, enum ws_log_level log_level, capture_op
         ws_log(log_domain, log_level, "Timestamp type [%02d] : %s", i, interface_opts->timestamp_type);
     }
 
-    ws_log(log_domain, log_level, "Application name  : %s", capture_opts->app_name ? capture_opts->app_name : "(unspecified)");
     ws_log(log_domain, log_level, "Interface name[df]  : %s", capture_opts->default_options.name ? capture_opts->default_options.name : "(unspecified)");
     ws_log(log_domain, log_level, "Interface Descr[df] : %s", capture_opts->default_options.descr ? capture_opts->default_options.descr : "(unspecified)");
     ws_log(log_domain, log_level, "Interface Hardware Descr[df] : %s", capture_opts->default_options.hardware ? capture_opts->default_options.hardware : "(unspecified)");
@@ -1404,33 +1406,9 @@ capture_opts_default_iface_if_necessary(capture_options *capture_opts,
     return capture_opts_add_iface_opt(capture_opts, "1");
 }
 
-#ifndef S_IFIFO
-#define S_IFIFO _S_IFIFO
-#endif
-#ifndef S_ISFIFO
-#define S_ISFIFO(mode)  (((mode) & S_IFMT) == S_IFIFO)
-#endif
-
-/* copied from filesystem.c */
-static int
-capture_opts_test_for_fifo(const char *path)
-{
-    ws_statb64 statb;
-
-    if (ws_stat64(path, &statb) < 0)
-        return errno;
-
-    if (S_ISFIFO(statb.st_mode))
-        return ESPIPE;
-    else
-        return 0;
-}
-
 static bool
 capture_opts_output_to_pipe(const char *save_file, bool *is_pipe)
 {
-    int err;
-
     *is_pipe = false;
 
     if (save_file != NULL) {
@@ -1443,8 +1421,19 @@ capture_opts_output_to_pipe(const char *save_file, bool *is_pipe)
                Least Astonishment. */
             *is_pipe = true;
         } else {
+#ifdef _WIN32
+            /* On Windows, check to see if the name is in the reserved namespace
+             * for Named Pipes. Actually calling _stat connects and disconnects
+             * from the named pipe, if it exists, forcing the pipe server to
+             * handle that with DisconnectNamedPipe. If it doesn't exist, we'll
+             * fail appropriately later. Creating an ordinary file is not an
+             * option if the name is in the reserved namespace, unlike UN*X.
+             *
+             * XXX - Should this logic just be in test_for_fifo()? */
+            *is_pipe = win32_is_pipe_name(save_file);
+#else
             /* not writing to stdout, test for a FIFO (aka named pipe) */
-            err = capture_opts_test_for_fifo(save_file);
+            int err = test_for_fifo(save_file);
             switch (err) {
 
             case ENOENT:      /* it doesn't exist, so we'll be creating it,
@@ -1460,6 +1449,7 @@ capture_opts_output_to_pipe(const char *save_file, bool *is_pipe)
                 break;          /* ignore: later attempt to open */
                 /*  will generate a nice msg     */
             }
+#endif /* _WIN32 */
         }
     }
 

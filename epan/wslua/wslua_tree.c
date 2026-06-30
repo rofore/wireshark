@@ -438,7 +438,7 @@ WSLUA_METHOD TreeItem_add_packet_field(lua_State *L) {
     WSLUA_RETURN(3); /* The new child <<lua_class_TreeItem,`TreeItem`>>, the field's extracted value or nil, and offset or nil. */
 }
 
-/* The following is used by TreeItem_add() and TreeItem_le() and can THROW.
+/* The following is used by TreeItem_add() and TreeItem_add_le() and can THROW.
  * It should be called inside a TRY (e.g. WRAP_NON_LUA_EXCEPTIONS) block and
  * THROW_LUA_ERROR should be used insteadof lua[L]_error.
  */
@@ -534,43 +534,85 @@ static int TreeItem_add_item_any(lua_State *L, bool little_endian) {
                 case FT_UINT24:
                 case FT_UINT32:
                 case FT_FRAMENUM:
+                    if (!lua_isnumber(L,1)) {
+                        THROW_LUA_ERROR("Expected number for unsigned integer field");
+                        return 0;
+                    }
                     item = proto_tree_add_uint(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,wslua_checkuint32(L,1));
                     break;
                 case FT_INT8:
                 case FT_INT16:
                 case FT_INT24:
                 case FT_INT32:
+                    if (!lua_isnumber(L,1)) {
+                        THROW_LUA_ERROR("Expected number for integer field");
+                        return 0;
+                    }
                     item = proto_tree_add_int(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,wslua_checkint32(L,1));
                     break;
                 case FT_FLOAT:
+                    if (!lua_isnumber(L,1)) {
+                        THROW_LUA_ERROR("Expected number for FT_FLOAT field");
+                        return 0;
+                    }
                     item = proto_tree_add_float(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,(float)luaL_checknumber(L,1));
                     break;
                 case FT_DOUBLE:
+                    if (!lua_isnumber(L,1)) {
+                        THROW_LUA_ERROR("Expected number for FT_DOUBLE field");
+                        return 0;
+                    }
                     item = proto_tree_add_double(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,(double)luaL_checknumber(L,1));
                     break;
                 case FT_ABSOLUTE_TIME:
                 case FT_RELATIVE_TIME:
+                    if (!isNSTime(L,1)) {
+                        THROW_LUA_ERROR("Expected NSTime for %s field", (type==FT_ABSOLUTE_TIME ? "FT_ABSOLUTE_TIME" : "FT_RELATIVE_TIME"));
+                        return 0;
+                    }
                     item = proto_tree_add_time(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,checkNSTime(L,1));
                     break;
                 case FT_STRING:
                 case FT_STRINGZ:
-                    item = proto_tree_add_string(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,luaL_checkstring(L,1));
+                    {
+                        const char *value = lua_tostring(L, 1);
+                        if (value == NULL) {
+                            THROW_LUA_ERROR("Expected string for %s field", (type==FT_STRING ? "FT_STRING" : "FT_STRINGZ") );
+                            return 0;
+                        }
+                        item = proto_tree_add_string(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,value);
+                    }
                     break;
                 case FT_BYTES:
-                    item = proto_tree_add_bytes(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len, (const uint8_t*) luaL_checkstring(L,1));
+                    {
+                        const char *value = lua_tostring(L, 1);
+                        if (value == NULL) {
+                            THROW_LUA_ERROR("Expected bytes for FT_BYTES field");
+                            return 0;
+                        }
+                        item = proto_tree_add_bytes(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len, (const uint8_t*)value);
+                    }
                     break;
                 case FT_UINT64:
+                    if (!isUInt64(L,1)) {
+                        THROW_LUA_ERROR("Expected UInt64 for FT_UINT64 field");
+                        return 0;
+                    }
                     item = proto_tree_add_uint64(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,checkUInt64(L,1));
                     break;
                 case FT_INT64:
+                    if (!isInt64(L,1)) {
+                        THROW_LUA_ERROR("Expected Int64 for FT_INT64 field");
+                        return 0;
+                    }
                     item = proto_tree_add_int64(tree_item->tree,hfid,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len,checkInt64(L,1));
                     break;
                 case FT_IPv4:
                     {
-                        Address addr = checkAddress(L,1);
+                        Address addr = isAddress(L,1) ? checkAddress(L,1) : NULL;
                         uint32_t addr_value;
 
-                        if (addr->type != AT_IPv4) {
+                        if (addr == NULL || addr->type != AT_IPv4) {
                             THROW_LUA_ERROR("Expected IPv4 address for FT_IPv4 field");
                             return 0;
                         }
@@ -586,8 +628,8 @@ static int TreeItem_add_item_any(lua_State *L, bool little_endian) {
                     break;
                 case FT_IPv6:
                     {
-                        Address addr = checkAddress(L,1);
-                        if (addr->type != AT_IPv6) {
+                        Address addr = isAddress(L,1) ? checkAddress(L,1) : NULL;
+                        if (addr == NULL || addr->type != AT_IPv6) {
                             THROW_LUA_ERROR("Expected IPv6 address for FT_IPv6 field");
                             return 0;
                         }
@@ -597,8 +639,8 @@ static int TreeItem_add_item_any(lua_State *L, bool little_endian) {
                     break;
                 case FT_ETHER:
                     {
-                        Address addr = checkAddress(L,1);
-                        if (addr->type != AT_ETHER) {
+                        Address addr = isAddress(L,1) ? checkAddress(L,1) : NULL;
+                        if (addr == NULL || addr->type != AT_ETHER) {
                             THROW_LUA_ERROR("Expected MAC address for FT_ETHER field");
                             return 0;
                         }
@@ -1065,12 +1107,12 @@ WSLUA_METHOD TreeItem_set_hidden(lua_State *L) {
 /* WSLUA_ATTRIBUTE TreeItem_len RW Set/get <<lua_class_TreeItem,`TreeItem`>>'s length inside tvb, after it has already been created. */
 static int TreeItem_get_len(lua_State* L) {
     TreeItem ti = checkTreeItem(L,1);
-    int len = 0;
+    unsigned len = 0;
 
     /* XXX - this is *NOT* guaranteed to return a correct value! */
     len = proto_item_get_len(ti->item);
 
-    lua_pushinteger(L, len > 0 ? len : 0);
+    lua_pushinteger(L, (lua_Integer)len > 0 ? (lua_Integer)len : 0);
 
     return 1;
 }
@@ -1283,41 +1325,12 @@ WSLUA_METHOD TreeItem_get_child(lua_State *L) {
 /* Structure to hold iterator state with optional field name filters and recursion */
 typedef struct
 {
-    proto_node *current_node;  /* Current node being processed in iteration */
+    proto_node *next_node;     /* Next node to process in iteration */
     char **field_filters;      /* Array of field name strings to match (e.g., "tcp.port") */
-    int num_filters;           /* Number of filter strings in the array */
+    unsigned num_filters;      /* Number of filter strings in the array */
     bool recursive;            /* If true, iterate through entire subtree depth-first */
-    proto_node **stack;        /* Stack for recursive depth-first traversal */
-    int stack_size;            /* Number of nodes currently on the stack */
-    int stack_capacity;        /* Maximum capacity of stack (grows dynamically) */
+    wmem_stack_t *children;    /* For recursive depth-first traversal */
 } TreeItem_iterator_state;
-
-/* Helper function to push a node onto the stack for recursive iteration */
-static void push_node_to_stack(TreeItem_iterator_state *state, proto_node *node) {
-    if (!node)
-        return;
-
-    /* Dynamically expand stack capacity if needed */
-    if (state->stack_size >= state->stack_capacity) {
-        /* Double capacity plus initial buffer to reduce reallocation frequency */
-        state->stack_capacity = state->stack_capacity * 2 + 10;
-        state->stack = (proto_node **)g_realloc(state->stack,
-                                                state->stack_capacity * sizeof(proto_node *));
-    }
-
-    /* Add node to top of stack and increment size */
-    state->stack[state->stack_size++] = node;
-}
-
-/* Helper function to pop a node from the stack */
-static proto_node *pop_node_from_stack(TreeItem_iterator_state *state) {
-    /* Check if stack is empty */
-    if (state->stack_size <= 0)
-        return NULL;
-
-    /* Return top element and decrement stack size */
-    return state->stack[--state->stack_size];
-}
 
 /* Helper function for the children iterator with optional filtering and recursion */
 static int TreeItem_children_iterator(lua_State *L) {
@@ -1326,31 +1339,21 @@ static int TreeItem_children_iterator(lua_State *L) {
 
     /* Continue iterating while we have nodes to process */
     /* Either from current sibling chain OR from recursive stack */
-    while (state->current_node || (state->recursive && state->stack_size > 0)) {
-        proto_node *node = NULL;
+    while (state->next_node || (state->recursive && wmem_stack_count(state->children) > 0)) {
+        proto_node *node = NULL;  /* Node currently being processed */
 
-        if (state->current_node) {
+        if (state->next_node) {
             /* Process next node in current sibling chain */
-            node = state->current_node;
-            state->current_node = node->next;  /* Advance to next sibling for next iteration */
-        } else if (state->recursive && state->stack_size > 0) {
-            /* No more siblings - pop from stack for recursive traversal */
-            node = pop_node_from_stack(state);
-            if (!node)
-                continue;  /* Stack had invalid entry, skip */
-
-            /* Set current_node to first child of popped node */
-            /* This allows iteration through all siblings before going deeper */
-            proto_tree *subtree = proto_item_get_subtree((proto_item *)node);
-            if (subtree) {
-                state->current_node = ((proto_node *)subtree)->first_child;
-            }
+            node = state->next_node;
+            state->next_node = node->next;  /* Advance to next sibling for next iteration */
         }
+        else if (state->recursive && wmem_stack_count(state->children) > 0) {
+            /* pop from children for recursive traversal */
+            node = (proto_node *)wmem_stack_pop(state->children);
+        }
+        ws_assert(node != NULL);
 
-        if (!node)
-            continue;  /* Safety check - should not happen */
-
-        /* IMPORTANT: For recursive mode, always add children to stack regardless of filter match
+        /* IMPORTANT: For recursive mode, always add children regardless of filter match
          * This ensures that even if the current node doesn't match the filter,
          * its children are still searched recursively (depth-first traversal)
          *
@@ -1361,28 +1364,22 @@ static int TreeItem_children_iterator(lua_State *L) {
             proto_tree *subtree = proto_item_get_subtree((proto_item *)node);
             if (subtree) {
                 /* Collect all children first (needed for reverse-order pushing) */
-                proto_node *child = ((proto_node *)subtree)->first_child;
-                proto_node **children = NULL;
-                int child_count = 0;
+                proto_node *child;
+                wmem_stack_t *children = wmem_stack_new(lua_pinfo->pool);
 
                 /* Count and collect all children in forward order */
-                while (child) {
-                    child_count++;
-                    children = (proto_node **)g_realloc(children, child_count * sizeof(proto_node *));
-                    children[child_count - 1] = child;
-                    child = child->next;
+                for (child = ((proto_node *)subtree)->first_child; child != NULL; child = child->next) {
+                    wmem_stack_push(children, (void *)child);
                 }
 
                 /* Push children in REVERSE order to stack */
                 /* This ensures depth-first left-to-right traversal */
                 /* (first child is on top of stack, gets popped first) */
-                for (int i = child_count - 1; i >= 0; i--) {
-                    push_node_to_stack(state, children[i]);
+                while (wmem_stack_count(children) > 0) {
+                    wmem_stack_push(state->children, wmem_stack_pop(children));
                 }
 
-                /* Free temporary children array */
-                if (children)
-                    g_free(children);
+                wmem_destroy_stack(children);
             }
         }
 
@@ -1395,7 +1392,7 @@ static int TreeItem_children_iterator(lua_State *L) {
             /* Ensure node has valid field_info with abbreviated name */
             if (finfo && finfo->hfinfo && finfo->hfinfo->abbrev) {
                 /* Check against all filter strings (OR logic) */
-                for (int i = 0; i < state->num_filters; i++) {
+                for (unsigned i = 0; i < state->num_filters; i++) {
                     if (strcmp(finfo->hfinfo->abbrev, state->field_filters[i]) == 0) {
                         matches = true;
                         break;  /* Found match, no need to check remaining filters */
@@ -1409,7 +1406,7 @@ static int TreeItem_children_iterator(lua_State *L) {
         }
 
         /* Only return matching nodes to Lua, but continue processing regardless
-         * (children were already added to stack above for recursive mode) */
+         * (children were already added above for recursive mode) */
         if (matches) {
             /* Get the subtree for this matching node (may be NULL) */
             proto_tree *child_tree = proto_item_get_subtree((proto_item *)node);
@@ -1428,27 +1425,16 @@ static int TreeItem_children_iterator(lua_State *L) {
     return 0;  /* Return no values - signals end of iteration to Lua */
 }
 
-/* Garbage collector for the iterator state */
-static int TreeItem_iterator_state_gc(lua_State *L) {
-    /* Retrieve the iterator state userdata */
-    TreeItem_iterator_state *state = (TreeItem_iterator_state *)lua_touserdata(L, 1);
+/* Garbage collector for the iterator state.
+ * Currently does nothing but kept for completeness.
+ */
+static int TreeItem_iterator_state_gc(lua_State *L _U_) {
+    //TreeItem_iterator_state *state = (TreeItem_iterator_state *)lua_touserdata(L, 1);
 
-    /* Free the filter strings array */
-    if (state->field_filters) {
-        /* Free each individual filter string */
-        for (int i = 0; i < state->num_filters; i++) {
-            g_free(state->field_filters[i]);
-        }
-        /* Free the array itself */
-        g_free(state->field_filters);
-    }
-
-    /* Free the recursion stack */
-    if (state->stack) {
-        g_free(state->stack);
-    }
-
-    /* Note: The state struct itself is freed by Lua's GC */
+    /* The filter strings array and the recursion structure were allocated from
+     * lua_pinfo->pool and are freed automatically by Wireshark.
+     * The state struct itself is freed by Lua's garbage collection.
+     */
     return 0;
 }
 
@@ -1523,37 +1509,46 @@ WSLUA_METHOD TreeItem_children(lua_State *L) {
 
     /* Retrieve and validate the TreeItem */
     TreeItem ti = checkTreeItem(L, 1);
-    if (!ti)
+    if (!ti) {
+        THROW_LUA_ERROR("not a TreeItem!");
         return 0;
-
-    if (lua_gettop(L) >= WSLUA_OPTARG_TreeItem_children_RECURSIVE &&
-        !lua_isnil(L, WSLUA_OPTARG_TreeItem_children_RECURSIVE) &&
-        !lua_isboolean(L, WSLUA_OPTARG_TreeItem_children_RECURSIVE)) {
-        luaL_error(L, "TreeItem:children() recursive argument must be a boolean");
+    }
+    if (ti->expired) {
+        THROW_LUA_ERROR("expired TreeItem");
         return 0;
     }
 
-    if (lua_gettop(L) >= WSLUA_OPTARG_TreeItem_children_FIELD_FILTER &&
-        !lua_isnil(L, WSLUA_OPTARG_TreeItem_children_FIELD_FILTER)) {
-        int filter_arg = WSLUA_OPTARG_TreeItem_children_FIELD_FILTER;
+    unsigned num_filters = 0;
 
-        if (lua_type(L, filter_arg) != LUA_TSTRING && !lua_istable(L, filter_arg)) {
+    switch (lua_type(L, WSLUA_OPTARG_TreeItem_children_FIELD_FILTER)) {
+        case LUA_TSTRING:   /* Single string */
+            num_filters = 1;
+            break;
+
+        case LUA_TNIL:      /* Explicitly nil */
+        case LUA_TNONE:     /* Not given at all */
+            break;
+
+        case LUA_TTABLE:    /* Table, must be a table of strings */
+            {
+                num_filters = (unsigned)lua_rawlen(L, WSLUA_OPTARG_TreeItem_children_FIELD_FILTER);
+                for (unsigned i = 1; i <= num_filters; i++) {
+                    lua_rawgeti(L, WSLUA_OPTARG_TreeItem_children_FIELD_FILTER, i);
+                    if (lua_type(L, -1) != LUA_TSTRING) {
+                        luaL_error(L, "TreeItem:children() field filter table entries must be strings");
+                        return 0;
+                    }
+                    lua_pop(L, 1);
+                }
+            }
+            break;
+
+        default:
             luaL_error(L, "TreeItem:children() field filter must be a string or table of strings");
             return 0;
-        }
-
-        if (lua_istable(L, filter_arg)) {
-            int table_len = (int)lua_rawlen(L, filter_arg);
-            for (int i = 0; i < table_len; i++) {
-                lua_rawgeti(L, filter_arg, i + 1);
-                if (lua_type(L, -1) != LUA_TSTRING) {
-                    luaL_error(L, "TreeItem:children() field filter table entries must be strings");
-                    return 0;
-                }
-                lua_pop(L, 1);
-            }
-        }
     }
+
+    bool recursive = wslua_toboolean(L, WSLUA_OPTARG_TreeItem_children_RECURSIVE);
 
     proto_node *first_child = NULL;
 
@@ -1567,13 +1562,11 @@ WSLUA_METHOD TreeItem_children(lua_State *L) {
     TreeItem_iterator_state *state = (TreeItem_iterator_state *)lua_newuserdata(L, sizeof(TreeItem_iterator_state));
 
     /* Initialize all state fields to safe defaults */
-    state->current_node = first_child;     /* Start with first child */
-    state->field_filters = NULL;           /* No filters by default */
-    state->num_filters = 0;
-    state->recursive = false;              /* Non-recursive by default */
-    state->stack = NULL;                   /* Stack only allocated if recursive */
-    state->stack_size = 0;
-    state->stack_capacity = 0;
+    state->next_node = first_child;     /* Start with first child */
+    state->num_filters = num_filters;
+    state->field_filters = num_filters > 0 ? wmem_alloc_array(lua_pinfo->pool, char*, num_filters) : NULL;
+    state->recursive = recursive;
+    state->children = recursive ? wmem_stack_new(lua_pinfo->pool) : NULL;
 
     /* Set up garbage collection metatable for the state userdata */
     /* This ensures proper cleanup when iterator is no longer referenced */
@@ -1582,39 +1575,18 @@ WSLUA_METHOD TreeItem_children(lua_State *L) {
     lua_setfield(L, -2, "__gc");          /* Set __gc metamethod */
     lua_setmetatable(L, -2);              /* Apply metatable to userdata */
 
-    /* Check for recursive parameter (argument 3) */
-    if (lua_gettop(L) >= WSLUA_OPTARG_TreeItem_children_RECURSIVE &&
-        !lua_isnil(L, WSLUA_OPTARG_TreeItem_children_RECURSIVE)) {
-        /* Convert Lua boolean to C bool */
-        state->recursive = lua_toboolean(L, WSLUA_OPTARG_TreeItem_children_RECURSIVE);
+    /* Check number of filters we were given */
+    if (num_filters == 1) {
+        /* We got passed a single string */
+        state->field_filters[0] = wmem_strdup(lua_pinfo->pool, lua_tostring(L, WSLUA_OPTARG_TreeItem_children_FIELD_FILTER));
     }
-
-    /* Check if filter argument (argument 2) is provided */
-    if (lua_gettop(L) >= WSLUA_OPTARG_TreeItem_children_FIELD_FILTER &&
-        !lua_isnil(L, WSLUA_OPTARG_TreeItem_children_FIELD_FILTER)) {
-        int filter_arg = WSLUA_OPTARG_TreeItem_children_FIELD_FILTER;
-
-        if (lua_type(L, filter_arg) == LUA_TSTRING) {
-            /* Single filter string - allocate array of size 1 */
-            state->num_filters = 1;
-            state->field_filters = (char **)g_malloc(sizeof(char *));
-            /* Duplicate the string (Lua string becomes C string copy) */
-            state->field_filters[0] = g_strdup(lua_tostring(L, filter_arg));
-        } else if (lua_istable(L, filter_arg)) {
-            /* Table of filter strings - extract all strings from table */
-            int table_len = (int)lua_rawlen(L, filter_arg);
-            state->num_filters = table_len;
-            state->field_filters = (char **)g_malloc(sizeof(char *) * table_len);
-
-            /* Iterate through Lua table (1-based indexing) */
-            for (int i = 0; i < table_len; i++) {
-                lua_rawgeti(L, filter_arg, i + 1);  /* Get table[i+1] */
-                /* Valid string entry - duplicate it */
-                state->field_filters[i] = g_strdup(lua_tostring(L, -1));
-                lua_pop(L, 1);  /* Remove the value from stack */
-            }
+    else if (num_filters > 1) {
+        /* We got passed a table, we checked above that it was all strings */
+        for (unsigned i = 0; i < num_filters; i++) {
+            lua_rawgeti(L, WSLUA_OPTARG_TreeItem_children_FIELD_FILTER, i+1);
+            state->field_filters[i] = wmem_strdup(lua_pinfo->pool, lua_tostring(L, -1));
+            lua_pop(L, 1);
         }
-        /* If neither string nor table, filters remain NULL (no filtering) */
     }
 
     /* Push the iterator function as a closure with state as upvalue */
@@ -1659,8 +1631,14 @@ WSLUA_METHOD TreeItem_get_field_info(lua_State *L) {
 
     /* Retrieve and validate the TreeItem */
     TreeItem ti = checkTreeItem(L, 1);
-    if (!ti)
+    if (!ti) {
+        THROW_LUA_ERROR("not a TreeItem!");
         return 0;
+    }
+    if (ti->expired) {
+        THROW_LUA_ERROR("expired TreeItem");
+        return 0;
+    }
 
     field_info *finfo = NULL;
 
@@ -1684,19 +1662,29 @@ WSLUA_METHOD TreeItem_get_field_info(lua_State *L) {
 }
 
 WSLUA_METAMETHOD TreeItem__tostring(lua_State* L) {
-    /* Returns string debug information about the <<lua_class_TreeItem,`TreeItem`>>. */
+    /* Returns a short label of the form `TreeItem: <abbrev>` for an
+       attached field, `TreeItem: (root)` for a text-only/root tree,
+       or `TreeItem: (no item)` / `TreeItem: (expired)` /
+       `TreeItem: (null)` for the degenerate cases. The previous
+       form dumped only boolean flags (expired/item/tree/same),
+       which were not very useful for identifying which TreeItem
+       the debugger is looking at. */
     TreeItem ti = toTreeItem(L,1);
 
-    if (ti) {
-        lua_pushfstring(L,
-            "TreeItem: expired=%s, has item=%s, has subtree=%s, they are %sthe same",
-            ti->expired ? "true" : "false",
-            ti->item ? "true" : "false",
-            ti->tree ? "true" : "false",
-            (ti->tree == ti->item) ? "" : "not ");
-    }
-    else {
-        lua_pushstring(L, "No TreeItem object!");
+    if (!ti) {
+        lua_pushstring(L, "TreeItem: (null)");
+    } else if (ti->expired) {
+        lua_pushstring(L, "TreeItem: (expired)");
+    } else if (!ti->item) {
+        lua_pushstring(L, "TreeItem: (no item)");
+    } else {
+        proto_node *node = (proto_node *)ti->item;
+        field_info *finfo = node ? node->finfo : NULL;
+        if (finfo && finfo->hfinfo && finfo->hfinfo->abbrev) {
+            lua_pushfstring(L, "TreeItem: %s", finfo->hfinfo->abbrev);
+        } else {
+            lua_pushstring(L, "TreeItem: (root)");
+        }
     }
 
     return 1;

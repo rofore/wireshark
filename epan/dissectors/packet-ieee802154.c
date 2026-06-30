@@ -413,7 +413,7 @@ static void dissect_ieee802154_realign         (tvbuff_t *, packet_info *, proto
 static void dissect_ieee802154_gtsreq          (tvbuff_t *, packet_info *, proto_tree *, ieee802154_packet *);
 
 /* Decryption helpers. */
-static tvbuff_t *dissect_ieee802154_decrypt(tvbuff_t *, unsigned, packet_info *, ieee802154_packet *, ieee802154_decrypt_info_t*);
+static tvbuff_t *dissect_ieee802154_decrypt(tvbuff_t *, unsigned, packet_info *, ieee802154_packet *, ieee802154_decrypt_info_t*, unsigned char *);
 
 static unsigned ieee802154_set_mac_key(ieee802154_packet *packet, unsigned char *key, unsigned char *alt_key, ieee802154_key_t *uat_key);
 static unsigned ieee802154_set_trel_key(ieee802154_packet* packet, unsigned char* key, unsigned char* alt_key, ieee802154_key_t* uat_key);
@@ -1973,22 +1973,19 @@ tvbuff_t *decrypt_ieee802154_payload(tvbuff_t * tvb, unsigned offset, packet_inf
         unsigned nkeys = set_key_func(packet, key, alt_key, &ieee802154_keys[decrypt_info->key_number]);
         if (nkeys >= 1) {
             /* Try with the initial key */
-            decrypt_info->key = key;
-            payload_tvb = decrypt_func(tvb, offset, pinfo, packet, decrypt_info);
+            payload_tvb = decrypt_func(tvb, offset, pinfo, packet, decrypt_info, key);
             if (!((*decrypt_info->status == DECRYPT_PACKET_MIC_CHECK_FAILED) || (*decrypt_info->status == DECRYPT_PACKET_DECRYPT_FAILED))) {
                 break;
             }
         }
         if (nkeys >= 2) {
             /* Try also with the alternate key */
-            decrypt_info->key = alt_key;
-            payload_tvb = decrypt_func(tvb, offset, pinfo, packet, decrypt_info);
+            payload_tvb = decrypt_func(tvb, offset, pinfo, packet, decrypt_info, alt_key);
             if (!((*decrypt_info->status == DECRYPT_PACKET_MIC_CHECK_FAILED) || (*decrypt_info->status == DECRYPT_PACKET_DECRYPT_FAILED))) {
                 break;
             }
         }
     }
-    decrypt_info->key = NULL;
     if (decrypt_info->key_number == num_ieee802154_keys) {
         /* None of the stored keys seemed to work */
         *decrypt_info->status = DECRYPT_PACKET_NO_KEY;
@@ -2808,9 +2805,7 @@ ieee802154_dissect_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, u
         packet->dst16 = tvb_get_letohs(tvb, offset);
 
         /* Provide address hints to higher layers that need it. */
-        if (ieee_hints) {
-            ieee_hints->dst16 = packet->dst16;
-        }
+        ieee_hints->dst16 = packet->dst16;
 
         set_address_tvb(&pinfo->dl_dst, ieee802_15_4_short_address_type, 2, tvb, offset);
         copy_address_shallow(&pinfo->dst, &pinfo->dl_dst);
@@ -2860,9 +2855,7 @@ ieee802154_dissect_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, u
             packet->src_pan = IEEE802154_BCAST_PAN;
         }
     }
-    if (ieee_hints) {
-        ieee_hints->src_pan = packet->src_pan;
-    }
+    ieee_hints->src_pan = packet->src_pan;
 
     /* Source Address */
     if (packet->src_addr_mode == IEEE802154_FCF_ADDR_SHORT) {
@@ -2875,11 +2868,9 @@ ieee802154_dissect_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, u
             addr16.addr = packet->src16;
             addr16.pan = packet->src_pan;
 
-            if (ieee_hints) {
-                ieee_hints->src16 = packet->src16;
-                ieee_hints->map_rec = (ieee802154_map_rec *)
-                    g_hash_table_lookup(ieee802154_map.short_table, &addr16);
-            }
+            ieee_hints->src16 = packet->src16;
+            ieee_hints->map_rec = (ieee802154_map_rec *)
+                g_hash_table_lookup(ieee802154_map.short_table, &addr16);
         }
 
         set_address_tvb(&pinfo->dl_src, ieee802_15_4_short_address_type, 2, tvb, offset);
@@ -2891,7 +2882,7 @@ ieee802154_dissect_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, u
         proto_item_set_generated(ti);
         proto_item_set_hidden(ti);
 
-        if (ieee_hints && ieee_hints->map_rec) {
+        if (ieee_hints->map_rec) {
             /* Display inferred source address info */
             ti = proto_tree_add_eui64(ieee802154_tree, hf_ieee802154_src64, tvb, offset, 0,
                     ieee_hints->map_rec->addr64);
@@ -3042,15 +3033,14 @@ ieee802154_decrypt_payload(tvbuff_t *tvb, unsigned mhr_len, packet_info *pinfo, 
         decrypt_info.rx_mic = rx_mic;
         decrypt_info.rx_mic_length = &rx_mic_len;
         decrypt_info.status = &status;
-        decrypt_info.key = NULL; /* payload function will fill that in */
 
         if (ptr2)  // if this pointer is not null that mean we found trel
             payload_tvb = decrypt_ieee802154_payload(tvb, mhr_len, pinfo, NULL, packet, &decrypt_info,
                 ieee802154_set_trel_key, dissect_ieee802154_decrypt);
         else
-        /* call with NULL tree since we add the key_number below without hiding it */
-        payload_tvb = decrypt_ieee802154_payload(tvb, mhr_len, pinfo, NULL, packet, &decrypt_info,
-                                     ieee802154_set_mac_key, dissect_ieee802154_decrypt);
+            // call with NULL tree since we add the key_number below without hiding it
+            payload_tvb = decrypt_ieee802154_payload(tvb, mhr_len, pinfo, NULL, packet, &decrypt_info,
+                ieee802154_set_mac_key, dissect_ieee802154_decrypt);
 
         /* Get the unencrypted data if decryption failed.  */
         if (!payload_tvb) {
@@ -3521,7 +3511,7 @@ dissect_ieee802154_tap_tlvs(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 {
     uint32_t type;
     uint32_t length;
-    int offset = 0;
+    unsigned offset = 0;
     proto_item *ti;
     proto_tree *tlvtree;
     uint32_t tap_fcs_type;
@@ -5281,7 +5271,8 @@ dissect_ieee802154_decrypt(tvbuff_t *tvb,
                            unsigned offset,
                            packet_info *pinfo,
                            ieee802154_packet *packet,
-                           ieee802154_decrypt_info_t* decrypt_info)
+                           ieee802154_decrypt_info_t* decrypt_info,
+                           unsigned char *key)
 {
     tvbuff_t           *ptext_tvb;
     bool                have_mic = false;
@@ -5391,7 +5382,7 @@ dissect_ieee802154_decrypt(tvbuff_t *tvb,
         text = (uint8_t *)tvb_memdup(pinfo->pool, tvb, offset, captured_len);
 
         /* Perform CTR-mode transformation. */
-        if (!ccm_ctr_encrypt(decrypt_info->key, tmp, decrypt_info->rx_mic, text, captured_len)) {
+        if (!ccm_ctr_encrypt(key, tmp, decrypt_info->rx_mic, text, captured_len)) {
             wmem_free(pinfo->pool, text);
             *decrypt_info->status = DECRYPT_PACKET_DECRYPT_FAILED;
             return NULL;
@@ -5408,7 +5399,7 @@ dissect_ieee802154_decrypt(tvbuff_t *tvb,
          * in the captured data.
          */
         /* Decrypt the MIC (if present). */
-        if ((have_mic) && (!ccm_ctr_encrypt(decrypt_info->key, tmp, decrypt_info->rx_mic, NULL, 0))) {
+        if ((have_mic) && (!ccm_ctr_encrypt(key, tmp, decrypt_info->rx_mic, NULL, 0))) {
             *decrypt_info->status = DECRYPT_PACKET_DECRYPT_FAILED;
             return NULL;
         }
@@ -5452,7 +5443,7 @@ dissect_ieee802154_decrypt(tvbuff_t *tvb,
          * decryption phase.
          */
         memset(dec_mic, 0, sizeof(dec_mic));
-        if (!ccm_cbc_mac(decrypt_info->key, tmp, tvb_memdup(pinfo->pool, tvb, 0, l_a), l_a, tvb_get_ptr(ptext_tvb, 0, l_m), l_m, dec_mic)) {
+        if (!ccm_cbc_mac(key, tmp, tvb_memdup(pinfo->pool, tvb, 0, l_a), l_a, tvb_get_ptr(ptext_tvb, 0, l_m), l_m, dec_mic)) {
             *decrypt_info->status = DECRYPT_PACKET_MIC_CHECK_FAILED;
         }
         /* Compare the received MIC with the one we generated. */
@@ -5673,7 +5664,7 @@ ccm_cbc_mac(const uint8_t *key, const uint8_t *iv, const uint8_t *a, int a_len, 
         }
         else {
             memcpy(block, a, a_len);
-            memset(block+a_len, 0, sizeof(block)-a_len);
+            memset(&block[a_len], 0, sizeof(block)-a_len);
         }
         /* Adjust pointers. */
         a += sizeof(block);
@@ -5693,7 +5684,7 @@ ccm_cbc_mac(const uint8_t *key, const uint8_t *iv, const uint8_t *a, int a_len, 
         }
         else {
             memcpy(block, m, m_len);
-            memset(block+m_len, 0, sizeof(block)-m_len);
+            memset(&block[m_len], 0, sizeof(block)-m_len);
         }
         /* Adjust pointers. */
         m += sizeof(block);
@@ -5763,7 +5754,10 @@ static bool trel_key_derivation_func(/*ieee802154_packet* packet*/ unsigned char
     GByteArray* bytes;
     bytes = g_byte_array_new();
     bool res = hex_str_to_bytes(uat_key->pref_key, bytes, false);
-    if (!res) return false;
+    if (!res) {
+        g_byte_array_unref(bytes);
+        return false;
+    }
 
     uint8_t saltstring[] = { 'T', 'h', 'r', 'e', 'a', 'd', 'S', 'e', 'q', 'u', 'e', 'n', 'c', 'e', 'M', 'a', 's', 't', 'e', 'r', 'K', 'e', 'y' };
     uint8_t info_str[] = { 'T', 'h', 'r', 'e', 'a', 'd', 'O', 'v', 'e','r', 'I', 'n', 'f', 'r', 'a', 'K', 'e', 'y' };
@@ -5775,6 +5769,7 @@ static bool trel_key_derivation_func(/*ieee802154_packet* packet*/ unsigned char
     salt[3] = (Key_sequence >> 0) & 0xff;
 
     memcpy(ikm, bytes->data, 16);
+    g_byte_array_unref(bytes);
     memcpy(salt + sizeof(uint32_t), saltstring, sizeof(saltstring));
 
     err = hkdf_extract(GCRY_MD_SHA256, salt, sizeof(salt), ikm, sizeof(ikm), prk);

@@ -66,6 +66,7 @@
 #include <epan/tap.h>
 #include <epan/etypes.h>
 #include <epan/unit_strings.h>
+#include <epan/exceptions.h>
 
 #include <wsutil/utf8_entities.h>
 
@@ -1914,27 +1915,25 @@ dissect_sec_payload(tvbuff_t *tvb, int *offset, packet_info *pinfo, proto_tree *
         field_tree = proto_item_add_subtree(ti, ett_sgeonw_field);
         proto_tree_add_item(field_tree, hf_sgeonw_payload_field_type, tvb, *offset, 1, ENC_BIG_ENDIAN);
         *offset += 1;
+        param_len = dissect_sec_var_len(tvb, offset, pinfo, field_tree);
         switch(tmp_val) {
             case unsecured:
             case signed_pl:
-                param_len = dissect_sec_var_len(tvb, offset, pinfo, field_tree);
                 if (param_len) {
                     tvbuff_t *next_tvb = tvb_new_subset_length(tvb, *offset, param_len);
                     p_add_proto_data(pinfo->pool, pinfo, proto_geonw, SEC_TVB_KEY, next_tvb);
                 }
-                *offset += param_len;
                 break;
             case encrypted:
             case signed_and_encrypted:
-                param_len = dissect_sec_var_len(tvb, offset, pinfo, field_tree);
                 proto_tree_add_item(field_tree, hf_sgeonw_opaque, tvb, *offset, param_len, ENC_NA);
-                *offset += param_len;
                 break;
             default:
                 // Opaque
-                param_len = dissect_sec_var_len(tvb, offset, pinfo, field_tree);
                 proto_tree_add_item(field_tree, hf_sgeonw_opaque, tvb, *offset, param_len, ENC_NA);
-                *offset += param_len;
+        }
+        if (ckd_add(offset, *offset, param_len)) {
+            THROW(ReportedBoundsError);
         }
         proto_item_set_end(ti, tvb, *offset);
     }
@@ -2142,7 +2141,7 @@ dissect_geonw_internal(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
     uint32_t header_type;
     uint32_t rhl;
     uint32_t tmp_val;
-    int offset = 0;
+    unsigned offset = 0;
     proto_item *ti;
     proto_item *top_item;
     proto_item* rhl_ti = NULL;
@@ -3699,6 +3698,11 @@ proto_reg_handoff_geonw(void)
     dissector_add_uint("ieee1609dot2.psid", psid_geonetworking_management_communications, sgeonw_handle_);
     dissector_add_uint("ieee1609dot2.psid", psid_traffic_light_control_status_service, sgeonw_handle_);
     dissector_add_uint("ieee1609dot2.psid", psid_collective_perception_service, sgeonw_handle_);
+    dissector_add_uint("ieee1609dot2.psid", psid_avm_service, sgeonw_handle_);
+    dissector_add_uint("ieee1609dot2.psid", psid_vru_awareness_basic_service, sgeonw_handle_);
+    dissector_add_uint("ieee1609dot2.psid", psid_imz_basic_service, sgeonw_handle_);
+    dissector_add_uint("ieee1609dot2.psid", psid_mr_service, sgeonw_handle_);
+    dissector_add_uint("ieee1609dot2.psid", psid_poi_service, sgeonw_handle_);
 
 }
 

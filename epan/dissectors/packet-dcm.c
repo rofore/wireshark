@@ -757,7 +757,7 @@ dcm_init(void)
 
     /* Create three hash tables for quick lookups */
     /* XXX - These are constant hashmaps based on constant structs,
-     * produced by tools/make-packet-dcm.py
+     * produced by tools/dissector_generators/generate-dcm.py
      * The two with integer keys could use binary search (alter the
      * Python script to sort). If a hash table is desired, GNU gperf
      * or some perfect hash function generator should be used instead
@@ -2704,7 +2704,7 @@ dissect_dcm_tag_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, dcm_s
             at_elm = tvb_get_uint16(tvb, offset+ i*vm_item_len+2, encoding);
 
             proto_tree_add_uint_format_value(tree, hf_dcm_tag_value_32u, tvb, offset + i*vm_item_len, vm_item_len,
-                (at_grp << 16) | at_elm, "%04x,%04x", at_grp, at_elm);
+                ((unsigned)at_grp << 16) | at_elm, "%04x,%04x", at_grp, at_elm);
 
             at_value = wmem_strdup_printf(pinfo->pool,"%s(%04x,%04x)", at_value, at_grp, at_elm);
 
@@ -2886,7 +2886,7 @@ dcm_tag_lookup(uint16_t grp, uint16_t elm)
             tag_def = (dcm_tag_t const *)wmem_map_lookup(dcm_tag_table, GUINT_TO_POINTER(((uint32_t)grp << 16) | (elm & 0x000F)));
         }
         else if (grp == 0x1010) {
-            tag_def = (dcm_tag_t const *)wmem_map_lookup(dcm_tag_table, GUINT_TO_POINTER(((uint32_t)grp << 16) | (elm & 0x0000)));
+            tag_def = (dcm_tag_t const *)wmem_map_lookup(dcm_tag_table, GUINT_TO_POINTER(((uint32_t)grp << 16)));
         }
 
         if (tag_def == NULL) {
@@ -3200,7 +3200,7 @@ dissect_dcm_tag(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     */
 
     proto_tree_add_uint_format_value(tag_ptree, hf_dcm_tag, tvb, offset_tag, 4,
-        (grp << 16) | elm, "%04x,%04x (%s)", grp, elm, tag_def->description);
+        ((unsigned)grp << 16) | elm, "%04x,%04x (%s)", grp, elm, tag_def->description);
 
     /* Add VR to tag detail, except for sequence items */
     if (!is_item)  {
@@ -3803,7 +3803,7 @@ dissect_dcm_main(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, bool is_po
     uint32_t pdu_len = 0;
     uint32_t tlen = 0;
 
-    int offset = 0;
+    unsigned offset = 0;
 
     /*
         TCP packets are assembled well by wireshark in conjunction with the dissectors.

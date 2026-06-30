@@ -21,6 +21,7 @@
 #include <ui/preference_utils.h>
 #include <ui/qt/utils/qt_ui_utils.h>
 #include <ui/qt/utils/color_utils.h>
+#include <ui/qt/utils/theme_manager.h>
 #include <ui/qt/widgets/resize_header_view.h>
 
 #include <ui/qt/widgets/qcp_spacer_legend_item.h>
@@ -148,6 +149,9 @@ PlotDialog::PlotDialog(QWidget& parent, CaptureFile& cf) :
     ui->rightButtonBox->addButton(copy_profile_bt_, QDialogButtonBox::ActionRole);
     connect(copy_profile_bt_, &CopyFromProfileButton::copyProfile, this, &PlotDialog::copyFromProfile);
 
+    connect(ThemeManager::instance(), &ThemeManager::themeChanged,
+            this, &PlotDialog::onThemeChanged);
+
     QPushButton* close_bt = ui->rightButtonBox->button(QDialogButtonBox::Close);
     if (close_bt) close_bt->setDefault(true);
 
@@ -194,7 +198,6 @@ PlotDialog::PlotDialog(QWidget& parent, CaptureFile& cf) :
     markerMenu->addAction(ui->actionDeleteMarker);
     markerMenu->addAction(ui->actionDeleteAllMarkers);
     ctx_menu_.addMenu(markerMenu);
-    set_action_shortcuts_visible_in_context_menu(ctx_menu_.actions());
 
     // Let's try to explain the layout of this QCustomPlot.
     // First of all, we have two degenerate plots that are always kept at the
@@ -540,6 +543,38 @@ void PlotDialog::syncPlotSettings(int row)
     scheduleReplot();
 }
 
+void PlotDialog::onThemeChanged()
+{
+    if (!uat_model_)
+        return;
+
+    ThemeManager *tm = ThemeManager::instance();
+    bool anyUpdated = false;
+    for (int row = 0; row < uat_model_->rowCount(); ++row) {
+        const QColor current = uat_model_->data(
+            uat_model_->index(row, plotColColor), Qt::DecorationRole
+        ).value<QColor>();
+
+        // Only refresh rows the user has not customized — i.e. rows whose
+        // current color still matches the theme default we last recorded.
+        if (!themeDefaultColors_.contains(row) ||
+            themeDefaultColors_.value(row) != current)
+            continue;
+
+        const QColor next = tm->graphColor(row);
+        if (next == current)
+            continue;
+
+        uat_model_->setData(uat_model_->index(row, plotColColor),
+                            next, Qt::DecorationRole);
+        themeDefaultColors_.insert(row, next);
+        syncPlotSettings(row);
+        anyUpdated = true;
+    }
+    if (anyUpdated)
+        scheduleReplot();
+}
+
 int PlotDialog::getLastPlotIdx()
 {
     int maxPlot = 0;
@@ -555,7 +590,7 @@ int PlotDialog::getLastPlotIdx()
 }
 
 void PlotDialog::addPlot(bool checked, const QString& name, const QString& dfilter,
-    QRgb color_idx, Graph::PlotStyles style, const QString& yfield, double y_axis_factor)
+    QColor graphColor, Graph::PlotStyles style, const QString& yfield, double y_axis_factor)
 {
     if (!uat_model_) return;
 
@@ -564,13 +599,16 @@ void PlotDialog::addPlot(bool checked, const QString& name, const QString& dfilt
     newRowData.append(getLastPlotIdx() + 1);
     newRowData.append(name);
     newRowData.append(dfilter);
-    newRowData.append(QColor(color_idx));
+    newRowData.append(graphColor);
     newRowData.append(val_to_str_const(style, plot_graph_style_vs, "None"));
     newRowData.append(yfield);
     newRowData.append(y_axis_factor);
 
     QModelIndex newIndex = uat_model_->appendEntry(newRowData);
     if (newIndex.isValid()) {
+        // Record the theme-derived default so onThemeChanged() can refresh
+        // it later without overwriting subsequent user customizations.
+        themeDefaultColors_.insert(newIndex.row(), graphColor);
         ui->plotUat->setCurrentIndex(newIndex);
     }
     else {
@@ -607,17 +645,17 @@ void PlotDialog::addPlot(bool checked, const QString& dfilter, const QString& yf
     else {
         graph_name = yfield;
     }
-    addPlot(checked, std::move(graph_name), dfilter, ColorUtils::graphColor(uat_model_->rowCount()), Graph::psLine, yfield);
+    QColor graphColor = ThemeManager::instance()->graphColor(uat_model_->rowCount());
+    addPlot(checked, std::move(graph_name), dfilter, graphColor, Graph::psLine, yfield);
 }
 
 void PlotDialog::addDefaultPlot(bool enabled, bool filtered)
 {
-    if (filtered) {
-        addPlot(enabled, tr("Seq. num."), "tcp.srcport == 80", ColorUtils::graphColor(0), Graph::psDotStepLine, "tcp.seq");
-    }
-    else {
-        addPlot(enabled, tr("Frame num."), QString(), ColorUtils::graphColor(4), Graph::psLine, "frame.number");
-    }
+    QColor graphColor = filtered ? ThemeManager::instance()->graphColor(0) : ThemeManager::instance()->graphDefaultColor();
+    QString name = filtered ? tr("Seq. num.") : tr("Frame num.");
+    QString dfilter = filtered ? "tcp.srcport == 80" : QString();
+    QString yfield = filtered ? "tcp.seq" : "frame.number";
+    addPlot(enabled, name, dfilter, graphColor, filtered ? Graph::psDotStepLine : Graph::psLine, yfield);
 }
 
 void PlotDialog::captureFileClosing()
@@ -978,21 +1016,12 @@ void PlotDialog::showContextMenu(const QPoint& pos)
         menu->setAttribute(Qt::WA_DeleteOnClose);
         menu->addAction(ui->actionLegend);
         menu->addSeparator();
-#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
         menu->addAction(tr("Move to top left"), this, &PlotDialog::moveLegend)->setData((Qt::AlignTop | Qt::AlignLeft).toInt());
         menu->addAction(tr("Move to top center"), this, &PlotDialog::moveLegend)->setData((Qt::AlignTop | Qt::AlignHCenter).toInt());
         menu->addAction(tr("Move to top right"), this, &PlotDialog::moveLegend)->setData((Qt::AlignTop | Qt::AlignRight).toInt());
         menu->addAction(tr("Move to bottom left"), this, &PlotDialog::moveLegend)->setData((Qt::AlignBottom | Qt::AlignLeft).toInt());
         menu->addAction(tr("Move to bottom center"), this, &PlotDialog::moveLegend)->setData((Qt::AlignBottom | Qt::AlignHCenter).toInt());
         menu->addAction(tr("Move to bottom right"), this, &PlotDialog::moveLegend)->setData((Qt::AlignBottom | Qt::AlignRight).toInt());
-#else
-        menu->addAction(tr("Move to top left"), this, &PlotDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignTop | Qt::AlignLeft));
-        menu->addAction(tr("Move to top center"), this, &PlotDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignTop | Qt::AlignHCenter));
-        menu->addAction(tr("Move to top right"), this, &PlotDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignTop | Qt::AlignRight));
-        menu->addAction(tr("Move to bottom left"), this, &PlotDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignBottom | Qt::AlignLeft));
-        menu->addAction(tr("Move to bottom center"), this, &PlotDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignBottom | Qt::AlignHCenter));
-        menu->addAction(tr("Move to bottom right"), this, &PlotDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignBottom | Qt::AlignRight));
-#endif
         menu->popup(ui->plot->mapToGlobal(pos));
     }
     else if (ui->plot->xAxis2->selectTest(pos, false) >= 0) {
@@ -1033,11 +1062,7 @@ void PlotDialog::moveLegend()
 {
     if (QAction* contextAction = qobject_cast<QAction*>(sender())) {
         if (contextAction->data().canConvert<Qt::Alignment::Int>()) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
             Qt::Alignment alignment = Qt::Alignment::fromInt(contextAction->data().value<Qt::Alignment::Int>());
-#else
-            Qt::Alignment alignment = static_cast<Qt::Alignment>(contextAction->data().value<Qt::Alignment::Int>());
-#endif
             legend_alignment_ = alignment;
             updateLegendPos();
             ui->plot->replot();

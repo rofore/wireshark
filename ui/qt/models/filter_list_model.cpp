@@ -207,11 +207,7 @@ QModelIndex FilterListModel::addFilter(QString name, QString expression)
         return QModelIndex();
 
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     storage.emplace_back(name, expression);
-#else
-    storage << FilterListValue(name, expression);
-#endif
     endInsertRows();
 
     return index(rowCount() - 1, 0);
@@ -267,7 +263,13 @@ void FilterListModel::saveList()
         default: ws_assert_not_reached();
     }
 
-    filename = QStringLiteral("%1%2%3").arg(ProfileModel::activeProfilePath()).arg("/").arg(cfile);
+    //Use the model object to pull the profile information
+    ProfileModel model;
+    QString profilePath;
+    const ProfileItem* currentProfile = model.getCurrentProfile();
+    if (currentProfile != Q_NULLPTR)
+        profilePath = currentProfile->getProfilePath();
+    filename = QStringLiteral("%1%2%3").arg(profilePath).arg("/").arg(cfile);
     QFile file(filename);
 
     if (! file.open(QIODevice::WriteOnly | QIODevice::Text))

@@ -8,7 +8,6 @@
 #
 
 add_definitions(
-		${LIBXML2_DEFINITIONS}
 		${KERBEROS_DEFINITIONS}
 )
 
@@ -31,6 +30,7 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/tools/rdps.py
 		${CMAKE_CURRENT_SOURCE_DIR}/print.ps
 )
+add_custom_target(generate_ps_c DEPENDS ps.c)
 
 set(LIBWIRESHARK_PUBLIC_HEADERS
 	addr_resolv.h
@@ -40,6 +40,7 @@ set(LIBWIRESHARK_PUBLIC_HEADERS
 	arptypes.h
 	asn1.h
 	capture_dissectors.h
+	cfile.h
 	charsets.h
 	color_filters.h
 	column.h
@@ -53,6 +54,7 @@ set(LIBWIRESHARK_PUBLIC_HEADERS
 	crc32-tvb.h
 	crc6-tvb.h
 	crc8-tvb.h
+	credentials.h
 	decode_as.h
 	disabled_protos.h
 	conversation_filter.h
@@ -81,6 +83,7 @@ set(LIBWIRESHARK_PUBLIC_HEADERS
 	introspection.h
 	iana-info.h
 	ip_opts.h
+	keytab_krb5_ctx.h
 	maxmind_db.h
 	media_params.h
 	next_tvb.h
@@ -145,6 +148,7 @@ set(LIBWIRESHARK_NONGENERATED_FILES
 	aftypes.c
 	asn1.c
 	capture_dissectors.c
+	cfile.c
 	charsets.c
 	color_filters.c
 	column.c
@@ -167,6 +171,7 @@ set(LIBWIRESHARK_NONGENERATED_FILES
 	export_object.c
 	exported_pdu.c
 	fifo_string_cache.c
+	file_packet_provider.c
 	filter_expressions.c
 	aggregation_fields.c
 	follow.c
@@ -275,7 +280,7 @@ add_library(epan
 set_target_properties(epan PROPERTIES
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
-	VERSION "0.0.0" SOVERSION 0
+	VERSION "0.0.2" SOVERSION 0
 	INSTALL_RPATH "${LIBRARY_INSTALL_RPATH}"
 	# By default the name for a library with target name epan will be libepan,
 	# but Ethereal is now named Wireshark
@@ -293,13 +298,13 @@ target_link_libraries(epan
 		${GLIB2_LIBRARIES}
 	PRIVATE
 		wiretap
+		LibXml2::LibXml2
 		${BROTLI_LIBRARIES}
 		${CARES_LIBRARIES}
 		${GCRYPT_LIBRARIES}
 		${GIO2_LIBRARIES}
 		${GNUTLS_LIBRARIES}
 		${KERBEROS_LIBRARIES}
-		${LIBXML2_LIBRARIES}
 		${LUA_LIBRARIES}
 		${LZ4_LIBRARIES}
 		${M_LIBRARIES}
@@ -307,7 +312,7 @@ target_link_libraries(epan
 		${NGHTTP3_LIBRARIES}
 		${SMI_LIBRARIES}
 		${SNAPPY_LIBRARIES}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 		${XXHASH_LIBRARIES}
 		${ZLIB_LIBRARIES}
 		${ZLIBNG_LIBRARIES}
@@ -329,7 +334,6 @@ target_include_directories(epan
 		${KERBEROS_INCLUDE_DIRS}
 		${GLIB2_INCLUDE_DIRS}
 		${GNUTLS_INCLUDE_DIRS}
-		${LIBXML2_INCLUDE_DIRS}
 		${LUA_INCLUDE_DIRS}
 		${LZ4_INCLUDE_DIRS}
 		${NGHTTP2_INCLUDE_DIRS}
@@ -344,7 +348,7 @@ target_include_directories(epan
 		${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_dependencies(epan lemon)
+add_dependencies(epan lemon generate_ps_c)
 
 install(TARGETS epan
 	EXPORT WiresharkTargets
@@ -434,6 +438,7 @@ CHECKAPI(
 	SOURCES
 	  ${LIBWIRESHARK_NONGENERATED_FILES}
 )
+add_dependencies(checkAPI_epan generate_ps_c)
 
 #
 # Editor modelines  -  https://www.wireshark.org/tools/modelines.html

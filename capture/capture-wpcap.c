@@ -28,7 +28,6 @@
 #include <wsutil/feature_list.h>
 
 bool has_npcap;
-bool use_utf8;
 
 #ifdef HAVE_LIBPCAP
 
@@ -45,6 +44,7 @@ bool use_utf8;
 #include <wsutil/ws_assert.h>
 
 #define MAX_WIN_IF_NAME_LEN 511
+static bool use_utf8;
 
 static void    (*p_pcap_close) (pcap_t *);
 static int     (*p_pcap_stats) (pcap_t *, struct pcap_stat *);
@@ -816,13 +816,13 @@ get_remote_interface_list(const char *hostname, const char *port,
 		return NULL;
 	}
 
-	return get_interface_list_findalldevs_ex(hostname, port, auth_type,
+	return get_remote_interface_list_common(hostname, port, auth_type,
 	    username, passwd, err, err_str);
 }
 #endif
 
 GList *
-get_interface_list_ws(int *err, char **err_str)
+get_local_interface_list_ws(int *err, char **err_str)
 {
 	if (!has_npcap) {
 		/*
@@ -834,13 +834,7 @@ get_interface_list_ws(int *err, char **err_str)
 		return NULL;
 	}
 
-	return get_interface_list_findalldevs(true, err, err_str);
-}
-
-GList*
-get_interface_list_ss(int* err, char** err_str)
-{
-	return get_interface_list_findalldevs(false, err, err_str);
+	return get_local_interface_list(err, err_str);
 }
 
 /*

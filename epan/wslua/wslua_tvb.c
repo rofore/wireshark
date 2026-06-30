@@ -113,16 +113,40 @@ Tvb* push_Tvb(lua_State* L, tvbuff_t* ws_tvb) {
 }
 
 
+/* WSLUA_ATTRIBUTE Tvb_captured_length RO The captured length of the Tvb
+   (amount saved in the capture process). Mirrors `tvb:captured_len()`. */
+WSLUA_ATTRIBUTE_GET(Tvb,captured_length, {
+    lua_pushinteger(L, tvb_captured_length(obj->ws_tvb));
+});
+
+/* WSLUA_ATTRIBUTE Tvb_reported_length RO The reported length of the Tvb
+   (length on the network). Mirrors `tvb:reported_len()`. */
+WSLUA_ATTRIBUTE_GET(Tvb,reported_length, {
+    lua_pushinteger(L, tvb_reported_length(obj->ws_tvb));
+});
+
+/* WSLUA_ATTRIBUTE Tvb_raw_offset RO The raw offset of this (sub) Tvb in its
+   source Tvb. Mirrors `tvb:offset()`. */
+WSLUA_ATTRIBUTE_GET(Tvb,raw_offset, {
+    lua_pushinteger(L, tvb_raw_offset(obj->ws_tvb));
+});
+
 WSLUA_METAMETHOD Tvb__tostring(lua_State* L) {
     /*
-    Convert the bytes of a <<lua_class_Tvb,`Tvb`>> into a string.
-    This is primarily useful for debugging purposes since the string will be truncated if it is too long.
+    Convert the bytes of a <<lua_class_Tvb,`Tvb`>> into a string of
+    the form `Tvb: captured=<C> reported=<R> bytes=<hex>`.
+    The hex preview is automatically truncated by `tvb_bytes_to_str`
+    to a small number of bytes (currently 36) so the rendering stays
+    useful in the debugger Variables view and in `print()` for large
+    packets.
     */
     Tvb tvb = checkTvb(L,1);
-    int len = tvb_captured_length(tvb->ws_tvb);
-    char* str = tvb_bytes_to_str(NULL,tvb->ws_tvb,0,len);
+    int captured = tvb_captured_length(tvb->ws_tvb);
+    int reported = tvb_reported_length(tvb->ws_tvb);
+    char* str = tvb_bytes_to_str(NULL, tvb->ws_tvb, 0, captured);
 
-    lua_pushfstring(L, "TVB(%d) : %s", len, str);
+    lua_pushfstring(L, "Tvb: captured=%d reported=%d bytes=%s",
+                    captured, reported, str ? str : "");
 
     wmem_free(NULL, str);
 
@@ -325,8 +349,20 @@ WSLUA_META Tvb_meta[] = {
     { NULL, NULL }
 };
 
+/* Read-only attributes. Registered so the Lua debugger can expand a Tvb
+ * in the Variables view without having to invoke methods. The attribute
+ * names intentionally differ from the corresponding method names to
+ * avoid the attribute/method collision check performed by
+ * wslua_push_attributes. */
+WSLUA_ATTRIBUTES Tvb_attributes[] = {
+    WSLUA_ATTRIBUTE_ROREG(Tvb,captured_length),
+    WSLUA_ATTRIBUTE_ROREG(Tvb,reported_length),
+    WSLUA_ATTRIBUTE_ROREG(Tvb,raw_offset),
+    { NULL, NULL, NULL }
+};
+
 int Tvb_register(lua_State* L) {
-    WSLUA_REGISTER_CLASS(Tvb);
+    WSLUA_REGISTER_CLASS_WITH_ATTRS(Tvb);
     if (outstanding_Tvb != NULL) {
         g_ptr_array_unref(outstanding_Tvb);
     }
@@ -1661,6 +1697,18 @@ WSLUA_METHOD TvbRange_raw(lua_State* L) {
     WSLUA_RETURN(1); /* A Lua string of the binary bytes in the <<lua_class_TvbRange,`TvbRange`>>. */
 }
 
+/* WSLUA_ATTRIBUTE TvbRange_length RO The length (in bytes) of the range.
+   Mirrors `range:len()`. */
+WSLUA_ATTRIBUTE_GET(TvbRange,length, {
+    lua_pushinteger(L, (lua_Integer)obj->len);
+});
+
+/* WSLUA_ATTRIBUTE TvbRange_position RO The offset within the parent Tvb at
+   which the range starts. Mirrors `range:offset()`. */
+WSLUA_ATTRIBUTE_GET(TvbRange,position, {
+    lua_pushinteger(L, (lua_Integer)obj->offset);
+});
+
 WSLUA_METAMETHOD TvbRange__eq(lua_State* L) {
     /* Checks whether the contents of two <<lua_class_TvbRange,`TvbRange`>>s are equal. */
     TvbRange tvb_l = checkTvbRange(L,1);
@@ -1691,11 +1739,14 @@ WSLUA_METAMETHOD TvbRange__eq(lua_State* L) {
 
 WSLUA_METAMETHOD TvbRange__tostring(lua_State* L) {
     /*
-    Converts the <<lua_class_TvbRange,`TvbRange`>> into a string.
-    The string can be truncated, so this is primarily useful for debugging or in cases where truncation is preferred, e.g. "67:89:AB:...".
+    Converts the <<lua_class_TvbRange,`TvbRange`>> into a string of
+    the form `TvbRange: offset=<O> length=<L> bytes=<hex>`. The hex
+    preview is truncated by `tvb_bytes_to_str` to a small number of
+    bytes so the rendering stays useful in the debugger Variables
+    view and in `print()` for large ranges. Empty ranges render as
+    `TvbRange: offset=<O> length=0 (empty)`.
     */
     TvbRange tvbr = checkTvbRange(L,1);
-    char* str = NULL;
 
     if (!(tvbr && tvbr->tvb)) return 0;
     if (tvbr->tvb->expired) {
@@ -1704,14 +1755,18 @@ WSLUA_METAMETHOD TvbRange__tostring(lua_State* L) {
     }
 
     if (tvbr->len == 0) {
-        lua_pushstring(L, "<EMPTY>");
+        lua_pushfstring(L, "TvbRange: offset=%d length=0 (empty)",
+                        tvbr->offset);
     } else {
-        str = tvb_bytes_to_str(NULL,tvbr->tvb->ws_tvb,tvbr->offset,tvbr->len);
-        lua_pushstring(L,str);
+        char *str = tvb_bytes_to_str(NULL, tvbr->tvb->ws_tvb,
+                                     tvbr->offset, tvbr->len);
+        lua_pushfstring(L, "TvbRange: offset=%d length=%d bytes=%s",
+                        tvbr->offset, tvbr->len, str ? str : "");
         wmem_free(NULL, str);
     }
 
-    WSLUA_RETURN(1); /* A Lua hex string of the <<lua_class_TvbRange,`TvbRange`>> truncated to 24 bytes. */
+    WSLUA_RETURN(1); /* A short label including the offset, length,
+                        and a truncated hex preview. */
 }
 
 WSLUA_METHODS TvbRange_methods[] = {
@@ -1767,12 +1822,20 @@ WSLUA_META TvbRange_meta[] = {
     { NULL, NULL }
 };
 
+/* Read-only attributes for debugger introspection; see the comment on
+ * Tvb_attributes for the naming rationale. */
+WSLUA_ATTRIBUTES TvbRange_attributes[] = {
+    WSLUA_ATTRIBUTE_ROREG(TvbRange,length),
+    WSLUA_ATTRIBUTE_ROREG(TvbRange,position),
+    { NULL, NULL, NULL }
+};
+
 int TvbRange_register(lua_State* L) {
     if (outstanding_TvbRange != NULL) {
         g_ptr_array_unref(outstanding_TvbRange);
     }
     outstanding_TvbRange = g_ptr_array_new();
-    WSLUA_REGISTER_CLASS(TvbRange);
+    WSLUA_REGISTER_CLASS_WITH_ATTRS(TvbRange);
     return 0;
 }
 

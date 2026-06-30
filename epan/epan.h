@@ -6,10 +6,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-
-#ifndef __EPAN_H__
-#define __EPAN_H__
-
+#pragma once
 #include <wsutil/feature_list.h>
 #include <epan/tvbuff.h>
 #include <epan/prefs.h>
@@ -757,11 +754,11 @@ epan_dissect_prime_with_hfid_array(epan_dissect_t *edt, GArray *hfids);
  *
  * @param edt               The dissection context containing parsed packet data.
  * @param fill_col_exprs    If true, populate columns based on display filter expressions.
- * @param fill_fd_colums    If true, populate columns based on frame metadata.
+ * @param fill_fd_columns   If true, populate columns based on frame metadata.
  */
 WS_DLL_PUBLIC
 void
-epan_dissect_fill_in_columns(epan_dissect_t *edt, const bool fill_col_exprs, const bool fill_fd_colums);
+epan_dissect_fill_in_columns(epan_dissect_t *edt, const bool fill_col_exprs, const bool fill_fd_columns);
 
 /**
  * @brief Check whether a dissected packet contains a specific named field.
@@ -856,5 +853,3 @@ epan_gather_runtime_info(feature_list l);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-
-#endif /* __EPAN_H__ */

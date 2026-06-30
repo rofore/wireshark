@@ -17,11 +17,11 @@ add_subdirectory(corba-idl EXCLUDE_FROM_ALL)
 add_custom_command(
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/packet-ncp2222.c
 	COMMAND ${Python3_EXECUTABLE}
-		${CMAKE_SOURCE_DIR}/tools/ncp2222.py
+		${CMAKE_SOURCE_DIR}/tools/dissector_generators/generate-ncp2222.py
 		-o ${CMAKE_CURRENT_BINARY_DIR}/packet-ncp2222.c
 	DEPENDS
 		packet-ncp2222.inc
-		${CMAKE_SOURCE_DIR}/tools/ncp2222.py
+		${CMAKE_SOURCE_DIR}/tools/dissector_generators/generate-ncp2222.py
 )
 
 add_custom_target(x11-dissector
@@ -280,6 +280,7 @@ set(DISSECTOR_PUBLIC_HEADERS
 	packet-dcerpc.h
 	packet-dcom-dispatch.h
 	packet-dcom.h
+	packet-dis.h
 	packet-dns.h
 	packet-dsp.h
 	packet-dtls.h
@@ -1037,6 +1038,7 @@ set(DISSECTOR_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-igap.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-igmp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-igrp.c
+	${CMAKE_CURRENT_SOURCE_DIR}/packet-ike.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-ilnp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-imap.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-imf.c
@@ -1080,7 +1082,6 @@ set(DISSECTOR_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-ipxwan.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-irc.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-irdma.c
-	${CMAKE_CURRENT_SOURCE_DIR}/packet-isakmp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-iscsi.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-isdn.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-iser.c
@@ -1165,6 +1166,7 @@ set(DISSECTOR_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-lisp-tcp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-lisp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-lithionics.c
+	${CMAKE_CURRENT_SOURCE_DIR}/packet-livewire.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-llc.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-lldp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-llrp.c
@@ -1216,6 +1218,7 @@ set(DISSECTOR_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-mcpe.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-mctp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-mctp-control.c
+	${CMAKE_CURRENT_SOURCE_DIR}/packet-mctp-smbus.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-mdb.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-mdp.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-mdshdr.c
@@ -1324,6 +1327,7 @@ set(DISSECTOR_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-netlink-generic.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-netlink-netfilter.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-netlink-net_dm.c
+	${CMAKE_CURRENT_SOURCE_DIR}/packet-netlink-nl80211.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-netlink-mac80211-hwsim.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-netlink-ovs_ct_limit.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-netlink-ovs_datapath.c
@@ -1929,10 +1933,10 @@ set(DISSECTOR_DATA_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/data-bacnet.c
 	${CMAKE_CURRENT_SOURCE_DIR}/data-bluetooth.c
 	${CMAKE_CURRENT_SOURCE_DIR}/data-dmx-manfid.c
+	${CMAKE_CURRENT_SOURCE_DIR}/data-errno.c
 	${CMAKE_CURRENT_SOURCE_DIR}/data-isobus.c
 	${CMAKE_CURRENT_SOURCE_DIR}/data-midi-sysex-id.c
 	${CMAKE_CURRENT_SOURCE_DIR}/data-ncsi.c
-	${CMAKE_CURRENT_SOURCE_DIR}/data-nl80211.c
 	${CMAKE_CURRENT_SOURCE_DIR}/data-usb.c
 )
 
@@ -1955,7 +1959,6 @@ set(EVENT_DISSECTOR_SRC
 )
 
 set(DISSECTOR_SUPPORT_SRC
-	${CMAKE_CURRENT_SOURCE_DIR}/errno.c
 	${CMAKE_CURRENT_SOURCE_DIR}/json-dictionary.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-dcerpc-nt.c
 	${CMAKE_CURRENT_SOURCE_DIR}/packet-snort-config.c
@@ -2022,10 +2025,12 @@ set(DISSECTOR_REG_SRC
 )
 
 source_group(dissector-registration FILES ${DISSECTOR_REG_SRC})
+add_custom_target(generate_dissector_registration DEPENDS ${DISSECTOR_REG_SRC})
 
 add_library(dissector-registration OBJECT
 	${DISSECTOR_REG_SRC}
 )
+add_dependencies(dissector-registration generate_dissector_registration)
 
 target_include_directories(dissector-registration
 	PRIVATE
@@ -2065,6 +2070,7 @@ add_library(dissectors OBJECT
 	${DISSECTOR_LEX}
 	${EVENT_FILES}
 )
+add_dependencies(dissectors generate_dissector_registration)
 
 target_include_directories(dissectors
 	SYSTEM PRIVATE
@@ -2112,6 +2118,7 @@ if(NOT WIN32) # We're well past Windows' command line length limits
 		${DISSECTOR_HEADERS}
 		${ALL_EVENT_DISSECTOR_SRC}
 	)
+	add_dependencies(checkAPI_dissectors generate_dissector_registration)
 endif()
 
 #

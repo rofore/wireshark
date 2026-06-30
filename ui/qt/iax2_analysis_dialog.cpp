@@ -35,6 +35,7 @@
 #include <ui/qt/utils/color_utils.h>
 #include <ui/qt/utils/qt_ui_utils.h>
 #include <ui/qt/utils/stock_icon.h>
+#include <ui/qt/utils/theme_manager.h>
 #include "main_application.h"
 #include "ui/qt/widgets/wireshark_file_dialog.h"
 
@@ -86,7 +87,7 @@ public:
 
         if (statinfo->flags & STAT_FLAG_WRONG_SEQ) {
             status = QObject::tr("Wrong sequence number");
-            bg_color = ColorUtils::expert_color_error;
+            bg_color = ThemeManager::instance()->color(ThemeManager::ExpertError);
         } else if (statinfo->flags & STAT_FLAG_REG_PT_CHANGE) {
             status = QObject::tr("Payload changed to PT=%1").arg(statinfo->pt);
             bg_color = color_rtp_warn_;
@@ -128,7 +129,7 @@ public:
         if (bg_color.isValid()) {
             for (int col = 0; col < columnCount(); col++) {
                 setBackground(col, bg_color);
-                setForeground(col, ColorUtils::expert_color_foreground);
+                setForeground(col, ThemeManager::instance()->color(ThemeManager::ExpertForeground));
             }
         }
     }
@@ -208,7 +209,6 @@ Iax2AnalysisDialog::Iax2AnalysisDialog(QWidget &parent, CaptureFile &cf) :
     stream_ctx_menu_.addAction(ui->actionSaveReverseCsv);
     stream_ctx_menu_.addSeparator();
     stream_ctx_menu_.addAction(ui->actionSaveGraph);
-    set_action_shortcuts_visible_in_context_menu(stream_ctx_menu_.actions());
 
     ui->forwardTreeWidget->installEventFilter(this);
     ui->forwardTreeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -241,11 +241,12 @@ Iax2AnalysisDialog::Iax2AnalysisDialog(QWidget &parent, CaptureFile &cf) :
 
     for (int i = 0; i < num_graphs_; i++) {
         QCPGraph *graph = ui->streamGraph->addGraph();
-        graph->setPen(QPen(ColorUtils::graphColor(i)));
+        QColor graphColor = ThemeManager::instance()->graphColor(i);
+        graph->setPen(QPen(graphColor));
         graph->setName(graph_cbs[i]->text());
         graphs_ << graph;
         graph_cbs[i]->setChecked(true);
-        graph_cbs[i]->setIcon(StockIcon::colorIcon(ColorUtils::graphColor(i), QPalette::Text));
+        graph_cbs[i]->setIcon(StockIcon::colorIcon(ThemeManager::instance()->graphColor(i), QPalette::Text));
     }
     ui->streamGraph->xAxis->setLabel("Arrival Time");
     ui->streamGraph->yAxis->setLabel("Value (ms)");

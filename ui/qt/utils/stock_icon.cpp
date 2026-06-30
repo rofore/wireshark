@@ -154,6 +154,11 @@ StockIcon::StockIcon(const QString icon_name) :
 // Create a square icon filled with the specified color.
 QIcon StockIcon::colorIcon(const QRgb bg_color, const QRgb fg_color, const QString glyph)
 {
+    return colorIcon(QColor(bg_color), fg_color, glyph);
+}
+
+QIcon StockIcon::colorIcon(const QColor bg_color, const QRgb fg_color, const QString glyph)
+{
     QList<int> sizes = QList<int>() << 48 << 32 << 24 << 16 << 12;
     QIcon color_icon;
 
@@ -258,4 +263,10 @@ void StockIcon::fillIconNameMap()
     icon_name_to_standard_pixmap_["media-playback-pause"] = QStyle::SP_MediaPause;
     icon_name_to_standard_pixmap_["media-playback-start"] = QStyle::SP_MediaPlay;
     icon_name_to_standard_pixmap_["media-playback-stop"] = QStyle::SP_MediaStop;
+
+    // Icons for Lua debugger
+    icon_name_to_standard_pixmap_["folder"] = QStyle::SP_DirIcon;
+    icon_name_to_standard_pixmap_["text-x-generic"] = QStyle::SP_FileIcon;
+    icon_name_to_standard_pixmap_["view-refresh"] = QStyle::SP_BrowserReload;
+    icon_name_to_standard_pixmap_["edit-clear"] = QStyle::SP_TrashIcon;
 }

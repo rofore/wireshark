@@ -147,7 +147,7 @@
 #define ISIS_LSP_PFX_ATTR_FLAG_R    0x40
 #define ISIS_LSP_PFX_ATTR_FLAG_N    0x20
 
-const range_string mtid_strings[] = {
+const range_string isis_mtid_strings[] = {
   {    0,    0, "Standard topology" },
   {    1,    1, "IPv4 In-Band Management" },
   {    2,    2, "IPv6 routing topology" },
@@ -1430,8 +1430,7 @@ dissect_lsp_ext_ip_reachability_clv(tvbuff_t *tvb, packet_info* pinfo, proto_tre
 
         len = 5 + byte_length;
         if ((ctrl_info & 0x40) != 0) {
-            subclvs_len = tvb_get_uint8(tvb, offset+len);
-            proto_tree_add_item(subtree, hf_isis_lsp_ext_ip_reachability_subclvs_len, tvb, offset+len, 1, ENC_BIG_ENDIAN);
+            proto_tree_add_item_ret_uint(subtree, hf_isis_lsp_ext_ip_reachability_subclvs_len, tvb, offset+len, 1, ENC_BIG_ENDIAN, &subclvs_len);
             i =0;
             while (i < subclvs_len) {
                 clv_offset = offset + len + 1 + i; /* skip the total subtlv len indicator */
@@ -2198,8 +2197,7 @@ dissect_lsp_ipv6_reachability_clv(tvbuff_t *tvb, packet_info* pinfo, proto_tree 
 
         len = 6 + byte_length;
         if ((ctrl_info & 0x20) != 0) {
-            subclvs_len = tvb_get_uint8(tvb, offset+len);
-            proto_tree_add_item(subtree, hf_isis_lsp_ipv6_reachability_subclvs_len, tvb, offset+len, 1, ENC_BIG_ENDIAN);
+            proto_tree_add_item_ret_uint(subtree, hf_isis_lsp_ipv6_reachability_subclvs_len, tvb, offset+len, 1, ENC_BIG_ENDIAN, &subclvs_len);
 
             i =0;
             while (i < subclvs_len) {
@@ -5826,7 +5824,7 @@ proto_register_isis_lsp(void)
         },
         { &hf_isis_lsp_mt_id,
             { "Topology ID", "isis.lsp.mtid",
-              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(mtid_strings), 0x0fff,
+              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(isis_mtid_strings), 0x0fff,
               NULL, HFILL }
         },
         { &hf_isis_lsp_ip_reachability_ipv4_prefix,
@@ -5951,7 +5949,7 @@ proto_register_isis_lsp(void)
         },
         { &hf_isis_lsp_grp_macaddr_topology_id,
             { "Topology ID", "isis.lsp.grp_macaddr.mtid",
-              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(mtid_strings), 0x0fff,
+              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(isis_mtid_strings), 0x0fff,
               NULL, HFILL }
         },
         { &hf_isis_lsp_grp_macaddr_vlan_id,
@@ -5986,7 +5984,7 @@ proto_register_isis_lsp(void)
         },
         { &hf_isis_lsp_grp_ipv4addr_topology_id,
             { "Topology ID", "isis.lsp.grp_ipv4addr.mtid",
-              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(mtid_strings), 0x0fff,
+              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(isis_mtid_strings), 0x0fff,
               NULL, HFILL }
         },
         { &hf_isis_lsp_grp_ipv4addr_vlan_id,
@@ -6021,7 +6019,7 @@ proto_register_isis_lsp(void)
         },
         { &hf_isis_lsp_grp_ipv6addr_topology_id,
             { "Topology ID", "isis.lsp.grp_ipv6addr.mtid",
-              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(mtid_strings), 0x0fff,
+              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(isis_mtid_strings), 0x0fff,
               NULL, HFILL }
         },
         { &hf_isis_lsp_grp_ipv6addr_vlan_id,
@@ -6334,7 +6332,7 @@ proto_register_isis_lsp(void)
         },
         { &hf_isis_lsp_mt_cap_mtid,
             { "Topology ID", "isis.lsp.mt_cap.mtid",
-              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(mtid_strings), 0x0fff,
+              FT_UINT16, BASE_DEC|BASE_RANGE_STRING, RVALS(isis_mtid_strings), 0x0fff,
               NULL, HFILL }
         },
         { &hf_isis_lsp_eis_neighbors_reserved,

@@ -2,14 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ja_JP">
 <context>
-    <name>Abbreviation</name>
-    <message>
-        <source></source>
-        <comment>for &quot;not applicable&quot;</comment>
-        <translation></translation>
-    </message>
-</context>
-<context>
     <name>AboutDialog</name>
     <message>
         <source>About Wireshark</source>
@@ -147,6 +139,29 @@
     <message>
         <source>Value</source>
         <translation>値</translation>
+    </message>
+</context>
+<context>
+    <name>AnnotationEditDialog</name>
+    <message>
+        <source>Color:</source>
+        <translation>色:</translation>
+    </message>
+    <message>
+        <source>Comment (max %1 characters)</source>
+        <translation>コメント (最大 %1 文字)</translation>
+    </message>
+    <message>
+        <source>Comment:</source>
+        <translation>コメント:</translation>
+    </message>
+    <message>
+        <source>Select Annotation Color</source>
+        <translation>注釈の色を選択</translation>
+    </message>
+    <message>
+        <source>Annotations are session-only and will be lost when the capture is closed.</source>
+        <translation>アノテーションはこのセッションのみ有効で、キャプチャを閉じると失われます。</translation>
     </message>
 </context>
 <context>
@@ -704,6 +719,150 @@
     </message>
 </context>
 <context>
+    <name>BreakpointConditionDelegate</name>
+    <message>
+        <source>Expression</source>
+        <translation>書式</translation>
+    </message>
+    <message>
+        <source>Lua expression — pause when truthy</source>
+        <translation>Lua書式 — 真と評価されたときに一時停止</translation>
+    </message>
+    <message>
+        <source>Evaluated each time control reaches this line; locals, upvalues, and globals are visible like Watch / Evaluate.
+Runtime errors are treated as false (silent) and surface as a warning icon on the row.</source>
+        <translation>制御がこの行に到達するたびに評価されます。ウォッチ / 評価 と同様に、ローカル変数、アップバリュー、グローバル変数を参照できます。
+実行時エラーは false として扱われ（サイレント）、行に警告アイコンとして表示されます。</translation>
+    </message>
+    <message>
+        <source>Hit Count</source>
+        <translation>ヒット回数</translation>
+    </message>
+    <message>
+        <source>Pause after N hits (0 disables)</source>
+        <translation>N 回ヒット後に一時停止（0 で無効）</translation>
+    </message>
+    <message>
+        <source>Gate the pause on a hit counter. The dropdown next to N picks the comparison mode: from pauses on every hit from N onwards (default); every pauses on hits N, 2N, 3N, …; once pauses on the N-th hit and deactivates the breakpoint. Use 0 to disable the gate. The counter is preserved across edits to Expression / Hit Count / Log Message; lowering the target below the current count rolls the counter back to 0 so the breakpoint can wait for the next N hits. Right-click the row to reset it explicitly. Combined with an Expression on the same row, the hit-count gate runs first.</source>
+        <translation>ヒットカウンタで一時停止を制御します。N の横にあるドロップダウンで比較モードを選択します: from は N 回目以降のすべてのヒットで一時停止します（既定）; every は N、2N、3N、… 回目のヒットで一時停止します; once は N 回目のヒットで一度だけ一時停止し、ブレークポイントを無効化します。0 を指定するとこの条件を無効にします。カウンタは 式 / ヒット回数 / ログメッセージ を編集しても保持されます。現在のカウントより小さい値に下げるとカウンタは 0 に戻され、ブレークポイントは次の N 回ヒットまで待機できます。行を右クリックすると明示的にリセットできます。同じ行に Expression がある場合、ヒット回数条件が先に実行されます。</translation>
+    </message>
+    <message>
+        <source>Log Message</source>
+        <translation>ログメッセージ</translation>
+    </message>
+    <message>
+        <source>Log message — supports {expr} and tags such as {filename}, {basename}, {line}, {function}, {hits}, {timestamp}, {delta}…</source>
+        <translation>ログメッセージ — {expr} と、{filename}、{basename}、{line}、{function}、{hits}、{timestamp}、{delta}… などのタグをサポート</translation>
+    </message>
+    <message>
+        <source>Logpoints write a message to the Evaluate output (and Wireshark&apos;s info log) each time the line is reached. By default execution continues without pausing; tick the Pause box on this editor to also pause after emitting (useful for log-then-inspect without duplicating the breakpoint). The line is emitted verbatim — there is no automatic file:line prefix. Inside {} the text is evaluated as a Lua expression in this frame and converted to text the same way tostring() does; reserved tags below shadow any same-named Lua local / upvalue / global. Origin: {filename}, {basename}, {line}, {function}, {what}. Counters and scope: {hits}, {depth}, {thread}. Time: {timestamp}, {datetime}, {epoch}, {epoch_ms}, {elapsed}, {delta}. Use {{ and }} for literal { and }. Per-placeholder errors substitute &apos;&lt;error: ...&gt;&apos; without aborting the line.</source>
+        <translation>ログポイントは、この行に到達するたびに 評価出力（および Wireshark の情報ログ）へメッセージを書き込みます。既定では一時停止せずに実行を継続します。このエディタの一時停止ボックスをオンにすると、出力後に一時停止することもできます（ブレークポイントを重複させずにログ出力後に調査する場合に便利です）。行はそのまま出力されます — file:line のプレフィックスは自動的には付きません。{} 内のテキストはこのフレーム内の Lua 式として評価され、tostring() と同じ方法でテキストに変換されます。下記の予約タグは、同名の Lua ローカル変数 / アップバリュー / グローバル変数より優先されます。発生元: {filename}, {basename}, {line}, {function}, {what}。カウンタとスコープ: {hits}, {depth}, {thread}。時刻: {timestamp}, {datetime}, {epoch}, {epoch_ms}, {elapsed}, {delta}。リテラルの { と } には {{ と }} を使用します。各プレースホルダのエラーは行全体を中止せず、&apos;&lt;error: ...&gt;&apos;に置換されます。</translation>
+    </message>
+    <message>
+        <source>from</source>
+        <translation>…から</translation>
+    </message>
+    <message>
+        <source>every</source>
+        <translation>すべて</translation>
+    </message>
+    <message>
+        <source>once</source>
+        <translation>一度だけ</translation>
+    </message>
+    <message>
+        <source>Comparison mode for the hit count:
+from — pause on every hit from N onwards.
+every — pause on hits N, 2N, 3N…
+once — pause once on the N-th hit and deactivate the breakpoint.</source>
+        <translation>ヒット回数の比較モード:
+from — N 回目以降のすべてのヒットで一時停止します。
+every — N、2N、3N… 回目のヒットで一時停止します。
+once — N 回目のヒットで一度だけ一時停止し、ブレークポイントを無効化します。</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>一時停止</translation>
+    </message>
+    <message>
+        <source>Pause: format and emit the log message AND pause execution.
+Off = logpoint only (matches the historical &quot;logpoints never pause&quot; convention).</source>
+        <translation>一時停止: ログメッセージを整形して出力し、さらに実行を一時停止します。
+オフ = ログポイントのみ（従来の「ログポイントは一時停止しない」という慣例に一致します）。</translation>
+    </message>
+</context>
+<context>
+    <name>CaptureCardWidget</name>
+    <message>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Capture live packets from your network.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;ネットワークからライブパケットをキャプチャします&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <source>Capture</source>
+        <translation>キャプチャ</translation>
+    </message>
+    <message>
+        <source>Start a new capture session</source>
+        <translation>新規キャプチャセッションを開始</translation>
+    </message>
+    <message>
+        <source>&lt;h2&gt;Capture&lt;/h2&gt;</source>
+        <translation>&lt;h2&gt;キャプチャ&lt;/h2&gt;</translation>
+    </message>
+    <message>
+        <source>…using this filter:</source>
+        <translation>…このフィルタを使用:</translation>
+    </message>
+    <message>
+        <source>Capture filter</source>
+        <translation>キャプチャフィルタ</translation>
+    </message>
+    <message>
+        <source>Enter a capture filter expression to limit which data is recorded during live capture.</source>
+        <translation>ライブキャプチャ間にデータが記録されるのを制限するキャプチャフィルタ書式を入力</translation>
+    </message>
+    <message>
+        <source>Interface type filter</source>
+        <translation>インターフェースタイプフィルタ</translation>
+    </message>
+    <message>
+        <source>Filters the capture source list by type. Shows how many sources are currently visible and how many are hidden by the active filter.</source>
+        <translation>キャプチャソースの一覧を種別ごとにフィルタします。現在表示されているソース数とアクティブフィルタによって非表示になっているソース数を表示します</translation>
+    </message>
+    <message>
+        <source>Capture sources</source>
+        <translation>キャプチャソース</translation>
+    </message>
+    <message>
+        <source>Lists available capture sources. Select one or more to capture from.</source>
+        <translation>利用可能なキャプチャソース一覧を表示します。キャプチャするソースを1つ以上選択してください</translation>
+    </message>
+    <message>
+        <source>%1 / %2 interfaces</source>
+        <translation>%1 / %2 インターフェース</translation>
+    </message>
+    <message>
+        <source>%1 / %2</source>
+        <translation>%1 / %2</translation>
+    </message>
+    <message>
+        <source>All interfaces shown</source>
+        <translation>表示されているすべてのインターフェース</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n interface(s)</source>
+        <translation>
+            <numerusform>%n インターフェース</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n interface(s) shown, %1 hidden</source>
+        <translation>
+            <numerusform>%n インターフェース表示, %1 非表示</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>CaptureCommentDialog</name>
     <message>
         <source>Edit Capture Comments</source>
@@ -866,7 +1025,7 @@
     </message>
     <message>
         <source>Unknown file type returned by save as dialog.</source>
-        <translation>…として保存画面から返された未知のファイルタイプ</translation>
+        <translation>…として保存画面から返された不明のファイルタイプ</translation>
     </message>
     <message>
         <source>Please report this as a Wireshark issue at https://gitlab.com/wireshark/wireshark/-/issues.</source>
@@ -1138,25 +1297,26 @@
     </message>
 </context>
 <context>
-    <name>CaptureFilterCombo</name>
-    <message>
-        <source>Capture filter selector</source>
-        <translation>キャプチャフィルタ選択</translation>
-    </message>
-</context>
-<context>
-    <name>CaptureFilterEdit</name>
+    <name>CaptureFilterEntry</name>
     <message>
         <source>Capture filter entry</source>
         <translation>キャプチャフィルタエントリ</translation>
     </message>
     <message>
-        <source>Manage saved bookmarks.</source>
-        <translation>保存したブックマークを管理</translation>
+        <source>Saved Capture Filters</source>
+        <translation>保存したキャプチャフィルタ</translation>
     </message>
     <message>
-        <source>Apply this filter string to the display.</source>
-        <translation>このフィルタ文字列を表示に適用</translation>
+        <source>Save this filter</source>
+        <translation>このフィルタを保存</translation>
+    </message>
+    <message>
+        <source>Remove this filter</source>
+        <translation>このフィルタを削除</translation>
+    </message>
+    <message>
+        <source>Manage Capture Filters</source>
+        <translation>キャプチャフィルタ管理</translation>
     </message>
     <message>
         <source>Multiple filters selected. Override them here or leave this blank to preserve them.</source>
@@ -1171,18 +1331,6 @@
         <source>Enter a capture filter %1</source>
         <translation>キャプチャフィルタ %1 を入力</translation>
     </message>
-    <message>
-        <source>Save this filter</source>
-        <translation>このフィルタを保存</translation>
-    </message>
-    <message>
-        <source>Remove this filter</source>
-        <translation>このフィルタを削除</translation>
-    </message>
-    <message>
-        <source>Manage Capture Filters</source>
-        <translation>キャプチャフィルタ管理</translation>
-    </message>
 </context>
 <context>
     <name>CaptureFilterSyntaxWorker</name>
@@ -1193,6 +1341,25 @@
     <message>
         <source>Unable to check capture filter (BPF extensions require a live handle)</source>
         <translation>キャプチャフィルタをチェックできません(BPF拡張はライブハンドルを必要とします)</translation>
+    </message>
+</context>
+<context>
+    <name>CaptureFilterValidator</name>
+    <message>
+        <source>No interfaces selected</source>
+        <translation>インターフェースが選択されていません</translation>
+    </message>
+    <message>
+        <source>Unable to check capture filter</source>
+        <translation>キャプチャフィルタをチェックできません</translation>
+    </message>
+    <message>
+        <source>Unable to check capture filter (BPF extensions require a live handle)</source>
+        <translation>キャプチャフィルタをチェックできません(BPF拡張はライブハンドルを必要とします)</translation>
+    </message>
+    <message>
+        <source>Syntax checking unavailable</source>
+        <translation>文法チェックが利用できません</translation>
     </message>
 </context>
 <context>
@@ -1646,26 +1813,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The interval between new packet updates. Affects how often the GUI updates and the granularity of timers.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;新しいパケットが更新される間隔。どのくらいの頻度でGUIが更新されるのとタイマの精度に影響します。&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <source>Enable Aggregation View for real-time capturing</source>
-        <translation>リアルタイムキャプチャのために集約ビューを有効にします</translation>
-    </message>
-    <message>
-        <source>This option can only be changed when Aggregation Mode is not active.</source>
-        <translation>このオプションは集約モードがアクティブでない場合にのみ変更できます</translation>
-    </message>
-    <message>
-        <source>Aggregation fields</source>
-        <translation>集約フィールド</translation>
-    </message>
-    <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Fiedls used for aggregation.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;集約に用いるフィールド&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <source>Edit..</source>
-        <translation>編集..</translation>
     </message>
     <message>
         <source>Don&apos;t load interfaces on startup</source>
@@ -2247,6 +2394,85 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>Displays the raw data of the selected event.</source>
         <translation>選択したイベントの生データを表示します</translation>
     </message>
+    <message>
+        <source>Packet annotations are not saved and will be lost when the capture is closed.</source>
+        <translation>パケットの注釈は保存されず、キャプチャを閉じると失われます。</translation>
+    </message>
+    <message>
+        <source>Packet Annotations</source>
+        <translation>パケット注釈</translation>
+    </message>
+    <message>
+        <source>Select one or more bytes first.</source>
+        <translation>最初に１つかそれ以上のバイト列を選択します</translation>
+    </message>
+    <message>
+        <source>Add Annotation</source>
+        <translation>注釈を追加</translation>
+    </message>
+    <message>
+        <source>No annotation found at the selection.</source>
+        <translation>選択範囲に注釈が見つかりません。</translation>
+    </message>
+    <message>
+        <source>Edit Annotation</source>
+        <translation>注釈を編集</translation>
+    </message>
+    <message>
+        <source>Start byte set: %1</source>
+        <translation>開始バイトを設定しました: %1</translation>
+    </message>
+    <message>
+        <source>Set start byte first.</source>
+        <translation>最初に開始バイトを設定してください</translation>
+    </message>
+    <message>
+        <source>Start byte (absolute): %1
+End byte (absolute): %2
+Distance (absolute, bytes): %3
+Distance (signed, bytes): %4</source>
+        <translation>開始バイト（絶対）: %1
+終了バイト（絶対）: %2
+距離（絶対、バイト）: %3
+距離（符号付き、バイト）: %4</translation>
+    </message>
+    <message>
+        <source>selected protocol</source>
+        <translation>選択したプロトコル</translation>
+    </message>
+    <message>
+        <source>selected field</source>
+        <translation>選択したフィールド</translation>
+    </message>
+    <message>
+        <source>parent protocol</source>
+        <translation>親プロトコル</translation>
+    </message>
+    <message>
+        <source>
+Reference range (%1): start %2, length %3</source>
+        <translation>参照範囲（%1）: 開始 %2、長さ %3</translation>
+    </message>
+    <message>
+        <source>
+Start byte (relative to reference): %1
+End byte (relative to reference): %2</source>
+        <translation>開始バイト（参照からの相対）: %1
+終了バイト（参照からの相対）: %2</translation>
+    </message>
+    <message>
+        <source>
+Relative to reference: n/a (outside reference range)</source>
+        <translation>参照からの相対: 該当なし（参照範囲外）</translation>
+    </message>
+    <message>
+        <source>Compute Offset</source>
+        <translation>オフセットを計算</translation>
+    </message>
+    <message>
+        <source>Offset markers cleared.</source>
+        <translation>オフセットマーカーをクリアしました</translation>
+    </message>
 </context>
 <context>
     <name>DecodeAsDialog</name>
@@ -2339,14 +2565,256 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
-    <name>DisplayFilterCombo</name>
+    <name>DisAudioStream</name>
     <message>
-        <source>Display filter selector</source>
-        <translation>表示フィルタの選択</translation>
+        <source>No DIS signal payload is available for playback.</source>
+        <translation>再生可能な DIS 信号ペイロードがありません。</translation>
     </message>
     <message>
-        <source>Select from previously used filters.</source>
-        <translation>前に使ったフィルタから選択</translation>
+        <source>Unable to decode DIS audio payload for this stream.</source>
+        <translation>このストリームの DIS 音声ペイロードをデコードできません。</translation>
+    </message>
+    <message>
+        <source>Audio format is not supported by the current output device.</source>
+        <translation>現在の出力デバイスはこの音声形式に対応していません。</translation>
+    </message>
+    <message>
+        <source>Unable to open playback buffer.</source>
+        <translation>再生バッファを開けません</translation>
+    </message>
+</context>
+<context>
+    <name>DisStreamAnalysisDialog</name>
+    <message>
+        <source>DIS Stream Analysis</source>
+        <translation>DIS ストリーム解析</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>ストリーム</translation>
+    </message>
+    <message>
+        <source>Codec</source>
+        <translation>コーデック</translation>
+    </message>
+    <message>
+        <source>Duration (s)</source>
+        <translation>継続時間 (秒)</translation>
+    </message>
+    <message>
+        <source>Packets</source>
+        <translation>パケット</translation>
+    </message>
+    <message>
+        <source>Signal Packets</source>
+        <translation>信号パケット</translation>
+    </message>
+    <message>
+        <source>Transmitter Packets</source>
+        <translation>送信パケット</translation>
+    </message>
+    <message>
+        <source>Estimated Lost</source>
+        <translation>推定損失</translation>
+    </message>
+    <message>
+        <source>Jitter (mean/max ms)</source>
+        <translation>ジッタ (平均/最大ミリ秒)</translation>
+    </message>
+    <message>
+        <source>Delta (mean/max ms)</source>
+        <translation>デルタ (平均/最大ミリ秒)</translation>
+    </message>
+    <message>
+        <source>Capture Time (s)</source>
+        <translation>キャプチャ時間(秒)</translation>
+    </message>
+    <message>
+        <source>Amplitude</source>
+        <translation>振幅</translation>
+    </message>
+    <message>
+        <source>0.000 / 0.000 s</source>
+        <translation>0.000 / 0.000 秒</translation>
+    </message>
+    <message>
+        <source>Playback</source>
+        <translation>再生</translation>
+    </message>
+    <message>
+        <source>Packet</source>
+        <translation>パケット</translation>
+    </message>
+    <message>
+        <source>Time (s)</source>
+        <translation>時間(秒)</translation>
+    </message>
+    <message>
+        <source>Delta (ms)</source>
+        <translation>間隔(ミリ秒)</translation>
+    </message>
+    <message>
+        <source>Jitter (ms)</source>
+        <translation>ジッタ(ミリ秒)</translation>
+    </message>
+    <message>
+        <source>Lost</source>
+        <translation>損失</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>状態</translation>
+    </message>
+    <message>
+        <source>Go To First Packet</source>
+        <translation>最初のパケットに移動</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>再生</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <source>-</source>
+        <translation>-</translation>
+    </message>
+    <message>
+        <source>Unknown</source>
+        <translation>不明</translation>
+    </message>
+    <message>
+        <source>Problem</source>
+        <translation>問題</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+    <message>
+        <source>Waveform</source>
+        <translation>波形</translation>
+    </message>
+    <message>
+        <source>Jitter Spikes</source>
+        <translation>ジッタスパイク</translation>
+    </message>
+    <message>
+        <source>Estimated Loss</source>
+        <translation>推定損失</translation>
+    </message>
+    <message>
+        <source>Problem Packets</source>
+        <translation>問題のパケット</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>一時停止</translation>
+    </message>
+    <message>
+        <source>Double click on graph to set start of playback.</source>
+        <translation>グラフをダブルクリックして再生開始位置を設定します。</translation>
+    </message>
+    <message>
+        <source>Start: %1 s. Double click on graph to set start of playback.</source>
+        <translation>開始: %1 秒。グラフをダブルクリックして再生開始位置を設定します。</translation>
+    </message>
+    <message>
+        <source>DIS Playback</source>
+        <translation>DIS再生</translation>
+    </message>
+</context>
+<context>
+    <name>DisStreamDialog</name>
+    <message>
+        <source>DIS Streams</source>
+        <translation>DISストリーム</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>開始</translation>
+    </message>
+    <message>
+        <source>End</source>
+        <translation>終了</translation>
+    </message>
+    <message>
+        <source>Src Address</source>
+        <translation>送信元アドレス</translation>
+    </message>
+    <message>
+        <source>Src Port</source>
+        <translation>送信元ポート</translation>
+    </message>
+    <message>
+        <source>Dst Address</source>
+        <translation>宛先アドレス</translation>
+    </message>
+    <message>
+        <source>Dst Port</source>
+        <translation>宛先ポート</translation>
+    </message>
+    <message>
+        <source>Radio</source>
+        <translation>無線</translation>
+    </message>
+    <message>
+        <source>Entity</source>
+        <translation>エンティティ</translation>
+    </message>
+    <message>
+        <source>Signal</source>
+        <translation>信号</translation>
+    </message>
+    <message>
+        <source>Tx</source>
+        <translation>Tx</translation>
+    </message>
+    <message>
+        <source>Lost</source>
+        <translation>損失</translation>
+    </message>
+    <message>
+        <source>Max Delta (ms)</source>
+        <translation>最大間隔(ミリ秒)</translation>
+    </message>
+    <message>
+        <source>Mean Jitter (ms)</source>
+        <translation>平均ジッタ(ミリ秒)</translation>
+    </message>
+    <message>
+        <source>Max Jitter (ms)</source>
+        <translation>最大ジッタ(ミリ秒)</translation>
+    </message>
+    <message>
+        <source>Pb</source>
+        <translation>Pb</translation>
+    </message>
+    <message>
+        <source>Prepare Filter</source>
+        <translation>フィルタを準備</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>再生</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <source>Analyze</source>
+        <translation>分析</translation>
+    </message>
+    <message>
+        <source>X</source>
+        <translation>X</translation>
+    </message>
+    <message>
+        <source>DIS Playback</source>
+        <translation>DIS再生</translation>
     </message>
 </context>
 <context>
@@ -2415,6 +2883,45 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>Filter Button Preferences…</source>
         <oldsource>Filter Button Preferences...</oldsource>
         <translation>フィルタボタン設定…</translation>
+    </message>
+</context>
+<context>
+    <name>DisplayFilterEntry</name>
+    <message>
+        <source>Display filter entry</source>
+        <translation>表示フィルタエントリ</translation>
+    </message>
+    <message>
+        <source>Saved Display Filters</source>
+        <translation>保存した表示フィルタ</translation>
+    </message>
+    <message>
+        <source>Save this filter</source>
+        <translation>このフィルタを保存</translation>
+    </message>
+    <message>
+        <source>Remove this filter</source>
+        <translation>このフィルタを削除</translation>
+    </message>
+    <message>
+        <source>Manage Display Filters</source>
+        <translation>表示フィルタを管理</translation>
+    </message>
+    <message>
+        <source>Filter Button Preferences…</source>
+        <translation>フィルタボタン設定…</translation>
+    </message>
+    <message>
+        <source>Apply a display filter %1 &lt;%2/&gt;</source>
+        <translation>表示フィルタ %1 &lt;%2/&gt; を適用</translation>
+    </message>
+    <message>
+        <source>Display Filter Expression…</source>
+        <translation>表示フィルタ式...</translation>
+    </message>
+    <message>
+        <source>Left align buttons</source>
+        <translation>ボタンを左揃え</translation>
     </message>
 </context>
 <context>
@@ -2510,6 +3017,13 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Click OK to insert this filter</source>
         <translation>OKをクリックしてこのフィルタを挿入</translation>
+    </message>
+</context>
+<context>
+    <name>DisplayFilterValidator</name>
+    <message>
+        <source>&quot;%1&quot; is deprecated in favour of &quot;%2&quot;. See Help section 6.4.8 for details.</source>
+        <translation>&quot;%1&quot; は非推奨で &quot;%2&quot; が推奨されます。詳細はヘルプ 6.4.8をご覧ください</translation>
     </message>
 </context>
 <context>
@@ -2620,16 +3134,20 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>記述のみ</translation>
     </message>
     <message>
-        <source>Only enabled protocols</source>
-        <translation>有効にしたプロトコルのみ</translation>
+        <source>all</source>
+        <translation>すべて</translation>
     </message>
     <message>
-        <source>Only disabled protocols</source>
-        <translation>無効にしたプロトコルのみ</translation>
+        <source>enabled</source>
+        <translation>有効</translation>
     </message>
     <message>
-        <source>any protocol</source>
-        <translation>すべてのプロトコル</translation>
+        <source>disabled</source>
+        <translation>無効</translation>
+    </message>
+    <message>
+        <source>protocols</source>
+        <translation>プロトコル</translation>
     </message>
     <message>
         <source>non-heuristic protocols</source>
@@ -2648,7 +3166,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Description</source>
-        <translation>記述</translation>
+        <translation>説明</translation>
     </message>
 </context>
 <context>
@@ -2897,7 +3415,46 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>ExpertInfoModel</name>
+    <message>
+        <source>Severity: %1</source>
+        <translation>重要度: %1</translation>
+    </message>
+    <message>
+        <source>Summary: %1</source>
+        <translation>概要: %1</translation>
+    </message>
+    <message>
+        <source>Summary: Packet comments listed below.</source>
+        <translation>概要: パケットコメントを下記に一覧</translation>
+    </message>
+    <message>
+        <source>Group: %1</source>
+        <translation>グループ: %1</translation>
+    </message>
+    <message>
+        <source>Protocol: %1</source>
+        <translation>プロトコル: %1</translation>
+    </message>
+    <message>
+        <source>Count: %1</source>
+        <translation>カウント: %1</translation>
+    </message>
+    <message>
+        <source>Packet: %1</source>
+        <translation>パケット %1</translation>
+    </message>
+    <message>
+        <source>Header Field: %1</source>
+        <translation>ヘッダーフィールド: %1</translation>
+    </message>
+</context>
+<context>
     <name>ExpertInfoProxyModel</name>
+    <message>
+        <source>Count: %1</source>
+        <translation>カウント: %1</translation>
+    </message>
     <message>
         <source>Packet</source>
         <translation>パケット</translation>
@@ -2971,6 +3528,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>コンテントタイプ:</translation>
     </message>
     <message>
+        <source>Unique</source>
+        <translation>一意</translation>
+    </message>
+    <message>
+        <source>Only display the first of identical entries</source>
+        <translation>重複する項目は最初のみ表示</translation>
+    </message>
+    <message>
         <source>Searching for objects</source>
         <translation>オブジェクトを探索中</translation>
     </message>
@@ -2981,6 +3546,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Only display entries containing this string</source>
         <translation>この文字列を含むエントリのみ表示します</translation>
+    </message>
+    <message>
+        <source>Save All</source>
+        <translation>すべて保存</translation>
+    </message>
+    <message>
+        <source>Save Displayed</source>
+        <translation>表示されたものを保存</translation>
     </message>
     <message>
         <source>Preview</source>
@@ -3001,6 +3574,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Save Object As…</source>
         <translation>…としてオブジェクトを保存</translation>
+    </message>
+    <message>
+        <source>Save Objects In…</source>
+        <translation>…のオブジェクトを保存</translation>
     </message>
     <message>
         <source>Save All Objects In…</source>
@@ -3265,6 +3842,45 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>FilterExpressionEdit</name>
+    <message>
+        <source>Saved Filters</source>
+        <translation>保存したフィルタ</translation>
+    </message>
+    <message>
+        <source>Save this filter</source>
+        <translation>このフィルタを保存</translation>
+    </message>
+    <message>
+        <source>Remove this filter</source>
+        <translation>このフィルタを削除</translation>
+    </message>
+    <message>
+        <source>Manage Saved Filters</source>
+        <translation>保存したフィルタを管理</translation>
+    </message>
+    <message>
+        <source>Filter Button Preferences...</source>
+        <translation>フィルタボタン設定…</translation>
+    </message>
+    <message>
+        <source>Manage saved filters</source>
+        <translation>保存したフィルタを管理</translation>
+    </message>
+    <message>
+        <source>Clear the filter</source>
+        <translation>フィルタをクリア</translation>
+    </message>
+    <message>
+        <source>Apply this filter</source>
+        <translation>このフィルタを適用</translation>
+    </message>
+    <message>
+        <source>Recent filters</source>
+        <translation>最近のフィルタ</translation>
+    </message>
+</context>
+<context>
     <name>FilterExpressionFrame</name>
     <message>
         <source>Frame</source>
@@ -3280,7 +3896,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Enter a description for the filter button</source>
-        <translation>フィルタボタンの記述を入力します</translation>
+        <translation>フィルタボタンの説明を入力します</translation>
     </message>
     <message>
         <source>Filter:</source>
@@ -3348,6 +3964,13 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Filter Expression</source>
         <translation>フィルタ式</translation>
+    </message>
+</context>
+<context>
+    <name>FilterValidator</name>
+    <message>
+        <source>Invalid filter: %1</source>
+        <translation>無効なフィルタ: %1</translation>
     </message>
 </context>
 <context>
@@ -3513,6 +4136,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Global Extcap path</source>
         <translation>グローバルExtcapパス</translation>
+    </message>
+    <message>
+        <source>Personal Themes</source>
+        <translation>個人テーマ</translation>
+    </message>
+    <message>
+        <source>User-installed theme files (*.jsonc)</source>
+        <translation>ユーザーインストールテーマファイル (*.jsonc)</translation>
     </message>
     <message>
         <source>MaxMind DB path</source>
@@ -3770,61 +4401,16 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>フォントの選択</translation>
     </message>
     <message>
-        <source>Colors:</source>
-        <translation>色:</translation>
+        <source>Theme</source>
+        <translation>テーマ</translation>
     </message>
     <message>
-        <source>System Default</source>
-        <translation>システム デフォルト</translation>
+        <source>Theme Author Information</source>
+        <translation>テーマ著者情報</translation>
     </message>
     <message>
-        <source>Solid</source>
-        <translation>Solid</translation>
-    </message>
-    <message>
-        <source>Sample ignored packet text</source>
-        <translation>無視されたパケットテキストのサンプル</translation>
-    </message>
-    <message>
-        <source>Sample marked packet text</source>
-        <translation>マークされたパケットテキストのサンプル</translation>
-    </message>
-    <message>
-        <source>Sample active selected item</source>
-        <translation>アクティブな選択済み項目サンプル</translation>
-    </message>
-    <message>
-        <source>Style:</source>
-        <translation>スタイル:</translation>
-    </message>
-    <message>
-        <source>Gradient</source>
-        <translation>勾配</translation>
-    </message>
-    <message>
-        <source>Sample inactive selected item</source>
-        <translation>非アクティブな選択済み項目サンプル</translation>
-    </message>
-    <message>
-        <source>Sample &quot;Follow Stream&quot; client text</source>
-        <translation>&quot;ストリーム追跡&quot;クライアントテキストのサンプル</translation>
-    </message>
-    <message>
-        <source>Sample &quot;Follow Stream&quot; server text</source>
-        <translation>&quot;ストリーム追跡&quot;サーバテキストのサンプル</translation>
-    </message>
-    <message>
-        <source>Sample valid filter</source>
-        <translation>有効フィルタのサンプル</translation>
-    </message>
-    <message>
-        <source>Sample invalid filter</source>
-        <translation>無効フィルタのサンプル</translation>
-    </message>
-    <message>
-        <source>Sample warning filter</source>
-        <oldsource>Sample deprecated filter</oldsource>
-        <translation>非推奨フィルタのサンプル</translation>
+        <source>Theme Description</source>
+        <translation>テーマ説明</translation>
     </message>
     <message>
         <source>Example GIF query packets have jumbo window sizes</source>
@@ -3836,16 +4422,28 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>Geraldさんが作成したpangram すべての文字を１文字使う回文 Lazy badgers move unique waxy jellyfish packets.</translation>
     </message>
     <message>
-        <source>Color Scheme:</source>
-        <translation>配色:</translation>
+        <source>System</source>
+        <translation>システム</translation>
     </message>
     <message>
-        <source>Light Mode</source>
-        <translation>ライトモード</translation>
+        <source>Light</source>
+        <translation>ライト</translation>
     </message>
     <message>
-        <source>Dark Mode</source>
-        <translation>ダークモード</translation>
+        <source>Dark</source>
+        <translation>ダーク</translation>
+    </message>
+    <message>
+        <source>Appearance mode:</source>
+        <translation>外観モード</translation>
+    </message>
+    <message>
+        <source>Theme:</source>
+        <translation>テーマ:</translation>
+    </message>
+    <message>
+        <source>Theme by %1</source>
+        <translation>%1 によるテーマ</translation>
     </message>
     <message>
         <source>Font</source>
@@ -3992,6 +4590,30 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>ホーバーハイライトを許可</translation>
     </message>
     <message>
+        <source>Add annotation…</source>
+        <translation>注釈を追加…</translation>
+    </message>
+    <message>
+        <source>Edit annotation…</source>
+        <translation>注釈を編集…</translation>
+    </message>
+    <message>
+        <source>Remove annotation</source>
+        <translation>注釈を削除</translation>
+    </message>
+    <message>
+        <source>Start byte for offset</source>
+        <translation>オフセットの開始バイト</translation>
+    </message>
+    <message>
+        <source>End byte for offset</source>
+        <translation>オフセットの終了バイト</translation>
+    </message>
+    <message>
+        <source>Clear offset markers</source>
+        <translation>オフセットマーカーをクリア</translation>
+    </message>
+    <message>
         <source>Show bytes as hexadecimal</source>
         <translation>16進数でバイト列を表示</translation>
     </message>
@@ -4022,6 +4644,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>…as EBCDIC</source>
         <translation>EBCDIC形式として…</translation>
+    </message>
+    <message>
+        <source>Comment: %1</source>
+        <translation>コメント: %1</translation>
     </message>
 </context>
 <context>
@@ -4661,11 +5287,11 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Delta (ms)</source>
-        <translation>間隔 (ms)</translation>
+        <translation>間隔(ミリ秒)</translation>
     </message>
     <message>
         <source>Jitter (ms)</source>
-        <translation>ジッタ (ms)</translation>
+        <translation>ジッタ(ミリ秒)</translation>
     </message>
     <message>
         <source>Bandwidth</source>
@@ -5319,6 +5945,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>仮想</translation>
     </message>
     <message>
+        <source>Tunnel Interfaces</source>
+        <translation>トンネルインターフェース</translation>
+    </message>
+    <message>
+        <source>Loopback Devices</source>
+        <translation>ループバックデバイス</translation>
+    </message>
+    <message>
         <source>Remote interfaces</source>
         <translation>リモートインターフェース</translation>
     </message>
@@ -5366,12 +6000,35 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>Hide Interface</source>
         <translation>インターフェースを隠す</translation>
     </message>
+    <message>
+        <source>Unknown</source>
+        <translation>不明</translation>
+    </message>
+    <message>
+        <source>Hide all &apos;%1&apos; interfaces</source>
+        <translation>すべての &apos;%1&apos; 印らーフェースを隠す</translation>
+    </message>
 </context>
 <context>
     <name>InterfaceSortFilterModel</name>
     <message>
         <source>No interfaces to be displayed. %1 interfaces hidden.</source>
         <translation>インターフェースは表示されません。 %1 インターフェース非表示</translation>
+    </message>
+</context>
+<context>
+    <name>InterfaceStatsWorker</name>
+    <message>
+        <source>The interface statistics stream stopped unexpectedly.</source>
+        <translation>インターフェース統計ストリームが予期せず停止しました</translation>
+    </message>
+    <message>
+        <source>Unable to start the interface statistics stream.</source>
+        <translation>インターフェース統計ストリームを開始できません</translation>
+    </message>
+    <message>
+        <source>This build has no packet capture support.</source>
+        <translation>このビルドはパケットキャプチャをサポートしていません</translation>
     </message>
 </context>
 <context>
@@ -6416,111 +7073,67 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Packet list multi-color display mode:</source>
-        <translation type="unfinished"></translation>
+        <translation>パケット一覧マルチカラー表示モード:</translation>
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">オフ</translation>
+        <translation>オフ</translation>
     </message>
     <message>
         <source>Scrollbar only</source>
-        <translation type="unfinished"></translation>
+        <translation>スクロールバーのみ</translation>
     </message>
     <message>
         <source>Equal stripes</source>
-        <translation type="unfinished"></translation>
+        <translation>縞模様</translation>
     </message>
     <message>
         <source>Shift right</source>
-        <translation type="unfinished"></translation>
+        <translation>シフト右</translation>
     </message>
     <message>
         <source>75%</source>
-        <translation type="unfinished">75%</translation>
+        <translation>75%</translation>
     </message>
     <message>
         <source>80%</source>
-        <translation type="unfinished">80%</translation>
+        <translation>80%</translation>
     </message>
     <message>
         <source>85%</source>
-        <translation type="unfinished">85%</translation>
+        <translation>85%</translation>
     </message>
     <message>
         <source>90%</source>
-        <translation type="unfinished">90%</translation>
+        <translation>90%</translation>
     </message>
     <message>
         <source>95%</source>
-        <translation type="unfinished">95%</translation>
+        <translation>95%</translation>
     </message>
     <message>
         <source>Separator style:</source>
-        <translation type="unfinished"></translation>
+        <translation>区切りスタイル:</translation>
     </message>
     <message>
         <source>Vertical</source>
-        <translation type="unfinished"></translation>
+        <translation>垂直</translation>
     </message>
     <message>
         <source>Diagonal</source>
-        <translation type="unfinished"></translation>
+        <translation>対角</translation>
     </message>
     <message>
         <source>Bubble</source>
-        <translation type="unfinished"></translation>
+        <translation>バブル</translation>
     </message>
     <message>
         <source>Display multiple colors in packet details</source>
-        <translation type="unfinished"></translation>
+        <translation>パケット詳細部に複数の色を表示します</translation>
     </message>
 </context>
 <context>
     <name>LearnCardWidget</name>
-    <message>
-        <source>User Documentation</source>
-        <translation>ユーザドキュメント</translation>
-    </message>
-    <message>
-        <source>Docs</source>
-        <translation>ドキュメント</translation>
-    </message>
-    <message>
-        <source>Read the Wireshark user documentation online.</source>
-        <translation>Wiresharkユーザドキュメントをオンラインで読む</translation>
-    </message>
-    <message>
-        <source>Wiki</source>
-        <translation>Wiki</translation>
-    </message>
-    <message>
-        <source>Browse the Wireshark Wiki for how-tos and other information.</source>
-        <translation>手順や他の情報をWireshark Wikiで参照</translation>
-    </message>
-    <message>
-        <source>Questions and Answers</source>
-        <translation>質問と回答</translation>
-    </message>
-    <message>
-        <source>Q&amp;A</source>
-        <translation>Q&amp;A</translation>
-    </message>
-    <message>
-        <source>Get answers to your Wireshark questions from the community.</source>
-        <translation>コミュニティからあなたのWiresharkの質問に対して回答を得る</translation>
-    </message>
-    <message>
-        <source>Mailing Lists</source>
-        <translation>メーリングリスト</translation>
-    </message>
-    <message>
-        <source>Lists</source>
-        <translation>リスト</translation>
-    </message>
-    <message>
-        <source>Join the Wireshark mailing lists to discuss Wireshark with other users and developers.</source>
-        <translation>Wiresharkメーリングリストに参加して他のユーザや開発者と議論する</translation>
-    </message>
     <message>
         <source>&lt;h2&gt;Learn&lt;/h2&gt;</source>
         <translation>&lt;h2&gt;学習&lt;/h2&gt;</translation>
@@ -6532,22 +7145,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Opens the Wireshark documentation website</source>
         <translation>WiresharkドキュメントWebサイトを開く</translation>
-    </message>
-    <message>
-        <source>Discord</source>
-        <translation>Discord</translation>
-    </message>
-    <message>
-        <source>Join the Wireshark Discord server to chat with other users and developers.</source>
-        <translation>Wireshark Discordサーバに参加して他のユーザや開発者と話す</translation>
-    </message>
-    <message>
-        <source>Donate</source>
-        <translation>寄付</translation>
-    </message>
-    <message>
-        <source>Support the Wireshark project by making a donation to the Wireshark Foundation.</source>
-        <translation>Wireshark Foundationに寄付を行うことでWiresharkプロジェクトをサポートする</translation>
     </message>
 </context>
 <context>
@@ -7002,6 +7599,564 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>LuaDebuggerBreakpointsController</name>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln breakpoint(s)?</source>
+        <translation type="obsolete">
+            <numerusform>Are you sure you want to remove %Ln breakpoint?</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerCodeTabsController</name>
+    <message numerus="yes">
+        <source>There are unsaved changes in %Ln open file(s).</source>
+        <translation>
+            <numerusform>%Ln 個の開いているファイルに未保存の変更があります</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Save Lua Script</source>
+        <translation>Luaスクリプトを保存</translation>
+    </message>
+    <message>
+        <source>Could not write to %1:
+%2</source>
+        <translation>%1 に書き込めませんでした:
+%2</translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation>Luaデバッガ</translation>
+    </message>
+    <message>
+        <source>Save changes to %1 before closing?</source>
+        <translation>閉じる前に %1 への変更を保存しますか？</translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerCodeView</name>
+    <message>
+        <source>Click: add or remove breakpoint
+Drag existing breakpoint: move to nearest free visible line
+Shift+click: on an empty line, add a disabled breakpoint;
+on an existing breakpoint, toggle its active state</source>
+        <translation>クリック: ブレークポイントを追加または削除t
+既存のブレークポイントをドラッグ: 最も近い空いている表示行へ移動
+Shift+クリック: 空行では無効なブレークポイントを追加
+既存のブレークポイントでは有効/無効を切り替え</translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerDialog</name>
+    <message>
+        <source>Open Lua Script</source>
+        <translation>オープンLuaスクリプト</translation>
+    </message>
+    <message>
+        <source>Save (%1)</source>
+        <translation>保存 (%1)</translation>
+    </message>
+    <message>
+        <source>Continue execution (F5)</source>
+        <translation>実行を続行(F5)</translation>
+    </message>
+    <message>
+        <source>Step over (F10)</source>
+        <translation>ステップオーバー (F10)</translation>
+    </message>
+    <message>
+        <source>Step into (F11)</source>
+        <translation>ステップイン (F11)</translation>
+    </message>
+    <message>
+        <source>Step out (Shift+F11)</source>
+        <translation>ステップアウト(Shift+F11)</translation>
+    </message>
+    <message>
+        <source>Run to line (%1)</source>
+        <translation>行まで実行 (%1)</translation>
+    </message>
+    <message>
+        <source>Reload Lua Plugins (Ctrl+Shift+L)</source>
+        <translation>Luaプラグインを再読込 (Ctrl+Shift+L)</translation>
+    </message>
+    <message>
+        <source>Find in script (%1)</source>
+        <translation>スクリプト内を検索 (%1)</translation>
+    </message>
+    <message>
+        <source>Go to line (%1)</source>
+        <translation>行へ移動 (%1)</translation>
+    </message>
+    <message>
+        <source>Location</source>
+        <translation>場所</translation>
+    </message>
+    <message>
+        <source>Variables</source>
+        <translation>変数</translation>
+    </message>
+    <message>
+        <source>From: Locals</source>
+        <translation>From: ローカル変数</translation>
+    </message>
+    <message>
+        <source>From: Upvalues</source>
+        <translation>From: アップバリュー</translation>
+    </message>
+    <message>
+        <source>From: Globals</source>
+        <translation>From: グローバル変数</translation>
+    </message>
+    <message>
+        <source>
+… (truncated)</source>
+        <translation>… (切り詰められました)</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Locals&lt;/b&gt;&lt;br/&gt;Parameters and local variables for the selected stack frame.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Upvalues&lt;/b&gt;&lt;br/&gt;Outer variables that this function actually uses from surrounding code. Anything the function does not reference does not appear here.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Globals&lt;/b&gt;&lt;br/&gt;Names from the global environment table.&lt;/p&gt;&lt;p&gt;Values that differ from the previous pause are drawn in a &lt;b&gt;bold accent color&lt;/b&gt;, and briefly flash on the pause that introduced the change.&lt;/p&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;ローカル変数&lt;/b&gt;&lt;br/&gt;選択したスタックフレームのパラメータとローカル変数&lt;/p&gt;&lt;p&gt;&lt;b&gt;アップバリュー&lt;/b&gt;&lt;br/&gt;この関数が周囲のコードから実際に使用している外部変数です。関数が参照しないものはここには表示されません&lt;/p&gt;&lt;p&gt;&lt;b&gt;グローバル変数&lt;/b&gt;&lt;br/&gt;グローバル環境変数テーブル名&lt;/p&gt;&lt;p&gt;前回の一時停止時と異なる値は &lt;b&gt;太字のアクセントカラー&lt;/b&gt;で描画され、その変更が発生した一時停止時に短く点滅します&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>名前</translation>
+    </message>
+    <message>
+        <source>Value</source>
+        <translation>値</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>種別</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>ウォッチ</translation>
+    </message>
+    <message>
+        <source>Stack Trace</source>
+        <translation>ステックトレース</translation>
+    </message>
+    <message>
+        <source>Function</source>
+        <translation>ファンクション</translation>
+    </message>
+    <message>
+        <source>Select a row to inspect locals and upvalues for that frame. Double-click a Lua frame to open its source location.</source>
+        <translation>行を選択して、そのフレームのローカル変数とアップバリューを調べます。Luaフレームをダブルクリックしてソース位置を開きます</translation>
+    </message>
+    <message>
+        <source>Breakpoints</source>
+        <translation>ブレークポイント</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Expression&lt;/b&gt;&lt;br/&gt;Pause only when this Lua expression is truthy in the current frame. Runtime errors count as false and surface a warning icon on the row.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Hit Count&lt;/b&gt;&lt;br/&gt;Gate the pause on a hit counter. The dropdown next to &lt;i&gt;N&lt;/i&gt; picks the comparison mode: &lt;code&gt;from&lt;/code&gt; pauses on every hit from &lt;i&gt;N&lt;/i&gt; onwards (default); &lt;code&gt;every&lt;/code&gt; pauses on hits &lt;i&gt;N&lt;/i&gt;, 2&amp;times;&lt;i&gt;N&lt;/i&gt;, 3&amp;times;&lt;i&gt;N&lt;/i&gt;, &amp;hellip;; &lt;code&gt;once&lt;/code&gt; pauses on the &lt;i&gt;N&lt;/i&gt;-th hit and deactivates the breakpoint. The counter is preserved across edits; right-click the row to reset it.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Log Message&lt;/b&gt;&lt;br/&gt;Write a line to the &lt;i&gt;Evaluate&lt;/i&gt; output (and Wireshark&apos;s debug log) each time the breakpoint fires &amp;mdash; after the &lt;i&gt;Hit Count&lt;/i&gt; gate and any &lt;i&gt;Expression&lt;/i&gt; allow it. By default execution continues; click the pause toggle on the editor row to also pause after emitting. Tags: &lt;code&gt;{expr}&lt;/code&gt; (any Lua value); &lt;code&gt;{filename}&lt;/code&gt;, &lt;code&gt;{basename}&lt;/code&gt;, &lt;code&gt;{line}&lt;/code&gt;, &lt;code&gt;{function}&lt;/code&gt;, &lt;code&gt;{what}&lt;/code&gt;; &lt;code&gt;{hits}&lt;/code&gt;, &lt;code&gt;{depth}&lt;/code&gt;, &lt;code&gt;{thread}&lt;/code&gt;; &lt;code&gt;{timestamp}&lt;/code&gt;, &lt;code&gt;{datetime}&lt;/code&gt;, &lt;code&gt;{epoch}&lt;/code&gt;, &lt;code&gt;{epoch_ms}&lt;/code&gt;, &lt;code&gt;{elapsed}&lt;/code&gt;, &lt;code&gt;{delta}&lt;/code&gt;; &lt;code&gt;{{&lt;/code&gt; / &lt;code&gt;}}&lt;/code&gt; for literal braces.&lt;/p&gt;&lt;p&gt;Edit the &lt;i&gt;Location&lt;/i&gt; cell (double-click, F2, or right-click &amp;rarr; Edit) to attach one of these. A white core inside the breakpoint dot &amp;mdash; in this list and in the gutter &amp;mdash; marks rows that carry extras.&lt;/p&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;式&lt;/b&gt;&lt;br/&gt;現在のフレームでこの Lua 式が真と評価された場合のみ一時停止します。実行時エラーは false として扱われ、行に警告アイコンとして表示されます。&lt;/p&gt;&lt;p&gt;&lt;b&gt;ヒット回数&lt;/b&gt;&lt;br/&gt;ヒットカウンタで一時停止を制御します。 &lt;i&gt;N&lt;/i&gt; の横にあるドロップダウンで比較モードを選択します: &lt;code&gt;from&lt;/code&gt;は &lt;i&gt;N&lt;/i&gt; 回目以降のすべてのヒットで一時停止します(既定) &lt;code&gt;every&lt;/code&gt; は &lt;i&gt;N&lt;/i&gt; &#xa0;回、2x &lt;i&gt;N&lt;/i&gt;回、3x&lt;i&gt;N&lt;/i&gt;回目毎に毎回一時停止します。 &lt;code&gt;once&lt;/code&gt; は &lt;i&gt;N&lt;/i&gt; &#xa0;回目のヒットで一度だけ一時停止し、ブレークポイントを無効化します。カウンタは編集しても保持されます。行を右クリックするとリセットできます。&lt;/p&gt;&lt;p&gt;&lt;b&gt;ログメッセージ&lt;/b&gt;&lt;br/&gt;ブレークポイントが発火するたびに &lt;i&gt;Evaluate&lt;/i&gt; 出力 (およびWiresharkのデバッグログ出力)へ1行書き込みます。なお、&lt;i&gt;ヒット回数&lt;/i&gt; 条件と任意の &lt;i&gt;式&lt;/i&gt; が許可した後になります。既定では実行を継続します。エディタ行の一時停止トグルをクリックすると、出力後に一時停止することもできます。タグ: &lt;code&gt;{expr}&lt;/code&gt; (any Lua value); &lt;code&gt;{filename}&lt;/code&gt;, &lt;code&gt;{basename}&lt;/code&gt;, &lt;code&gt;{line}&lt;/code&gt;, &lt;code&gt;{function}&lt;/code&gt;, &lt;code&gt;{what}&lt;/code&gt;; &lt;code&gt;{hits}&lt;/code&gt;, &lt;code&gt;{depth}&lt;/code&gt;, &lt;code&gt;{thread}&lt;/code&gt;; &lt;code&gt;{timestamp}&lt;/code&gt;, &lt;code&gt;{datetime}&lt;/code&gt;, &lt;code&gt;{epoch}&lt;/code&gt;, &lt;code&gt;{epoch_ms}&lt;/code&gt;, &lt;code&gt;{elapsed}&lt;/code&gt;, &lt;code&gt;{delta}&lt;/code&gt;; &lt;code&gt;{{&lt;/code&gt; / &lt;code&gt;}}&lt;/code&gt; をリテラルの括弧に利用します。&lt;/p&gt;&lt;p&gt;（ダブルクリック、F2、または右クリック &amp;amp;rarr; 編集）。ブレークポイント点の内側の白い芯は、この一覧およびガター上で、追加設定を持つ行を示します。編集中にエディタのモードドロップダウンを切り替えると、他のページで入力した未確定のテキストは破棄されます。入力内容を保持するには、切り替える前にそのページで Enter を押してください。&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Active</source>
+        <translation>アクティブ</translation>
+    </message>
+    <message>
+        <source>Line</source>
+        <translation>行</translation>
+    </message>
+    <message>
+        <source>Hits</source>
+        <translation>ヒット</translation>
+    </message>
+    <message>
+        <source>ON — Break on Lua errors</source>
+        <translation>ON — Luaエラーでブレーク</translation>
+    </message>
+    <message>
+        <source>OFF — Break on Lua errors</source>
+        <translation>OFF — Luaエラーでブレーク</translation>
+    </message>
+    <message>
+        <source>Files</source>
+        <translation>ファイル</translation>
+    </message>
+    <message>
+        <source>Evaluate</source>
+        <translation>評価</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Lua Expression Evaluation&lt;/b&gt;&lt;br&gt;&lt;br&gt;Code runs in a protected environment: runtime errors are caught and shown in the output instead of propagating.&lt;br&gt;&lt;br&gt;&lt;b&gt;What works:&lt;/b&gt;&lt;ul&gt;&lt;li&gt;Read/modify global variables (&lt;code&gt;_G.x = 42&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;Modify table contents (&lt;code&gt;my_table.field = 99&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;Call functions and inspect return values&lt;/li&gt;&lt;/ul&gt;&lt;b&gt;Limitations:&lt;/b&gt;&lt;ul&gt;&lt;li&gt;Local variables cannot be modified directly (use &lt;code&gt;debug.setlocal()&lt;/code&gt;) unless there is an associated &lt;i&gt;assign&lt;/i&gt; method (&lt;code&gt;pinfo.src_port&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;Long-running expressions are automatically aborted&lt;/li&gt;&lt;li&gt;&lt;b&gt;Warning:&lt;/b&gt; Changes to globals persist and can affect ongoing dissection&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;b&gt;Lua式の評価&lt;/b&gt;&lt;br&gt;&lt;br&gt;コードは保護された環境で実行されます。実行時エラーは伝播せず、捕捉されて出力に表示されます。&lt;br&gt;&lt;br&gt;&lt;b&gt;実行可能な動作:&lt;/b&gt;&lt;ul&gt;&lt;li&gt;  グローバル変数の読み取り・変更 (&lt;code&gt;_G.x = 42&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;テーブル内容の変更 (&lt;code&gt;my_table.field = 99&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;&#xa0; 関数の呼び出しおよび戻り値の確認&lt;/li&gt;&lt;/ul&gt;&lt;b&gt;制限事項:&lt;/b&gt;&lt;ul&gt;&lt;li&gt;  ローカル変数は直接変更できません ( &lt;code&gt;debug.setlocal()を使用するか&lt;/code&gt;&lt;i&gt;代入&lt;/i&gt; メソッドが関連付けられている場合を除く (&lt;code&gt;pinfo.src_port&lt;/code&gt;)&lt;/li&gt;)&lt;li&gt; 長時間実行される式は自動的に中断されます&lt;/li&gt;&lt;li&gt;&lt;b&gt;警告k:&lt;/b&gt; グローバル変数への変更は永続化され、進行中のディセクションに影響を与える可能性があります &lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
+        <source>Enter Lua expression</source>
+        <translation>Lua式を入力</translation>
+    </message>
+    <message>
+        <source>Output</source>
+        <translation>出力</translation>
+    </message>
+    <message>
+        <source>Execute the Lua code (Ctrl+Return)</source>
+        <translation>Luaコードを実行 (Ctrl+Return)</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>クリア</translation>
+    </message>
+    <message>
+        <source>Clear output</source>
+        <translation>出力をクリア</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>設定</translation>
+    </message>
+    <message>
+        <source>Auto (follow color scheme)</source>
+        <translation>自動 (配色に従う)</translation>
+    </message>
+    <message>
+        <source>Dark</source>
+        <translation>ダーク</translation>
+    </message>
+    <message>
+        <source>Light</source>
+        <translation>ライト</translation>
+    </message>
+    <message>
+        <source>Color theme for the code editor</source>
+        <translation>コードエディタのカラーテーマ</translation>
+    </message>
+    <message>
+        <source>Code View Theme:</source>
+        <translation>コード表示テーマ:</translation>
+    </message>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln breakpoint(s)?</source>
+        <translation type="vanished">
+            <numerusform>本当に %Ln 個のブレークポイントを削除してもよろしいですか？</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln watch(es)?</source>
+        <translation type="vanished">
+            <numerusform>本当に %Ln 個のウォッチを削除してもよろしいですか？</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Type: %1</source>
+        <translation>種別: %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>There are unsaved changes in %Ln open file(s).</source>
+        <translation type="vanished">
+            <numerusform>%Ln 個の開いているファイルに未保存の変更があります</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Remove All Breakpoints</source>
+        <translation>すべてのブレークポイントを削除</translation>
+    </message>
+    <message>
+        <source>Add Watch (%1)</source>
+        <translation>ウォッチを追加 (%1)</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;Each row is either a &lt;b&gt;Variables-tree path&lt;/b&gt; or a &lt;b&gt;Lua expression&lt;/b&gt;; the panel auto-detects which based on the syntax you type.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Path watches&lt;/b&gt; &amp;mdash; resolved against the paused frame&apos;s locals, upvalues, and globals:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Section-qualified: &lt;code&gt;Locals.&lt;i&gt;name&lt;/i&gt;&lt;/code&gt;, &lt;code&gt;Upvalues.&lt;i&gt;name&lt;/i&gt;&lt;/code&gt;, &lt;code&gt;Globals.&lt;i&gt;name&lt;/i&gt;&lt;/code&gt;.&lt;/li&gt;&lt;li&gt;Section root alone: &lt;code&gt;Locals&lt;/code&gt;, &lt;code&gt;Upvalues&lt;/code&gt;, &lt;code&gt;Globals&lt;/code&gt; (&lt;code&gt;_G&lt;/code&gt; is an alias for &lt;code&gt;Globals&lt;/code&gt;).&lt;/li&gt;&lt;li&gt;Unqualified name: resolved in &lt;b&gt;Locals &amp;rarr; Upvalues &amp;rarr; Globals&lt;/b&gt; order; the row tooltip shows which section matched.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;After the first segment, chain &lt;code&gt;.field&lt;/code&gt; or bracket keys &amp;mdash; integer (&lt;code&gt;[1]&lt;/code&gt;, &lt;code&gt;[-1]&lt;/code&gt;, &lt;code&gt;[0x1F]&lt;/code&gt;), boolean (&lt;code&gt;[true]&lt;/code&gt;), or short-literal string (&lt;code&gt;[&quot;key&quot;]&lt;/code&gt;, &lt;code&gt;[&apos;k&apos;]&lt;/code&gt;). Depth is capped at 32 segments.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Expression watches&lt;/b&gt; &amp;mdash; anything that is not a plain path (operators, function/method calls, table constructors, length &lt;code&gt;#&lt;/code&gt;, comparisons, &amp;hellip;) is evaluated as Lua against the same locals/upvalues/globals. &lt;b&gt;You do not need a leading &lt;code&gt;=&lt;/code&gt; or &lt;code&gt;return&lt;/code&gt;&lt;/b&gt;; value-returning expressions auto-return their value. Examples: &lt;code&gt;#packets&lt;/code&gt;, &lt;code&gt;tbl[i + 1]&lt;/code&gt;, &lt;code&gt;obj:method()&lt;/code&gt;, &lt;code&gt;a == b&lt;/code&gt;, &lt;code&gt;{x, y}&lt;/code&gt;. Tables produced by an expression are expandable, and children re-resolve on every pause.&lt;/p&gt;&lt;p&gt;Values are only read while the debugger is &lt;b&gt;paused&lt;/b&gt;; otherwise the Value column shows a muted em dash. Values that differ from the previous pause are drawn in a &lt;b&gt;bold accent color&lt;/b&gt;, and briefly flash on the pause that introduced the change.&lt;/p&gt;&lt;p&gt;Double-click or press &lt;b&gt;F2&lt;/b&gt; to edit a row; &lt;b&gt;Delete&lt;/b&gt; removes it; drag rows to reorder. Use the &lt;b&gt;Evaluate&lt;/b&gt; panel below to run statements with side effects (assignments, blocks, loops).&lt;/p&gt;</source>
+        <translation>&lt;p&gt;各行は &lt;b&gt;変数ツリーパス&lt;/b&gt; または &lt;b&gt;Lua式&lt;/b&gt;のいずれかです。; パネルは入力された構文に基づいて自動判定します。&lt;/p&gt;&lt;p&gt;&lt;b&gt;パスウォッチ&lt;/b&gt; 一時停止中フレームのローカル変数、アップバリュー、グローバル変数に対して解決されます:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;セクション修飾:&lt;code&gt;ローカル変数&lt;i&gt;名&lt;/i&gt;&lt;/code&gt;, &lt;code&gt;アップバリュー&lt;i&gt;名&lt;/i&gt;&lt;/code&gt;, &lt;code&gt;グローバル変数&lt;i&gt;名&lt;/i&gt;&lt;/code&gt;.&lt;/li&gt;&lt;li&gt;セクションルート単独: &lt;code&gt;ロケール&lt;/code&gt;, &lt;code&gt;アップバリュー&lt;/code&gt;, &lt;code&gt;グローバル変数&lt;/code&gt; (&lt;code&gt;_G&lt;/code&gt; は &lt;code&gt;グローバル変数&lt;/code&gt;の別名です).&lt;/li&gt;&lt;li&gt;非修飾名:&lt;b&gt;ローカル変数 アップバリュー グローバル変数&lt;/b&gt; の順にに解決されます; 行のツールチップには一致したセクションが表示されます。&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;最初のセグメント以降は、&lt;code&gt;.フィールド&lt;/code&gt; またはブラケットキー; 整数 (&lt;code&gt;[1]&lt;/code&gt;, &lt;code&gt;[-1]&lt;/code&gt;, &lt;code&gt;[0x1F]&lt;/code&gt;), 真偽値 (&lt;code&gt;[true]&lt;/code&gt;), 短いリテラル文字列 (&lt;code&gt;[&quot;key&quot;]&lt;/code&gt;, &lt;code&gt;[&apos;k&apos;]&lt;/code&gt;). を連結できます。深度は 32 セグメントまでに制限されます。&lt;/p&gt;&lt;p&gt;&lt;b&gt;式ウォッチ&lt;/b&gt;  単純なパスではないもの（演算子、関数/メソッド呼び出し、テーブルコンストラクタ、長さ &lt;code&gt;#&lt;/code&gt;, 比較) は、同じローカル変数/アップバリュー/グローバル変数に対する Lua として評価されます。 &lt;b&gt;先頭の&lt;code&gt;=&lt;/code&gt; や &lt;code&gt;return&lt;/code&gt;は不要です。&lt;/b&gt; 値を返す式は自動的に値を返します。例:&lt;code&gt;#packets&lt;/code&gt;, &lt;code&gt;tbl[i + 1]&lt;/code&gt;, &lt;code&gt;obj:method()&lt;/code&gt;, &lt;code&gt;a == b&lt;/code&gt;, &lt;code&gt;{x, y}&lt;/code&gt; 式が生成したテーブルは展開可能で、子要素は一時停止のたびに再解決されます。&lt;/p&gt;&lt;p&gt;値はデバッガが&lt;b&gt;一時停止&lt;/b&gt; のときだけ読み取られます。それ以外の場合、Value 列には薄い em ダッシュが表示されます。前回の一時停止時と異なる値は &lt;b&gt;太字のアクセントカラー&lt;/b&gt; で描画され、その変更が発生した一時停止時に短く点滅します。&lt;/p&gt;&lt;p&gt;行を編集するにはダブルクリックまたは&lt;b&gt;F2&lt;/b&gt; を押します。削除するには &lt;b&gt;Delete&lt;/b&gt;を押します。行はドラッグして並べ替えられます。副作用のある文（代入、ブロック、ループ）を実行するには、下の&lt;b&gt;Evaluate&lt;/b&gt;パネルを使用してください。&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Remove Watch (%1)</source>
+        <translation>ウォッチを削除 (%1)</translation>
+    </message>
+    <message>
+        <source>Remove All Watches (%1)</source>
+        <translation>すべてのウォッチを削除 (%1)</translation>
+    </message>
+    <message>
+        <source>No breakpoints</source>
+        <translation>ブレークポイントはありません</translation>
+    </message>
+    <message>
+        <source>Edit Breakpoint</source>
+        <translation>ブレークポイントを編集</translation>
+    </message>
+    <message>
+        <source>Remove Breakpoint (%1)</source>
+        <translation>ブレークポイントを削除 (%1)</translation>
+    </message>
+    <message>
+        <source>Remove All Breakpoints (%1)</source>
+        <translation>すべてのブレークポイントを削除 (%1)</translation>
+    </message>
+    <message>
+        <source>Undo</source>
+        <translation>元に戻す</translation>
+    </message>
+    <message>
+        <source>Redo</source>
+        <translation>やり直し</translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation>切り取り</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>コピー</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>貼り付け</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>すべてを選択</translation>
+    </message>
+    <message>
+        <source>Add Breakpoint</source>
+        <translation>ブレークポイントを追加</translation>
+    </message>
+    <message>
+        <source>Remove Breakpoint</source>
+        <translation>ブレークポイントを削除</translation>
+    </message>
+    <message>
+        <source>Run to this line</source>
+        <translation>この行まで実行</translation>
+    </message>
+    <message>
+        <source>Add Watch: &quot;%1&quot;</source>
+        <translation>ウォッチを追加: &quot;%1&quot;</translation>
+    </message>
+    <message>
+        <source>Debugger is paused. Uncheck to disable.</source>
+        <translation>デバッガは一時停止中です。無効化するにはチェックを外してください</translation>
+    </message>
+    <message>
+        <source>Debugger is enabled. Uncheck to disable.</source>
+        <translation>デバッガが有効です。チェックを外して無効にします</translation>
+    </message>
+    <message>
+        <source>Debugger is disabled while a live capture is running. Stop the capture to re-enable.</source>
+        <translation>  &#xa0; &#xa0; &#xa0; &#xa0; &#xa0; &lt;translation&gt;ライブキャプチャの実行中はデバッガが無効になります。再度有効化するにはキャプチャを停止してください</translation>
+    </message>
+    <message>
+        <source>Debugger is disabled. Check to enable.</source>
+        <translation>デバッガが無効です。チェックして有効にします</translation>
+    </message>
+    <message>
+        <source>Disabled (live capture)</source>
+        <translation>無効 (ライブキャプチャ)</translation>
+    </message>
+    <message>
+        <source>Disabled</source>
+        <translation>無効</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>一時停止中</translation>
+    </message>
+    <message>
+        <source>(runtime error)</source>
+        <translation>(ランタイムエラー)</translation>
+    </message>
+    <message>
+        <source>Running</source>
+        <translation>実行中</translation>
+    </message>
+    <message>
+        <source>Lua Scripts (*.lua);;All Files (*)</source>
+        <translation>Lua スクリプト (*.lua);;すべてのファイル (*)</translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation>Luaデバッガ</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>続行</translation>
+    </message>
+    <message>
+        <source>F5</source>
+        <translation>F5</translation>
+    </message>
+    <message>
+        <source>Step Over</source>
+        <translation>ステップオーバー</translation>
+    </message>
+    <message>
+        <source>F10</source>
+        <translation>F10</translation>
+    </message>
+    <message>
+        <source>Step Into</source>
+        <translation>ステップイン</translation>
+    </message>
+    <message>
+        <source>F11</source>
+        <translation>F11</translation>
+    </message>
+    <message>
+        <source>Step Out</source>
+        <translation>ステップアウト</translation>
+    </message>
+    <message>
+        <source>Shift+F11</source>
+        <translation>Shift+F11</translation>
+    </message>
+    <message>
+        <source>Add Watch</source>
+        <translation>ウォッチを追加</translation>
+    </message>
+    <message>
+        <source>Ctrl+Shift+W</source>
+        <translation>Ctrl+Shift+W</translation>
+    </message>
+    <message>
+        <source>Open File</source>
+        <translation>ファイルを開く</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
+        <source>Ctrl+S</source>
+        <translation>Ctrl+S</translation>
+    </message>
+    <message>
+        <source>Find…</source>
+        <translation>検索…</translation>
+    </message>
+    <message>
+        <source>Ctrl+F</source>
+        <translation>Ctrl+F</translation>
+    </message>
+    <message>
+        <source>Go to Line…</source>
+        <translation>行へ移動…</translation>
+    </message>
+    <message>
+        <source>Ctrl+G</source>
+        <translation>Ctrl+G</translation>
+    </message>
+    <message>
+        <source>Reload Lua Plugins</source>
+        <translation>Luaプラグインを再読込</translation>
+    </message>
+    <message>
+        <source>Ctrl+Shift+L</source>
+        <translation>Ctrl+Shift+L</translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerFindFrame</name>
+    <message>
+        <source>Find:</source>
+        <translation>検索:</translation>
+    </message>
+    <message>
+        <source>Find Next</source>
+        <translation>次を検索</translation>
+    </message>
+    <message>
+        <source>Find Previous</source>
+        <translation>前を検索</translation>
+    </message>
+    <message>
+        <source>Replace:</source>
+        <translation>置換:</translation>
+    </message>
+    <message>
+        <source>Replace</source>
+        <translation>置換</translation>
+    </message>
+    <message>
+        <source>Replace All</source>
+        <translation>すべてを置換</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>閉じる</translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerGoToLineFrame</name>
+    <message>
+        <source>Line:</source>
+        <translation>行:</translation>
+    </message>
+    <message>
+        <source>Go to line</source>
+        <translation>行へ移動…</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerPauseOverlay</name>
+    <message>
+        <source>Lua debugger paused</source>
+        <translation>Luaデバッガは一時停止中です</translation>
+    </message>
+    <message>
+        <source>Use the Lua Debugger window to step, continue, or evaluate. The main window resumes when execution is released.</source>
+        <translation>ステップ実行、続行、評価には Lua デバッガウィンドウを使用してください。実行が解放されるとメインウィンドウが再開します</translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerWatchController</name>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln watch(es)?</source>
+        <translation type="obsolete">
+            <numerusform>Are you sure you want to remove %Ln watch?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation>Luaデバッガ</translation>
+    </message>
+    <message numerus="yes">
+        <source>Watch expression is too long (maximum %Ln characters).</source>
+        <translation>
+            <numerusform>ウォッチ式が長すぎます(最大 %Ln 文字)</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerWatchRowPresenter</name>
+    <message>
+        <source>Enter a variable path (e.g. Locals.x, Globals.t.k) or a Lua expression in the Watch column to see a value here.</source>
+        <translation>ここに値を表示するには、Watch 列に変数パス(例: Locals.x, Globals.t.k)または Lua式を入力してください</translation>
+    </message>
+    <message>
+        <source>Value shown only while the debugger is paused.</source>
+        <translation>値はデバッガの一時停止中のみ表示されます</translation>
+    </message>
+    <message>
+        <source>Value shown only while the debugger is paused. The debugger is currently disabled.</source>
+        <translation>値はデバッガの一時停止中のみ表示されます。デバッガは現在無効です</translation>
+    </message>
+    <message>
+        <source>Type: %1</source>
+        <translation>種別: %1</translation>
+    </message>
+    <message>
+        <source>error</source>
+        <translation>エラー</translation>
+    </message>
+    <message>
+        <source>Could not evaluate watch.</source>
+        <translation>ウォッチを評価できませんでした</translation>
+    </message>
+    <message>
+        <source>Expression — re-evaluated on every pause.</source>
+        <translation>式 — 一時停止のたびに再評価されます</translation>
+    </message>
+</context>
+<context>
     <name>MainStatusBar</name>
     <message>
         <source>Ready to load or capture</source>
@@ -7143,6 +8298,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>選択されたパケット: %1 %2 </translation>
     </message>
     <message>
+        <source> %1 Aggregated: %2</source>
+        <translation> %1 集約: %2</translation>
+    </message>
+    <message>
         <source> %1 Selected: %2 (%3%)</source>
         <translation> %1 選択済: %2 (%3%)</translation>
     </message>
@@ -7208,6 +8367,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
 </context>
 <context>
     <name>MainWindow</name>
+    <message>
+        <source> before updating</source>
+        <translation>更新前</translation>
+    </message>
+    <message>
+        <source>Please close the current file before updating.</source>
+        <translation>更新する前に現在のファイルを閉じてください</translation>
+    </message>
     <message>
         <source>Display filter as %1</source>
         <translation>%1 として表示フィルタ</translation>
@@ -7655,7 +8822,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Burst measurement interval (ms):</source>
-        <translation>バースト計測間隔(ms):</translation>
+        <translation>バースト計測間隔(ミリ秒):</translation>
     </message>
     <message>
         <source>Burst alarm threshold (packets):</source>
@@ -7933,14 +9100,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
 <context>
     <name>PacketList</name>
     <message>
-        <source>Packet list</source>
-        <translation>パケット一覧</translation>
-    </message>
-    <message>
-        <source>List of captured packets</source>
-        <translation>キャプチャしたパケットの一覧</translation>
-    </message>
-    <message>
         <source>Summary as Text</source>
         <translation>テキストとしての概要</translation>
     </message>
@@ -8049,6 +9208,22 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Sorting …</source>
         <translation>ソート中 …</translation>
+    </message>
+    <message>
+        <source>Marked</source>
+        <translation>マーク済</translation>
+    </message>
+    <message>
+        <source>Ignored</source>
+        <translation>無視済</translation>
+    </message>
+    <message>
+        <source>Reference Time</source>
+        <translation>基準時刻</translation>
+    </message>
+    <message>
+        <source>Modified</source>
+        <translation>修正済</translation>
     </message>
 </context>
 <context>
@@ -8756,8 +9931,8 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>列</translation>
     </message>
     <message>
-        <source>Font and Colors</source>
-        <translation>フォントと色</translation>
+        <source>Theme and Font</source>
+        <translation>テーマとフォント</translation>
     </message>
     <message>
         <source>Welcome Page</source>
@@ -8778,6 +9953,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>RSA Keys</source>
         <translation>RSA 鍵</translation>
+    </message>
+    <message>
+        <source>Aggregation</source>
+        <translation>集約</translation>
     </message>
 </context>
 <context>
@@ -8902,10 +10081,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>新規プロファイル</translation>
     </message>
     <message>
-        <source>Profile Error</source>
-        <translation>プロファイルエラー</translation>
-    </message>
-    <message>
         <source>Exporting profiles</source>
         <translation>プロファイルをエキスポート中</translation>
     </message>
@@ -8928,22 +10103,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation type="vanished">
             <numerusform>%Ln 選択された個人プロファイル</numerusform>
         </translation>
-    </message>
-    <message>
-        <source>An import of profiles is not allowed, while changes are pending</source>
-        <translation>プロファイルのインポートは許可されません。この間の変更は保留されます。</translation>
-    </message>
-    <message>
-        <source>An import is pending to be saved. Additional imports are not allowed</source>
-        <translation>保存されるインポートは保留中です。追加のインポートは許可されません。</translation>
-    </message>
-    <message>
-        <source>An export of profiles is only allowed for personal profiles</source>
-        <translation>プロファイルのエクスポートは個人プロファイルのみ許可されます。</translation>
-    </message>
-    <message>
-        <source>An export of profiles is not allowed, while changes are pending</source>
-        <translation>プロファイルのエクスポートは許可されません。この間の変更は保留されます。</translation>
     </message>
     <message numerus="yes">
         <source>%Ln profile(s) exported</source>
@@ -9013,24 +10172,24 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>これはシステム提供プロファイルです</translation>
     </message>
     <message>
-        <source>A profile change for this name is pending</source>
-        <translation>この名前のプロファイルの変更は保留中です。</translation>
-    </message>
-    <message>
-        <source> (See: %1)</source>
-        <translation> (参照: %1)</translation>
-    </message>
-    <message>
-        <source>This is an invalid profile definition</source>
-        <translation>これは無効なプロファイル定義です。</translation>
-    </message>
-    <message>
         <source>A profile already exists with this name</source>
         <translation>この名前のプロファイルは既に存在します。</translation>
     </message>
     <message>
-        <source>A profile with this name is being deleted</source>
-        <translation>この名前のプロファイルは削除されました。</translation>
+        <source>Duplicate profile name (%1)</source>
+        <translation>プロファイル名が重複しています (%1)</translation>
+    </message>
+    <message>
+        <source>A profile change for this name is pending (See: %1)</source>
+        <translation>この名前のプロファイル変更が保留中です (参照: %1)</translation>
+    </message>
+    <message>
+        <source>%1 (originally %2)</source>
+        <translation>%1 (元は %2)</translation>
+    </message>
+    <message>
+        <source>The %1 profile is being deleted</source>
+        <translation>%1 プロファイルを削除しています</translation>
     </message>
     <message>
         <source>Created from default settings</source>
@@ -9054,16 +10213,8 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>コピー</translation>
     </message>
     <message>
-        <source>Exporting profiles while changes are pending is not allowed</source>
-        <translation>変更が保留中のプロファイルのエキスポートはは許可されません。</translation>
-    </message>
-    <message>
         <source>No profiles found to export</source>
         <translation>エキスポートするプロファイルが見つかりませんでした</translation>
-    </message>
-    <message>
-        <source>Can&apos;t delete profile directory</source>
-        <translation>プロファイルのディレクトリを削除できません</translation>
     </message>
     <message>
         <source>A profile name cannot contain the following characters: %1</source>
@@ -9076,18 +10227,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>A profile cannot start or end with a period (.)</source>
         <translation>プロファイルはピリオド (.) で開始や終了できません</translation>
-    </message>
-    <message>
-        <source>Default</source>
-        <translation>デフォルト</translation>
-    </message>
-    <message>
-        <source>Global</source>
-        <translation>グローバル</translation>
-    </message>
-    <message>
-        <source>Personal</source>
-        <translation>個人</translation>
     </message>
     <message>
         <source>Renamed from: %1</source>
@@ -9163,14 +10302,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
 <context>
     <name>ProtoTree</name>
     <message>
-        <source>Packet details</source>
-        <translation>パケット詳細</translation>
-    </message>
-    <message>
-        <source>Tree view of the selected packet&apos;s fields</source>
-        <translation>選択したパケットのフィールドのツリー表示</translation>
-    </message>
-    <message>
         <source>Not a field or protocol</source>
         <translation>フィールドやプロトコルではあります</translation>
     </message>
@@ -9208,7 +10339,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Description</source>
-        <translation>記述</translation>
+        <translation>説明</translation>
     </message>
     <message>
         <source>Field Name</source>
@@ -9232,23 +10363,23 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Coloring Rule Preferences...</source>
-        <translation type="unfinished"></translation>
+        <translation>色付けルール設定...</translation>
     </message>
     <message>
         <source>Coloring Rules...</source>
-        <translation type="unfinished"></translation>
+        <translation>色付けルール...</translation>
     </message>
     <message>
         <source>Resume Coloring Rule</source>
-        <translation type="unfinished"></translation>
+        <translation>色付けルールを復元</translation>
     </message>
     <message>
         <source>Pause Coloring Rule</source>
-        <translation type="unfinished"></translation>
+        <translation>色付けルールを停止</translation>
     </message>
     <message>
         <source>Resume All Coloring Rules</source>
-        <translation type="unfinished"></translation>
+        <translation>すべての色付けルールを復元</translation>
     </message>
     <message>
         <source>Copied %1</source>
@@ -9265,6 +10396,29 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Colorize with Filter</source>
         <translation>フィルタで色付け</translation>
+    </message>
+</context>
+<context>
+    <name>ProtoTreeModel</name>
+    <message>
+        <source>Comment</source>
+        <translation>コメント</translation>
+    </message>
+    <message>
+        <source>Chat</source>
+        <translation>チャット</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>注意</translation>
+    </message>
+    <message>
+        <source>Warning</source>
+        <translation>警告</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>エラー</translation>
     </message>
 </context>
 <context>
@@ -9753,7 +10907,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Unknown (%1)</source>
-        <translation>未知 (%1)</translation>
+        <translation>不明 (%1)</translation>
     </message>
     <message>
         <source>CCCH</source>
@@ -9798,6 +10952,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>UE Id</source>
         <translation>UE Id</translation>
+    </message>
+    <message>
+        <source></source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Name</source>
@@ -9981,12 +11139,249 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>not found</source>
         <translation>見つかりません</translation>
     </message>
+    <message>
+        <source>Global</source>
+        <translation>グローバル</translation>
+    </message>
+    <message>
+        <source>Personal</source>
+        <translation>個人</translation>
+    </message>
+    <message>
+        <source>Type: %1</source>
+        <translation>種別: %1</translation>
+    </message>
+    <message>
+        <source>%1 = %2</source>
+        <translation>%1 = %2</translation>
+    </message>
+    <message>
+        <source>Copy Name</source>
+        <translation>名前をコピー</translation>
+    </message>
+    <message>
+        <source>Copy Value</source>
+        <translation>値をコピー</translation>
+    </message>
+    <message>
+        <source>Copy Path</source>
+        <translation>パスをコピー</translation>
+    </message>
+    <message>
+        <source>Copy Name &amp;&amp; Value</source>
+        <translation>名前と値をコピー</translation>
+    </message>
+    <message>
+        <source>Add Watch: &quot;%1&quot;</source>
+        <translation>ウォッチを追加: &quot;%1&quot;</translation>
+    </message>
+    <message>
+        <source>Reload Lua Plugins</source>
+        <translation>Luaプラグインを再読込</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to reload all Lua plugins?
+
+This will restart all Lua scripts and may affect capture analysis.</source>
+        <translation>本当にすべてのLuaプラグインを再読み込みしてもよろしいですか？
+これによりすべての Lua スクリプトが再起動され、キャプチャ解析に影響する可能性があります</translation>
+    </message>
+    <message>
+        <source>Evaluation available when debugger is paused</source>
+        <translation>評価はデバッガの一時停止中に利用できます</translation>
+    </message>
+    <message>
+        <source>Enter Lua expression</source>
+        <translation>Lua式を入力</translation>
+    </message>
+    <message>
+        <source>Error: %1</source>
+        <translation>エラー: %1</translation>
+    </message>
+    <message>
+        <source>Error: Unknown error</source>
+        <translation>エラー:不明なエラー</translation>
+    </message>
+    <message>
+        <source>Open Source</source>
+        <translation>ソースを開く</translation>
+    </message>
+    <message>
+        <source>Copy Location</source>
+        <translation>位置をコピー</translation>
+    </message>
+    <message>
+        <source>Show in Finder</source>
+        <translation>ファインダーで表示</translation>
+    </message>
+    <message>
+        <source>Show in Folder</source>
+        <translation>フォルダで表示</translation>
+    </message>
+    <message>
+        <source>Add Watch</source>
+        <translation>ウォッチを追加</translation>
+    </message>
+    <message>
+        <source>Remove All Watches</source>
+        <translation>すべてのウォッチを削除</translation>
+    </message>
+    <message>
+        <source>Duplicate Watch</source>
+        <translation>ウォッチを複製</translation>
+    </message>
+    <message>
+        <source>Edit Watch</source>
+        <translation>ウォッチを編集</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <source>Clear All Watches</source>
+        <translation>すべてのウォッチをクリア</translation>
+    </message>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln watch(es)?</source>
+        <translation>
+            <numerusform>本当に %Ln 個のウォッチを削除してもよろしいですか？</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Maximum watch depth reached</source>
+        <translation>ウォッチの最大深度に達しました</translation>
+    </message>
+    <message>
+        <source>Maximum watch depth reached.</source>
+        <translation>ウォッチの最大深度に達しました</translation>
+    </message>
+    <message>
+        <source>Location</source>
+        <translation>位置</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Hit-count summary&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;code&gt;≥N&lt;/code&gt; &amp;mdash; &lt;i&gt;from&lt;/i&gt; mode: pause from hit &lt;i&gt;N&lt;/i&gt; onwards.&lt;br/&gt;&lt;code&gt;×N&lt;/code&gt; &amp;mdash; &lt;i&gt;every&lt;/i&gt; mode: pause on hits &lt;i&gt;N&lt;/i&gt;, &lt;i&gt;2N&lt;/i&gt;, &lt;i&gt;3N&lt;/i&gt;, &amp;hellip;&lt;br/&gt;&lt;code&gt;@N&lt;/code&gt; &amp;mdash; &lt;i&gt;once&lt;/i&gt; mode: pause once on the &lt;i&gt;N&lt;/i&gt;th hit, then deactivate.&lt;/p&gt;&lt;p&gt;The cell starts with the running hit counter; if a gate is set it follows in parentheses, e.g. &lt;code&gt;3 (≥10)&lt;/code&gt;. With no hit gate the cell is just the counter.&lt;/p&gt;&lt;p&gt;Edit the &lt;i&gt;Location&lt;/i&gt; cell to set or change the gate (see the breakpoint-extras section).&lt;/p&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;ヒット回数サマリ&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;code&gt;≥N&lt;/code&gt; &amp;mdash; &lt;i&gt;from&lt;/i&gt; モード: &lt;i&gt;N&lt;/i&gt; 回目以降のすべてのヒットで一時停止します。&lt;br/&gt;&lt;code&gt;×N&lt;/code&gt; &amp;mdash; &lt;i&gt;every&lt;/i&gt; モード:  &lt;i&gt;N&lt;/i&gt;, &lt;i&gt;2N&lt;/i&gt;, &lt;i&gt;3N&lt;/i&gt;...回目のヒットで一時停止します。 &lt;br/&gt;&lt;code&gt;@N&lt;/code&gt; &amp;mdash; &lt;i&gt;once&lt;/i&gt; モード:  &lt;i&gt;N&lt;/i&gt;回目のヒットで一度だけ一時停止し、その後ブレークポイントを無効化します。&lt;/p&gt;&lt;p&gt;セルは実行中のヒットカウンタで始まり、条件が設定されている場合は括弧内に表示されます（例: &lt;code&gt;3 (≥10)&lt;/code&gt; ヒット条件がない場合、セルにはカウンタのみ表示されます。&lt;/p&gt;&lt;p&gt;条件を編集するには &lt;i&gt;Location&lt;/i&gt;セルを編集してください（ブレークポイント拡張セクションを参照） &lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Edit...</source>
+        <translation>編集...</translation>
+    </message>
+    <message>
+        <source>Reset Hit Count</source>
+        <translation>ヒット回数をリセット</translation>
+    </message>
+    <message>
+        <source>Reset All Hit Counts</source>
+        <translation>すべてのヒット回数をリセット</translation>
+    </message>
+    <message>
+        <source>Remove All Breakpoints</source>
+        <translation>すべてのブレークポイントを削除</translation>
+    </message>
+    <message>
+        <source>Clear All Breakpoints</source>
+        <translation>すべてのブレークポイントをクリア</translation>
+    </message>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln breakpoint(s)?</source>
+        <translation>
+            <numerusform>%Ln 個のブレークポイントを削除してもよろしいですか？</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Location: %1:%2</source>
+        <translation>位置: %1:%2</translation>
+    </message>
+    <message>
+        <source>Condition: %1</source>
+        <translation>条件: %1</translation>
+    </message>
+    <message>
+        <source>pauses on hits %1, 2×%1, 3×%1, …</source>
+        <translation>%1、2×%1、3×%1、… 回目のヒットで一時停止</translation>
+    </message>
+    <message>
+        <source>pauses once on hit %1, then deactivates the breakpoint</source>
+        <translation>%1 回目のヒットで一度だけ一時停止し、その後ブレークポイントを無効化</translation>
+    </message>
+    <message>
+        <source>pauses on every hit from %1 onwards</source>
+        <translation>%1 回目以降のすべてのヒットで一時停止</translation>
+    </message>
+    <message>
+        <source>Hit Count: %1 / %2 (%3)</source>
+        <translation>ヒット回数: %1 / %2 (%3)</translation>
+    </message>
+    <message>
+        <source>Hits: %1</source>
+        <translation>ヒット: %1</translation>
+    </message>
+    <message>
+        <source>Log: %1</source>
+        <translation>ログ: %1</translation>
+    </message>
+    <message>
+        <source>(logpoint — also pauses)</source>
+        <translation>(ログポイント — 一時停止も行います)</translation>
+    </message>
+    <message>
+        <source>(logpoint — does not pause)</source>
+        <translation>(ログポイント — 一時停止しません)</translation>
+    </message>
+    <message>
+        <source>Condition error on last evaluation — treated as false (silent). Edit or reset the breakpoint to clear.</source>
+        <translation>前回の評価で条件エラーが発生しました — false として扱われます（サイレント）。解除するにはブレークポイントを編集またはリセットしてください</translation>
+    </message>
+    <message>
+        <source>Condition error: %1</source>
+        <translation>条件エラー: %1</translation>
+    </message>
+    <message>
+        <source>File not found: %1</source>
+        <translation>ファイルが見つかりません: %1</translation>
+    </message>
+    <message>
+        <source>&amp;Edit...</source>
+        <translation>編集(&amp;E)...</translation>
+    </message>
+    <message>
+        <source>&amp;Disable</source>
+        <translation>無効化(&amp;D)</translation>
+    </message>
+    <message>
+        <source>&amp;Enable</source>
+        <translation>有効化(&amp;E)</translation>
+    </message>
+    <message>
+        <source>&amp;Remove</source>
+        <translation>削除(&amp;R)</translation>
+    </message>
+    <message>
+        <source>No breakpoints
+%1: add or remove breakpoint on the current line in the editor</source>
+        <translation>ブレークポイントはありません
+%1: エディタの現在の行にブレークポイントを追加または削除</translation>
+    </message>
+    <message>
+        <source>All breakpoints are inactive — click to activate all
+%1: add or remove on the current line in the editor</source>
+        <translation>すべてのブレークポイントは無効です — クリックしてすべて有効化します
+%1: エディタの現在の行で追加または削除</translation>
+    </message>
+    <message>
+        <source>Click to deactivate all breakpoints
+%1: add or remove on the current line in the editor</source>
+        <translation>クリックしてすべてのブレークポイントを無効化します
+%1: エディタの現在の行で追加または削除</translation>
+    </message>
 </context>
 <context>
     <name>QObject::QObject::QObject</name>
     <message>
         <source>CCCH</source>
-        <translation>CCCH</translation>
+        <translation type="vanished">CCCH</translation>
     </message>
 </context>
 <context>
@@ -10469,12 +11864,12 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Delta (ms)</source>
-        <translation>間隔 (ms)</translation>
+        <translation>間隔(ミリ秒)</translation>
     </message>
     <message>
         <source>Jitter (ms)</source>
         <oldsource>Jitter</oldsource>
-        <translation>ジッタ (ms)</translation>
+        <translation>ジッタ(ミリ秒)</translation>
     </message>
     <message>
         <source>Skew</source>
@@ -11303,11 +12698,11 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Lost</source>
-        <translation>欠落</translation>
+        <translation>損失</translation>
     </message>
     <message>
         <source>Max Delta (ms)</source>
-        <translation>最大間隔(ms)</translation>
+        <translation>最大間隔(ミリ秒)</translation>
     </message>
     <message>
         <source>Max Jitter</source>
@@ -11363,11 +12758,11 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Min Delta (ms)</source>
-        <translation>最小間隔(ms)</translation>
+        <translation>最小間隔(ミリ秒)</translation>
     </message>
     <message>
         <source>Mean Delta (ms)</source>
-        <translation>平均間隔(ms)</translation>
+        <translation>平均間隔(ミリ秒)</translation>
     </message>
     <message>
         <source>Min Jitter</source>
@@ -12478,7 +13873,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Description</source>
-        <translation>記述</translation>
+        <translation>説明</translation>
     </message>
 </context>
 <context>
@@ -12776,7 +14171,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Description</source>
-        <translation>記述</translation>
+        <translation>説明</translation>
     </message>
 </context>
 <context>
@@ -13586,6 +14981,315 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>TcpDedupDialog</name>
+    <message>
+        <source>TCP Duplication Table</source>
+        <translation>TCP複製テーブル</translation>
+    </message>
+    <message>
+        <source>The &quot;Detect duplication (capture-level) packets&quot; preference must be enabled in
+Preferences → Protocols → TCP to use this table.</source>
+        <translation>このテーブルを利用するには&quot;検出された複製パケット(キャプチャレベル)&quot; 設定を以下で有効にする必要があります
+設定 → プロトコル → TCP</translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation>時間</translation>
+    </message>
+    <message>
+        <source>Delta</source>
+        <translation>間隔</translation>
+    </message>
+    <message>
+        <source>Frame Number</source>
+        <translation>フレーム番号</translation>
+    </message>
+    <message>
+        <source>Duplication Total</source>
+        <translation>複製合計</translation>
+    </message>
+    <message>
+        <source>Frame List</source>
+        <translation>フレーム一覧</translation>
+    </message>
+    <message>
+        <source>Info</source>
+        <translation>情報</translation>
+    </message>
+    <message>
+        <source>Stream:</source>
+        <translation>ストリーム:</translation>
+    </message>
+</context>
+<context>
+    <name>ThemeDebugDialog</name>
+    <message>
+        <source>Theme Debug</source>
+        <translation>テーマデバッグ</translation>
+    </message>
+    <message>
+        <source>Name:</source>
+        <translation>名前:</translation>
+    </message>
+    <message>
+        <source>Internal:</source>
+        <translation>内部:</translation>
+    </message>
+    <message>
+        <source>Version:</source>
+        <translation>バージョン:</translation>
+    </message>
+    <message>
+        <source>Author:</source>
+        <translation>作者:</translation>
+    </message>
+    <message>
+        <source>Description:</source>
+        <translation>説明</translation>
+    </message>
+    <message>
+        <source>Mode:</source>
+        <translation>モード:</translation>
+    </message>
+    <message>
+        <source>Dark mode:</source>
+        <translation>ダークモード:</translation>
+    </message>
+    <message>
+        <source>Theme</source>
+        <translation>テーマ</translation>
+    </message>
+    <message>
+        <source>Geometry:</source>
+        <translation>サイズと位置:</translation>
+    </message>
+    <message>
+        <source>Frame geometry:</source>
+        <translation>フレームのサイズと位置:</translation>
+    </message>
+    <message>
+        <source>Screen:</source>
+        <translation>スクリーン:</translation>
+    </message>
+    <message>
+        <source>DPI / DPR:</source>
+        <translation>DPI / DPR:</translation>
+    </message>
+    <message>
+        <source>Window state:</source>
+        <translation>ウインドウ状態:</translation>
+    </message>
+    <message>
+        <source>These values refresh live while the dialog is open.</source>
+        <translation> ダイアログが開いている間は値がリアルタイムで更新されます。</translation>
+    </message>
+    <message>
+        <source>Main Window</source>
+        <translation>メインウインドウ</translation>
+    </message>
+    <message>
+        <source>Track widget under mouse</source>
+        <translation>マウスのある場所のウィジェットを追跡</translation>
+    </message>
+    <message>
+        <source>The inspector reports any widget in this application under the cursor — including child dialogs. Widgets that belong to this debug window are skipped so the last hovered target stays pinned. Hold Alt+Shift and click any widget to pin it: this turns off tracking and locks the readout onto that widget (re-check the box above to resume). Note: on macOS, tool windows are hidden whenever another application has focus, so tracking pauses until Wireshark is frontmost again.</source>
+        <translation> インスペクターは、このアプリケーション内でカーソル下にあるすべてのウィジェット（子ダイアログを含む）を表示します。このデバッグウィンドウに属するウィジェットは除外されるため、直前にホバーしていた対象が固定されます。
+Alt+Shift を押しながら任意のウィジェットをクリックするとピン留めされ、トラッキングが無効になって表示がそのウィジェットに固定されます（上のチェックボックスを再度オンにすると再開します）。
+注：macOS では、別のアプリケーションがフォーカスを持つとツールウィンドウが非表示になるため、Wireshark が再び最前面になるまでトラッキングは一時停止します。</translation>
+    </message>
+    <message>
+        <source>Cursor (global):</source>
+        <translation>カーソル(グローバル):</translation>
+    </message>
+    <message>
+        <source>Class:</source>
+        <translation>クラス:</translation>
+    </message>
+    <message>
+        <source>Object name:</source>
+        <translation>オブジェクト名:</translation>
+    </message>
+    <message>
+        <source>Font:</source>
+        <translation>フォント:</translation>
+    </message>
+    <message>
+        <source>Global rect:</source>
+        <translation>グローバル矩形:</translation>
+    </message>
+    <message>
+        <source>Parent chain:</source>
+        <translation>親チェーン:</translation>
+    </message>
+    <message>
+        <source>Palette (Active group):</source>
+        <translation>パレット (アクティブグループ):</translation>
+    </message>
+    <message>
+        <source>Role</source>
+        <translation>ロール</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>色</translation>
+    </message>
+    <message>
+        <source>ThemeManager token</source>
+        <translation>テーママネージャートークン</translation>
+    </message>
+    <message>
+        <source>Swatch</source>
+        <translation>スウォッチ</translation>
+    </message>
+    <message>
+        <source>Stylesheet:</source>
+        <translation>スタイルシート:</translation>
+    </message>
+    <message>
+        <source>(no stylesheet)</source>
+        <translation>(スタイルシートなし)</translation>
+    </message>
+    <message>
+        <source>Widget Inspector</source>
+        <translation> ウィジェットインスペクタ</translation>
+    </message>
+    <message>
+        <source>Token</source>
+        <translation>トークン</translation>
+    </message>
+    <message>
+        <source>Hex</source>
+        <translation>16進数</translation>
+    </message>
+    <message>
+        <source>Tokens</source>
+        <translation>トークン</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation>はい</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>いいえ</translation>
+    </message>
+    <message>
+        <source>(no main window)</source>
+        <translation>(メインウインドウなし)</translation>
+    </message>
+    <message>
+        <source>(unknown)</source>
+        <translation>(不明)</translation>
+    </message>
+    <message>
+        <source>maximized</source>
+        <translation>最大化</translation>
+    </message>
+    <message>
+        <source>minimized</source>
+        <translation>最小化</translation>
+    </message>
+    <message>
+        <source>fullscreen</source>
+        <translation>フルスクリーン</translation>
+    </message>
+    <message>
+        <source>active</source>
+        <translation>アクティブ</translation>
+    </message>
+    <message>
+        <source>normal</source>
+        <translation>通常</translation>
+    </message>
+    <message>
+        <source>(unset)</source>
+        <translation>(未設定)</translation>
+    </message>
+    <message>
+        <source>(none)</source>
+        <translation>(なし)</translation>
+    </message>
+    <message>
+        <source>(unnamed)</source>
+        <translation>(名称未設定)</translation>
+    </message>
+</context>
+<context>
+    <name>ThemePreviewWidget</name>
+    <message>
+        <source>No.</source>
+        <translation>No.</translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation>時間</translation>
+    </message>
+    <message>
+        <source>Delta</source>
+        <translation>間隔</translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation>送信元</translation>
+    </message>
+    <message>
+        <source>Destination</source>
+        <translation>宛先</translation>
+    </message>
+    <message>
+        <source>Protocol</source>
+        <translation>プロトコル</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation>長さ</translation>
+    </message>
+    <message>
+        <source>Show Coloring Rules</source>
+        <translation>色付けルールを表示</translation>
+    </message>
+    <message>
+        <source>Save Image As…</source>
+        <translation>...として画像を保存</translation>
+    </message>
+    <message>
+        <source>Save Theme Preview</source>
+        <translation>テーマプレビューを保存</translation>
+    </message>
+    <message>
+        <source>PNG Image (*.png)</source>
+        <translation>PNG画像 (*.png)</translation>
+    </message>
+    <message>
+        <source>Could not write the image to &quot;%1&quot;.</source>
+        <translation>イメージを &quot;%1&quot; に書き込めませんでした</translation>
+    </message>
+    <message>
+        <source>Info</source>
+        <translation>情報</translation>
+    </message>
+    <message>
+        <source>Ready</source>
+        <translation>準備</translation>
+    </message>
+    <message>
+        <source>Profile: Default</source>
+        <translation>プロファイル: デフォルト</translation>
+    </message>
+    <message>
+        <source>Packets: %1</source>
+        <translation>パケット: %1</translation>
+    </message>
+    <message>
+        <source>Displayed: %1 (100.0%)</source>
+        <translation>表示: %1 (100.0%)</translation>
+    </message>
+</context>
+<context>
     <name>TimeShiftDialog</name>
     <message>
         <source>Shift all packets by</source>
@@ -14057,14 +15761,125 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
-    <name>WelcomePage</name>
+    <name>WelcomeHeaderWidget</name>
     <message>
         <source>Form</source>
         <translation>フォーム</translation>
     </message>
     <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:large;&quot;&gt;Welcome to Wireshark&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:large;&quot;&gt;Wiresharkへようこそ&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <source>Application Name</source>
+        <translation>アプリケーション名</translation>
+    </message>
+    <message>
+        <source>Application name</source>
+        <translation>アプリケーション名</translation>
+    </message>
+    <message>
+        <source>Wireshark</source>
+        <translation>Wireshark</translation>
+    </message>
+    <message>
+        <source>Version information</source>
+        <translation>バージョン情報</translation>
+    </message>
+    <message>
+        <source>Version of the application currently running</source>
+        <translation>現在実行中のアプリケーションのバージョン</translation>
+    </message>
+    <message>
+        <source>4.7.0 (v4.7.0rc0-2438-g68ddfc1bcba4)</source>
+        <translation>4.7.0 (v4.7.0rc0-2438-g68ddfc1bcba4)</translation>
+    </message>
+    <message>
+        <source>Variant of the application running</source>
+        <translation>実行中アプリケーションのビルド種別</translation>
+    </message>
+    <message>
+        <source>Build variant of the application currently running</source>
+        <translation>現在実行中のアプリケーションのビルド種別</translation>
+    </message>
+    <message>
+        <source>Development Build</source>
+        <translation>開発ビルド</translation>
+    </message>
+    <message>
+        <source>Update Available</source>
+        <translation>更新が利用可能</translation>
+    </message>
+    <message>
+        <source>Graphical indicator that an update is available</source>
+        <translation>更新が利用可能なことを示すグラフィカルインジケータ</translation>
+    </message>
+    <message>
+        <source>.</source>
+        <translation>.</translation>
+    </message>
+    <message>
+        <source>Update available</source>
+        <translation>更新が利用可能</translation>
+    </message>
+    <message>
+        <source>A new update is available</source>
+        <translation>新しい更新が利用可能です</translation>
+    </message>
+    <message>
+        <source>Update available: %1</source>
+        <translation>利用可能な更新: %1</translation>
+    </message>
+    <message>
+        <source>Release Notes</source>
+        <translation>リリースノート</translation>
+    </message>
+    <message>
+        <source>Opens a browser to show the release notes for the available update</source>
+        <translation>利用可能な更新のリリースノートを表示するためにブラウザを開きます</translation>
+    </message>
+    <message>
+        <source>Download Update</source>
+        <translation>更新をダウンロード</translation>
+    </message>
+    <message>
+        <source>Starts the download process for the currently available update</source>
+        <translation>現在利用可能な更新のダウンロード処理を開始します</translation>
+    </message>
+    <message>
+        <source>Dismiss update notification</source>
+        <translation>更新通知を閉じる</translation>
+    </message>
+    <message>
+        <source>Dismiss the update notification and show the information about an update again on either next application start or when a new update is available</source>
+        <translation>更新通知を閉じ、次回アプリケーション起動時または新しい更新が利用可能になったときに更新情報を再度表示します</translation>
+    </message>
+    <message>
+        <source>Update %1 is available</source>
+        <translation>更新 %1 が利用可能です</translation>
+    </message>
+    <message>
+        <source>A new update for version %1 is available (current version is %2)</source>
+        <translation>バージョン %1 の新しい更新が利用可能です (現在のバージョンは %2)</translation>
+    </message>
+    <message>
+        <source>Release Notes for update %1</source>
+        <translation>更新 %1 のリリースノート</translation>
+    </message>
+    <message>
+        <source>Opens a browser to show the release notes for %1</source>
+        <translation>%1 のリリースノートを表示するためにブラウザを開きます</translation>
+    </message>
+    <message>
+        <source>Download update %1</source>
+        <translation>更新 %1 をダウンロード</translation>
+    </message>
+    <message>
+        <source>Starts the download process for update %1</source>
+        <translation>更新 %1 のダウンロード処理を開始します</translation>
+    </message>
+</context>
+<context>
+    <name>WelcomePage</name>
+    <message>
+        <source>Form</source>
+        <translation>フォーム</translation>
     </message>
     <message>
         <source>Open</source>
@@ -14089,34 +15904,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Capture files that have been opened previously</source>
         <translation>以前に開いたキャプチャファイル</translation>
-    </message>
-    <message>
-        <source>Capture</source>
-        <translation>キャプチャ</translation>
-    </message>
-    <message>
-        <source>Start a new capture session</source>
-        <translation>新規キャプチャセッションを開始</translation>
-    </message>
-    <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Capture live packets from your network.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;ネットワークから現在のパケットをキャプチャします&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <source>&lt;h2&gt;Capture&lt;/h2&gt;</source>
-        <translation>&lt;h2&gt;キャプチャ&lt;/h2&gt;</translation>
-    </message>
-    <message>
-        <source>…using this filter:</source>
-        <translation>…このフィルタを利用:</translation>
-    </message>
-    <message>
-        <source>Interface list</source>
-        <translation>インターフェース一覧</translation>
-    </message>
-    <message>
-        <source>List of available capture interfaces</source>
-        <translation>利用可能なキャプチャインターフェース一覧</translation>
     </message>
     <message>
         <source>Tips and announcements</source>
@@ -14151,62 +15938,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>%1 welcomeページは最近のファイル、キャプチャインターフェースおよび学習リソースへのアクセスを提供します</translation>
     </message>
     <message>
-        <source>Welcome to %1</source>
-        <translation>%1 へようこそ</translation>
-    </message>
-    <message>
         <source>List of recently opened capture files. Double-click or press Enter to open.</source>
         <translation>最近開いたキャプチャファイルのリスト、ダブルクリックかEnterキーを押して開きます</translation>
     </message>
-    <message>
-        <source>Interface type filter</source>
-        <translation>インターフェース種別フィルタ</translation>
-    </message>
-    <message>
-        <source>Filters the capture source list by type. Shows how many sources are currently visible and how many are hidden by the active filter.</source>
-        <translation>キャプチャソース一覧を種類ごとにフィルタします。現在表示されているソース数と、アクティブなフィルタによって非表示になっているソース数を表示します</translation>
-    </message>
-    <message>
-        <source>Capture sources</source>
-        <translation>キャプチャソース</translation>
-    </message>
-    <message>
-        <source>Lists available capture sources. Select one or more to capture from.</source>
-        <translation>利用可能なキャプチャソースの一覧です。キャプチャしたい１つか複数を選択します</translation>
-    </message>
-    <message>
-        <source>Capture filter</source>
-        <translation>キャプチャフィルタ</translation>
-    </message>
-    <message>
-        <source>Enter a capture filter expression to limit which data is recorded during live capture.</source>
-        <translation>キャプチャフィルタ式を入力してライブキャプチャ中に記録されるデータを制限します</translation>
-    </message>
-    <message>
-        <source>All interfaces shown</source>
-        <translation>すべての表示されたインターフェース</translation>
-    </message>
     <message numerus="yes">
         <source>%n interface(s) shown, %1 hidden</source>
-        <translation>
-            <numerusform>%n インターフェース表示, %1 非表示</numerusform>
+        <translation type="obsolete">
+            <numerusform>%n interface shown, %1 hidden</numerusform>
         </translation>
-    </message>
-    <message>
-        <source>You are sniffing the glue that holds the Internet together using Wireshark </source>
-        <translation>あなたはWiresharkを使ってインターネットを互いにつなぐ膠をキャプチャしています</translation>
-    </message>
-    <message>
-        <source>You are running Wireshark </source>
-        <translation>Wiresharkを起動中</translation>
-    </message>
-    <message>
-        <source> You receive automatic updates.</source>
-        <translation>自動アップデートを受信します</translation>
-    </message>
-    <message>
-        <source> You have disabled automatic updates.</source>
-        <translation>自動アップデートを無効にしました</translation>
     </message>
     <message>
         <source>Copy file path</source>
@@ -14246,6 +15985,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Tip of the Day</source>
         <translation>今日のTIP</translation>
+    </message>
+    <message>
+        <source>Auto advance slides</source>
+        <translation>スライドを自動送り</translation>
     </message>
     <message>
         <source>Slide display interval</source>
@@ -14717,7 +16460,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Description</source>
-        <translation>記述</translation>
+        <translation>説明</translation>
     </message>
     <message>
         <source>Field Name</source>
@@ -14870,7 +16613,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Copy this item&apos;s description</source>
-        <translation>この項目の記述をコピーします</translation>
+        <translation>この項目の説明をコピーします</translation>
     </message>
     <message>
         <source>Copy this item&apos;s field name</source>
@@ -15537,6 +17280,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>オプション…(&amp;O)</translation>
     </message>
     <message>
+        <source>Main Window</source>
+        <translation>メインウインドウ</translation>
+    </message>
+    <message>
         <source>Allows jumping to a specific packet by its number.</source>
         <translation>番号で特定のパケットにジャンプすることを許可します</translation>
     </message>
@@ -15579,6 +17326,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Allows creating or editing display filter buttons.</source>
         <translation>表示フィルタボタンの作成や編集を許可します</translation>
+    </message>
+    <message>
+        <source>Main View</source>
+        <translation>メインビュー</translation>
+    </message>
+    <message>
+        <source>Main Menu</source>
+        <translation>メインメニュー</translation>
     </message>
     <message>
         <source>&amp;3GPP Uu</source>
@@ -15747,6 +17502,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>TCP throughput</source>
         <translation>TCP スループット</translation>
+    </message>
+    <message>
+        <source>Duplication Table</source>
+        <translation>複製テーブル</translation>
+    </message>
+    <message>
+        <source>TCP capture-level duplicate packet table</source>
+        <translation>TCPキャプチャレベル複製パケットテーブル</translation>
     </message>
     <message>
         <source>General</source>
@@ -16053,6 +17816,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>現在のキーボードショートカットを表示します</translation>
     </message>
     <message>
+        <source>&amp;Theme Debug</source>
+        <translation>テーマデバッグ (&amp;T)</translation>
+    </message>
+    <message>
+        <source>Show the active theme, main window geometry, and live widget info</source>
+        <translation>アクティブテーマ、メインウインドウのサイズと位置およびライブウィジェットの情報を表示します</translation>
+    </message>
+    <message>
         <source>MAP Summary</source>
         <translation>MAP概要</translation>
     </message>
@@ -16075,10 +17846,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Aggregation in Live Capture</source>
         <translation>キャプチャ中に集約</translation>
-    </message>
-    <message>
-        <source>Aggregation View.</source>
-        <translation>集約ビュー</translation>
     </message>
     <message>
         <source>New Coloring Rule…</source>
@@ -16413,6 +18180,22 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>更新を確認…</translation>
     </message>
     <message>
+        <source>Main View Splitter</source>
+        <translation>メインビュー分割</translation>
+    </message>
+    <message>
+        <source>Contains the packet list, protocol tree, and packet bytes.</source>
+        <translation>パケット一覧、プロトコルツリーとパケットバイト列を含みます</translation>
+    </message>
+    <message>
+        <source>Extra View Splitter</source>
+        <translation>エクストラビュー分割</translation>
+    </message>
+    <message>
+        <source>Contains packet extras and bytes views.</source>
+        <translation>パケットエクストラとバイトビューを含みます</translation>
+    </message>
+    <message>
         <source>Unable to drop files during capture.</source>
         <translation>キャプチャ中にファイルをドロップできません</translation>
     </message>
@@ -16424,7 +18207,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Unknown file type returned by merge dialog.</source>
-        <translation>結合画面から返された未知のファイルタイプ</translation>
+        <translation>結合画面から返された不明なファイルタイプ</translation>
     </message>
     <message>
         <source>Please report this as a Wireshark issue at https://gitlab.com/wireshark/wireshark/-/issues.</source>
@@ -16432,7 +18215,15 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Unknown file type returned by export dialog.</source>
-        <translation>エクスポート画面から返された未知のファイルタイプ</translation>
+        <translation>エクスポート画面から返された不明なファイルタイプ</translation>
+    </message>
+    <message>
+        <source>Aggregation View — displays frames grouped by your configured aggregation fields.</source>
+        <translation>集約ビュー — 設定した集約フィールドごとにフレームをグループ化して表示</translation>
+    </message>
+    <message>
+        <source>Aggregation View — displays frames grouped by your configured aggregation fields. To activate, go to Preferences → Aggregation.</source>
+        <translation>集約ビュー — 設定した集約フィールドごとにフレームをグループ化して表示します。有効にするには、［設定］→［集約］へ移動してください</translation>
     </message>
     <message>
         <source>Unsaved packets…</source>
@@ -16483,6 +18274,22 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Show or hide the toolbar</source>
         <translation>ツールバーを表示/非表示</translation>
+    </message>
+    <message>
+        <source>DIS Streams</source>
+        <translation>DISストリーム</translation>
+    </message>
+    <message>
+        <source>Show and analyze DIS radio streams</source>
+        <translation>DIS無線ストリームを表示・分析します</translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation>Luaデバッガ</translation>
+    </message>
+    <message>
+        <source>Software update checking is not available on this platform.</source>
+        <translation>このプラットフォームではソフトウェア更新の確認を利用できません</translation>
     </message>
     <message>
         <source>Continue &amp;without Saving</source>
@@ -16617,10 +18424,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Please wait while Wireshark is initializing…</source>
         <translation>Wiresharkの初期化中です。しばらくお待ちください…</translation>
-    </message>
-    <message>
-        <source> before updating</source>
-        <translation>更新前</translation>
     </message>
     <message>
         <source> before exporting PDUs</source>

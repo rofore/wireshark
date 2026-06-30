@@ -11,7 +11,7 @@ import argparse
 import signal
 from pathlib import Path
 import concurrent.futures
-from check_common import getFilesFromOpen, findDissectorFilesInFolder, getFilesFromCommits, removeComments, isGeneratedFile, Result
+from check_common import getFilesFromOpen, findDissectorFilesInFolder, getFilesFromCommits, removeComments, isGeneratedFile, Result, HFEntriesParser
 
 
 # This utility scans the dissector code for various issues.
@@ -300,8 +300,10 @@ def check_call_enc_matches_item(items_defined, call, api_check, result):
         if checker is not None:
             for enc in encs:
                 if enc.startswith('ENC_'):
-                    if type != 'FT_BOOLEAN' or item.get_field_width_in_bits() > 8:
-                        checker.check(enc, call, api_check, item, result)
+                    if type != 'FT_BOOLEAN':
+                        width = item.get_field_width_in_bits()
+                        if width is not None and width > 8:
+                            checker.check(enc, call, api_check, item, result)
 
 
 # A check for a particular API function.
@@ -500,32 +502,13 @@ class ProtoTreeAddItemCheck(APICheck):
 
                     enc = m.group(4)
                     hf_name = m.group(1)
-                    if not enc.startswith('ENC_') and 'endian' not in enc.lower():
-                        if enc not in {'encoding', 'enc', 'client_is_le', 'cigi_byte_order', 'endian', 'endianess', 'machine_encoding', 'byte_order', 'bLittleEndian',
-                                       'p_mq_parm->mq_str_enc', 'p_mq_parm->mq_int_enc',
-                                       'iEnc', 'strid_enc', 'iCod', 'nl_data->encoding',
-                                       'argp->info->encoding', 'gquic_info->encoding', 'writer_encoding',
-                                       'tds_get_int2_encoding(tds_info)',
-                                       'tds_get_int4_encoding(tds_info)',
-                                       'tds_get_char_encoding(tds_info)',
-                                       'info->encoding',
-                                       'item->encoding',
-                                       'DREP_ENC_INTEGER(drep)', 'string_encoding', 'item', 'type',
-                                       'dvb_enc_to_item_enc(encoding)',
-                                       'packet->enc',
-                                       'IS_EBCDIC(uCCS) ? ENC_EBCDIC : ENC_ASCII',
-                                       'DREP_ENC_INTEGER(hdr->drep)',
+                    if 'endian' not in enc.lower() and 'enc' not in enc.lower():
+                        if enc not in {'client_is_le', 'cigi_byte_order', 'endian', 'endianess', 'byte_order', 'bLittleEndian',
+                                       'iCod',
+                                       'item', 'type',
                                        'payload_le',
-                                       'local_encoding',
-                                       'hf_data_encoding',
-                                       'IS_EBCDIC(eStr) ? ENC_EBCDIC : ENC_ASCII',
                                        'pdu_info->sbc', 'pdu_info->mbc',
-                                       'seq_info->txt_enc | ENC_NA',
-                                       'BASE_SHOW_UTF_8_PRINTABLE',
-                                       'is_mdns ? ENC_UTF_8|ENC_NA : ENC_ASCII|ENC_NA',
-                                       'xl_encoding',
-                                       'my_frame_data->encoding_client', 'my_frame_data->encoding_results',
-                                       'seq_info->txt_enc'
+                                       'BASE_SHOW_UTF_8_PRINTABLE'
                                        }:
 
                             result.warn(self.file + ':' + str(line_number),
@@ -913,6 +896,16 @@ class ValueString:
                 if value < self.min_value:
                     self.min_value = value
 
+    def __eq__(self, other):
+        if not isinstance(other, ValueString):
+            # don't attempt to compare against unrelated types
+            return NotImplemented
+        else:
+            if self.parsed_vals == other.parsed_vals:
+                return True
+            else:
+                return False
+
     def extraChecks(self, result):
         # Look for one value missing in range (quite common...)
         num_items = len(self.parsed_vals)
@@ -1117,6 +1110,7 @@ class StringString:
                     terminated = True
 
         if not terminated:
+            # Would already be reported by check_apis.py
             result.error(self.file, ': string_string', self.name, "is not terminated with { NULL, NULL }")
 
     def extraChecks(self, result):
@@ -1212,51 +1206,6 @@ def findExpertItems(filename, contents, macros, result):
             expertEntries.AddEntry(expertEntry)
 
     return expertEntries
-
-
-def findDeclaredTrees(filename, contents):
-    trees = []
-
-    definition_matches = re.finditer(r'static int\s*\s*(ett_[a-zA-Z0-9_]*)\s*;',
-                                     contents, re.MULTILINE | re.DOTALL)
-    for d in definition_matches:
-        trees.append(d.group(1))
-
-    return trees
-
-
-def findDefinedTrees(filename, contents, declared):
-    # Look for array of definitions. Looks something like this
-    # static int *ett[] = {
-    #    &ett_oran,
-    #    &ett_oran_ecpri_pcid,
-    #    &ett_oran_ecpri_rtcid,
-    #    &ett_oran_ecpri_seqid
-    # };
-
-    trees = set()
-
-    # Not insisting that this array is static..
-    definition_matches = re.finditer(r'int\s*\*\s*(?:const|)\s*[a-zA-Z0-9_]*?ett[a-zA-Z0-9_]*\s*\[\]\s*=\s*\{(.*?)\};',
-                                     contents, re.MULTILINE | re.DOTALL)
-    for d in definition_matches:
-        entries = d.group(1)
-
-        # Now separate out each entry
-        matches = re.finditer(r'\&(ett_[a-zA-Z0-9_]+)',
-                              entries, re.MULTILINE | re.DOTALL)
-        for match in matches:
-            ett = match.group(1)
-
-            if ett not in declared:
-                # N.B., this check will avoid matches with arrays (which won't match 'declared' re)
-                continue
-
-            # Don't think this can happen..
-            # if ett in trees:
-            #    print('Warning:', filename, ett, 'appears twice!!!')
-            trees.add(match.group(1))
-    return trees
 
 
 def checkExpertCalls(filename, expertEntries, result):
@@ -1740,6 +1689,7 @@ class Item:
                 return
             n += 1
 
+
     def get_field_width_in_bits(self):
         if self.item_type == 'FT_BOOLEAN':
             if self.display == 'BASE_NONE':    # 'NULL' ?
@@ -1751,14 +1701,14 @@ class Item:
                     # For FT_BOOLEAN, modifier is just numerical number of bits. Round up to next nibble.
                     return int((int(self.display) + 3)/4)*4
                 except Exception:
-                    return 8
+                    return None
         else:
             if self.item_type in field_widths:
                 # Lookup fixed width for this type
                 return field_widths[self.item_type]
             else:
                 # Unknown type..
-                return 0
+                return None
 
     def check_num_digits(self, mask):
         if mask.startswith('0x') and len(mask) > 3:
@@ -2108,25 +2058,17 @@ def find_items(filename, contents, macros, result, value_strings, range_strings,
     is_generated = isGeneratedFile(filename)
     items = {}
 
-    # N.B. re extends all the way to HFILL to avoid greedy matching
-    # TODO: fix a problem where re can't cope with mask that involve a macro with commas in it...
-    matches = re.finditer(r'.*\{\s*\&(hf_[a-z_A-Z0-9]*)\s*,\s*{\s*\"(.*?)\"\s*,\s*\"(.*?)\"\s*,\s*(.*?)\s*,\s*([0-9A-Z_\|\s]*?)\s*,\s*(.*?)\s*,\s*(.*?)\s*,\s*([a-zA-Z0-9\W\s_\u00f6\u00e4]*?)\s*,\s*HFILL', contents)
-    for m in matches:
-        # Store this item.
-        hf = m.group(1)
+    for i in HFEntriesParser(contents).items:
+        hf, name, filter, field_type, display, convert, bitmask, blurb = i
 
-        blurb = m.group(8)
-        if blurb.startswith('"'):
-            blurb = blurb[1:-1]
-
-        items[hf] = Item(filename, hf, filter=m.group(3), label=m.group(2), item_type=m.group(4),
-                         display=m.group(5),
-                         strings=m.group(6),
+        items[hf] = Item(filename, hf, filter=filter, label=name, item_type=field_type,
+                         display=display,
+                         strings=convert,
                          macros=macros,
                          result=result,
                          value_strings=value_strings,
                          range_strings=range_strings,
-                         mask=m.group(7),
+                         mask=bitmask,
                          blurb=blurb,
                          check_mask=check_mask,
                          mask_exact_width=mask_exact_width,
@@ -2312,12 +2254,12 @@ def check_double_fetches(filename, contents, items, result):
         # TODO: allow match if underscores are removed?
         if line_has_fetch_function(prev_line) and hf_name.endswith(first_prev_token) and '=' in prev_line_tokens:
             result.warn(filename, 'PREV: val=', first_prev_token, 'hfname=', hf_name,
-                        'mask=', mask_value, 'type=', item_type,
+                        'mask=', hex(mask_value), 'type=', item_type,
                         '- use', suggest + '() ?\n',
                         m.group(0))
         elif line_has_fetch_function(next_line) and hf_name.endswith(first_next_token) and '=' in next_line_tokens:
             result.warn(filename, 'NEXT: val=', first_next_token, 'hfname=', hf_name,
-                        'mask=', mask_value, 'type=', item_type,
+                        'mask=', hex(mask_value), 'type=', item_type,
                         '- use', suggest + '() ?\n',
                         m.group(0))
 
@@ -2326,9 +2268,10 @@ def check_double_fetches(filename, contents, items, result):
 # Run checks on the given dissector file.
 def checkFile(filename, check_mask=False, mask_exact_width=False, check_label=False, check_consecutive=False,
               check_missing_items=False, check_bitmask_fields=False, label_vs_filter=False, extra_value_string_checks=False,
-              check_expert_items=False, check_subtrees=False, check_double_fetch=False):
+              check_expert_items=False, check_double_fetch=False):
 
     result = Result()
+    is_generated = None
 
     # Check file exists - e.g. may have been deleted in a recent commit.
     if not os.path.exists(filename):
@@ -2354,6 +2297,18 @@ def checkFile(filename, check_mask=False, mask_exact_width=False, check_label=Fa
         for name in value_strings:
             value_strings[name].extraChecks(result)
 
+        # Also check whether any pair of value_strings is identical!
+        reported_pairs = set()
+        if is_generated is None:
+            is_generated = isGeneratedFile(filename)
+        if not is_generated:
+            for name in value_strings:
+                for name2 in value_strings:
+                    if name != name2 and (name2, name) not in reported_pairs and len(value_strings[name].parsed_vals) > 0:
+                        if value_strings[name] == value_strings[name2]:
+                            result.note(f'{filename} value_strings {name} and {name2} appear to be identical ({len(value_strings[name].parsed_vals)} entries)')
+                            reported_pairs.add((name, name2))
+
     # Find (and sanity-check) range_strings
     range_strings = findRangeStrings(filename, contents_no_comments, macros, result, do_extra_checks=extra_value_string_checks)
     if extra_value_string_checks:
@@ -2375,14 +2330,6 @@ def checkFile(filename, check_mask=False, mask_exact_width=False, check_label=Fa
     items_defined = find_items(filename, contents_no_comments, macros, result, value_strings, range_strings,
                                check_mask, mask_exact_width, check_label, check_consecutive)
     items_extern_declared = {}
-
-    # Check that ett_ variables are registered
-    if check_subtrees:
-        ett_declared = findDeclaredTrees(filename, contents_no_comments)
-        ett_defined = findDefinedTrees(filename, contents_no_comments, ett_declared)
-        for d in ett_declared:
-            if d not in ett_defined:
-                result.warn(filename, 'subtree identifier', d, 'is declared but not found in an array for registering')
 
     items_declared = {}
     if check_missing_items:
@@ -2470,8 +2417,6 @@ if __name__ == '__main__':
                         help='when set, do extra checks on parsed value_strings')
     parser.add_argument('--check-expert-items', action='store_true',
                         help='when set, do extra checks on expert items')
-    parser.add_argument('--check-subtrees', action='store_true',
-                        help='when set, do extra checks ett variables')
     parser.add_argument('--check-double-fetch', action='store_true',
                         help='when set, attempt to warn for values being double-fetched')
 
@@ -2491,7 +2436,6 @@ if __name__ == '__main__':
         args.label_vs_filter = True
         # args.extra_value_string_checks = True
         args.check_expert_items = True
-        # args.check_subtrees = True
         args.check_double_fetch = True
 
     if args.check_bitmask_fields:
@@ -2547,7 +2491,7 @@ if __name__ == '__main__':
                                                  check_consecutive=args.consecutive, check_missing_items=args.missing_items,
                                                  check_bitmask_fields=args.check_bitmask_fields, label_vs_filter=args.label_vs_filter,
                                                  extra_value_string_checks=args.extra_value_string_checks,
-                                                 check_expert_items=args.check_expert_items, check_subtrees=args.check_subtrees,
+                                                 check_expert_items=args.check_expert_items,
                                                  check_double_fetch=args.check_double_fetch): file for file in files}
         for future in concurrent.futures.as_completed(future_to_file_output):
             # File is done - show any output and update warning, error counts

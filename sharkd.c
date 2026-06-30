@@ -42,12 +42,12 @@
 #include <epan/column.h>
 #include <epan/print.h>
 #include <epan/addr_resolv.h>
-#include "ui/util.h"
-#include "ui/ws_ui_util.h"
-#include "ui/decode_as_utils.h"
-#include "wsutil/filter_files.h"
-#include "ui/tap_export_pdu.h"
-#include "ui/failure_message.h"
+#include <ui/util.h>
+#include <ui/ws_ui_util.h>
+#include <ui/decode_as_utils.h>
+#include <wsutil/filter_files.h>
+#include <ui/tap_export_pdu.h>
+#include <ui/failure_message.h>
 #include <wiretap/wtap.h>
 #include <epan/epan_dissect.h>
 #include <epan/tap.h>
@@ -63,6 +63,7 @@
 #include <wsutil/plugins.h>
 #endif
 
+#include "globals.h"
 #include "sharkd.h"
 
 #define SHARKD_INIT_FAILED 1
@@ -70,7 +71,6 @@
 
 capture_file cfile;
 
-static uint32_t cum_bytes;
 static frame_data ref_frame;
 
 /*
@@ -288,7 +288,7 @@ process_packet(capture_file *cf, epan_dissect_t *edt, int64_t offset,
 
     /* The frame number of this packet, if we add it to the set of frames,
        would be one more than the count of frames in the file so far. */
-    frame_data_init(&fdlocal, cf->count + 1, rec, offset, cum_bytes);
+    frame_data_init(&fdlocal, cf->count + 1, rec, offset, cf->cum_bytes);
 
     /* If we're going to print packet information, or we're going to
        run a read filter, or display filter, or we're going to process taps, set up to
@@ -322,7 +322,7 @@ process_packet(capture_file *cf, epan_dissect_t *edt, int64_t offset,
     }
 
     if (passed) {
-        frame_data_set_after_dissect(&fdlocal, &cum_bytes);
+        frame_data_set_after_dissect(&fdlocal, &cf->cum_bytes);
         cf->provider.prev_cap = cf->provider.prev_dis = frame_data_sequence_add(cf->provider.frames, &fdlocal);
 
         /* If we're not doing dissection then there won't be any dependent frames.
@@ -428,6 +428,35 @@ load_cap_file(capture_file *cf, int max_packet_count, int64_t max_byte_count)
     return err;
 }
 
+void
+cf_close(capture_file *cf)
+{
+    if (cf->state == FILE_CLOSED || cf->state == FILE_READ_PENDING)
+        return; /* Nothing to do */
+
+    if (cf->provider.wth) {
+        wtap_close(cf->provider.wth);
+        cf->provider.wth = NULL;
+    }
+
+    /* We have no file open... */
+    if (cf->filename != NULL) {
+        /* If it's a temporary file, remove it. */
+        if (cf->is_tempfile)
+            ws_unlink(cf->filename);
+        g_free(cf->filename);
+        cf->filename = NULL;
+    }
+
+    if (cf->provider.frames != NULL) {
+        free_frame_data_sequence(cf->provider.frames);
+        cf->provider.frames = NULL;
+    }
+
+    /* We have no file open. */
+    cf->state = FILE_CLOSED;
+}
+
 cf_status_t
 cf_open(capture_file *cf, const char *fname, unsigned int type, bool is_tempfile, int *err)
 {
@@ -438,7 +467,9 @@ cf_open(capture_file *cf, const char *fname, unsigned int type, bool is_tempfile
     if (wth == NULL)
         goto fail;
 
-    /* The open succeeded.  Fill in the information for this file. */
+    /* The open succeeded.  Close whatever capture file we had open,
+       and fill in the information for this file. */
+    cf_close(cf);
 
     cf->provider.wth = wth;
     cf->f_datalen = 0; /* not used, but set it anyway */
@@ -464,6 +495,7 @@ cf_open(capture_file *cf, const char *fname, unsigned int type, bool is_tempfile
     cf->provider.ref = NULL;
     cf->provider.prev_dis = NULL;
     cf->provider.prev_cap = NULL;
+    cf->cum_bytes = 0;
 
     /* Create new epan session for dissection. */
     epan_free(cf->epan);

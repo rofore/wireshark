@@ -89,6 +89,7 @@ BASIC_LIST="base-devel \
 	${PACKAGE_PREFIX}-python \
 	${PACKAGE_PREFIX}-qt6-base \
 	${PACKAGE_PREFIX}-qt6-multimedia \
+	${PACKAGE_PREFIX}-qt6-svg \
 	${PACKAGE_PREFIX}-qt6-tools \
 	${PACKAGE_PREFIX}-qt6-translations \
 	${PACKAGE_PREFIX}-qt6-5compat \
@@ -133,6 +134,7 @@ then
 fi
 
 # Partial upgrades are unsupported.
+# shellcheck disable=SC2086
 pacman --sync --refresh --sysupgrade --needed $ACTUAL_LIST $OPTIONS || exit 2
 
 if [ $ADDITIONAL -eq 0 ]

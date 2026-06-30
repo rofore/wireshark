@@ -617,7 +617,7 @@ extern const ws_in6_addr *tvb_get_ptr_ipv6(tvbuff_t tvb, int offset);
 
 ipv6_pinfo_t *p_get_ipv6_pinfo(packet_info *pinfo)
 {
-    return (ipv6_pinfo_t *)p_get_proto_data(pinfo->pool, pinfo, proto_ipv6, IPV6_PROTO_PINFO);
+    return (ipv6_pinfo_t *)p_get_proto_data(pinfo->pool, pinfo, proto_ipv6, (pinfo->curr_proto_layer_num << 8) | IPV6_PROTO_PINFO);
 }
 
 /* Return tree pointer (for tree root preference) */
@@ -1274,7 +1274,7 @@ dissect_routing6_rt0(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *
 {
     struct ws_rthdr *rt = (struct ws_rthdr *)data;
     proto_item *ti;
-    int offset = 0;
+    unsigned offset = 0;
     int idx;
     int rt0_addr_count;
     const ws_in6_addr *addr = NULL;
@@ -1316,7 +1316,7 @@ dissect_routing6_mipv6(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
 {
     struct ws_rthdr *rt = (struct ws_rthdr *)data;
     proto_item *ti;
-    int offset = 0;
+    unsigned offset = 0;
     const ws_in6_addr *addr;
 
     proto_tree_add_item(tree, hf_ipv6_routing_mipv6_reserved, tvb, offset, 4, ENC_NA);
@@ -1351,7 +1351,7 @@ dissect_routing6_rpl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *
 {
     struct ws_rthdr *rt = (struct ws_rthdr *)data;
     proto_item *ti;
-    int offset = 0;
+    unsigned offset = 0;
     uint8_t cmprI, cmprE, cmprX, pad;
     uint32_t reserved;
     int idx;
@@ -1480,7 +1480,7 @@ static int
 dissect_routing6_srh(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
     struct ws_rthdr *rt = (struct ws_rthdr *)data;
-    int offset = 0;
+    unsigned offset = 0;
     int addr_offset;
     uint32_t last_entry, addr_count;
 
@@ -3716,6 +3716,9 @@ dissect_ipv6(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
     alloc_address_wmem_ipv6(pinfo->pool, &pinfo->net_dst, ip6_dst);
     copy_address_shallow(&pinfo->dst, &pinfo->net_dst);
 
+    /* XXX - See comment in the IPv4 disector. */
+    pinfo->conv_elements = NULL;
+
     if (tree) {
         if (ipv6_summary_in_tree) {
             proto_item_append_text(ipv6_item, ", Src: %s, Dst: %s",
@@ -3822,7 +3825,7 @@ dissect_ipv6(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_
         ipv6_pinfo->ipv6_tree = ipv6_tree;
         ipv6_pinfo->ipv6_item_len = IPv6_HDR_SIZE;
     }
-    p_add_proto_data(pinfo->pool, pinfo, proto_ipv6, IPV6_PROTO_PINFO, ipv6_pinfo);
+    p_add_proto_data(pinfo->pool, pinfo, proto_ipv6, (pinfo->curr_proto_layer_num << 8) | IPV6_PROTO_PINFO, ipv6_pinfo);
 
     /* Adjust the length of this tvbuff to include only the IPv6 datagram. */
     set_actual_length(tvb, IPv6_HDR_SIZE + plen);
@@ -5833,7 +5836,7 @@ proto_reg_handoff_ipv6(void)
     dissector_add_uint("ipv6.routing.type", IPv6_RT_HEADER_COMPACT_16, h);
     dissector_add_uint("ipv6.routing.type", IPv6_RT_HEADER_COMPACT_32, h);
 
-    heur_dissector_add("dect_nr.dlc", dissect_ipv6_heur, "IPv6 over DECT NR+", "ipv6_dect_nr", proto_ipv6, HEURISTIC_ENABLE);
+    heur_dissector_add("dect_nr.dlc", dissect_ipv6_heur, "IPv6 over DLC DECT NR+", "ipv6_dect_nr", proto_ipv6, HEURISTIC_ENABLE);
 
     ilnp_handle = find_dissector_add_dependency("ilnp", proto_ipv6_dstopts);
 

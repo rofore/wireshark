@@ -1,7 +1,7 @@
 /* packet-lte-rrc-template.c
  * Routines for Evolved Universal Terrestrial Radio Access (E-UTRA);
  * Radio Resource Control (RRC) protocol specification
- * (3GPP TS 36.331 V19.2.0 Release 19) packet dissection
+ * (3GPP TS 36.331 V19.3.0 Release 19) packet dissection
  * Copyright 2008, Vincent Helfre
  * Copyright 2009-2026, Pascal Quantin
  *
@@ -70,9 +70,9 @@ static wmem_tree_t *lte_rrc_dcch_segment_id_tree;
 static bool lte_rrc_nas_in_root_tree;
 static bool lte_rrc_reassemble_dcch_segments;
 
-extern int proto_mac_lte;
-extern int proto_rlc_lte;
-extern int proto_pdcp_lte;
+static int proto_mac_lte;
+static int proto_rlc_lte;
+static int proto_pdcp_lte;
 
 
 /* Include constants */
@@ -4709,6 +4709,11 @@ proto_reg_handoff_lte_rrc(void)
   gsm_rlcmac_dl_handle = find_dissector("gsm_rlcmac_dl");
   nr_rrc_reconf_handle = find_dissector("nr-rrc.rrc_reconf");
   lte_rrc_conn_reconf_handle = find_dissector("lte-rrc.rrc_conn_reconf");
+
+  proto_mac_lte = proto_get_id_by_filter_name("mac-lte");
+  proto_rlc_lte = proto_get_id_by_filter_name("rlc-lte");
+  proto_pdcp_lte = proto_get_id_by_filter_name("pdcp-lte");
+
 }
 
 

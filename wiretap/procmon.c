@@ -202,7 +202,6 @@ static char *procmon_read_string(FILE_T fh, gunichar2 *str_buf, int *err, char *
         ws_debug("Truncating string from %u bytes to %u", cur_str_size, MAX_PROCMON_STRING_LENGTH);
         cur_str_size = MAX_PROCMON_STRING_LENGTH;
     }
-    // XXX Make sure cur_str_size is even?
     if (!wtap_read_bytes_or_eof(fh, str_buf, cur_str_size, err, err_info))
     {
         ws_debug("wtap_read_bytes_or_eof() failed, err = %d.", *err);
@@ -215,7 +214,8 @@ static char *procmon_read_string(FILE_T fh, gunichar2 *str_buf, int *err, char *
         }
         return NULL;
     }
-    return g_utf16_to_utf8(str_buf, cur_str_size, NULL, NULL, NULL);
+    char *utf8_str = g_convert_with_fallback((const char *)str_buf, cur_str_size, "UTF-8", "UTF-16LE", "?", NULL, NULL, NULL);
+    return utf8_str ? utf8_str : g_strdup("<invalid>");
 }
 
 // Read the hosts array. Assume failures here are non-fatal.
@@ -390,6 +390,13 @@ static bool procmon_read(wtap *wth, wtap_rec *rec,
         procmon_read_hosts(wth, file_info->header.host_port_array_offset, err, err_info);
     }
 
+    /* Stop processing once our offset reaches past events (or the file is malformed) */
+    if (file_info->cur_event >= file_info->header.num_events)
+    {
+        ws_debug("end of events");
+        return false;
+    }
+
     *data_offset = file_info->event_offsets[file_info->cur_event];
     ws_noisy("file offset is %" PRId64 " array offset is %" PRId64, file_tell(wth->fh), *data_offset);
 
@@ -399,12 +406,6 @@ static bool procmon_read(wtap *wth, wtap_rec *rec,
         return false;
     }
 
-    /* Stop processing once offset reaches past events */
-    if (file_info->cur_event >= file_info->header.num_events)
-    {
-        ws_debug("end of events");
-        return false;
-    }
     file_info->cur_event++;
 
     // if (*data_offset+COMMON_EVENT_STRUCT_SIZE >= (int64_t)file_info->header.event_offsets_array_offset) {

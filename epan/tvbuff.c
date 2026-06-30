@@ -645,16 +645,9 @@ _tvb_captured_length_remaining(const tvbuff_t *tvb, const unsigned offset)
 unsigned
 tvb_captured_length_remaining(const tvbuff_t *tvb, const unsigned offset)
 {
-	unsigned rem_length;
-	int   exception;
-
 	DISSECTOR_ASSERT(tvb && tvb->initialized);
 
-	exception = validate_offset_and_remaining(tvb, offset, &rem_length);
-	if (exception)
-		return 0;
-
-	return rem_length;
+	return _tvb_captured_length_remaining(tvb, offset);
 }
 
 unsigned
@@ -1965,6 +1958,334 @@ parse_month_name(const char *name, int *tm_mon)
 	return false;
 }
 
+bool
+tvb_get_string_uint64(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		      const unsigned encoding, uint64_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftou64(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftou64(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftou64(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
+bool
+tvb_get_string_uint(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		    const unsigned encoding, uint32_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftou32(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftou32(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftou32(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
+bool
+tvb_get_string_uint16(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		    const unsigned encoding, uint16_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftou16(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftou16(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftou16(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
+bool
+tvb_get_string_uint8(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		    const unsigned encoding, uint8_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftou8(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftou8(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftou8(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
+bool
+tvb_get_string_int64(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		     const unsigned encoding, int64_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftoi64(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftoi64(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftoi64(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
+bool
+tvb_get_string_int(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		   const unsigned encoding, int32_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftoi32(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftoi32(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftoi32(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
+bool
+tvb_get_string_int16(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		    const unsigned encoding, int16_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftoi16(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftoi16(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftoi16(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
+bool
+tvb_get_string_int8(tvbuff_t *tvb, const unsigned offset, const unsigned length,
+		    const unsigned encoding, int8_t *value, unsigned *endoff)
+{
+	const uint8_t *ptr;
+	const uint8_t *endptr;
+	const uint8_t **endptrptr = endoff ? &endptr : NULL;
+	bool success;
+
+	validate_single_byte_ascii_encoding(encoding);
+
+	ptr = ensure_contiguous_unsigned(tvb, offset, length);
+
+	if (ptr == NULL) {
+		*value = 0;
+		if (endoff) {
+			*endoff = offset;
+		}
+		return false;
+	}
+
+	switch (encoding & ENC_STRING) {
+	case ENC_STR_HEX:
+		success = ws_hexbuftoi8(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_DEC:
+		success = ws_buftoi8(ptr, length, endptrptr, value);
+		break;
+	case ENC_STR_NUM:
+	default:
+		success = ws_basebuftoi8(ptr, length, endptrptr, value, 0);
+	}
+
+	if (endoff) {
+		// 0 <= endptr - ptr <= length
+		*endoff = offset + (uint32_t)(endptr - ptr);
+	}
+
+	return success;
+}
+
 /*
  * Is the character a WSP character, as per RFC 5234?  (space or tab).
  */
@@ -2544,13 +2865,6 @@ _tvb_get_bits64_le(tvbuff_t *tvb, unsigned bit_offset, const unsigned total_no_o
 		}
 	}
 	return value;
-}
-
-/* Get 1 - 32 bits (should be deprecated as same as tvb_get_bits32??) */
-uint32_t
-tvb_get_bits(tvbuff_t *tvb, const unsigned bit_offset, const unsigned no_of_bits, const unsigned encoding)
-{
-	return (uint32_t)tvb_get_bits64(tvb, bit_offset, no_of_bits, encoding);
 }
 
 static bool
@@ -3915,19 +4229,6 @@ tvb_get_stringz_unichar2(wmem_allocator_t *scope, tvbuff_t *tvb, const unsigned 
  * functions that operate on strings that don't have a tvb_ equivalent.
  * That's hard to enforce, which is why this is deprecated.
  */
-const uint8_t *
-tvb_get_const_stringz(tvbuff_t *tvb, const unsigned offset, unsigned *lengthp)
-{
-	unsigned      size;
-	const uint8_t *strptr;
-
-	size   = tvb_strsize(tvb, offset);
-	strptr = ensure_contiguous_unsigned(tvb, offset, size);
-	if (lengthp)
-		*lengthp = size;
-	return strptr;
-}
-
 static char *
 tvb_get_ucs_2_stringz(wmem_allocator_t *scope, tvbuff_t *tvb, const unsigned offset, unsigned *lengthp, const unsigned encoding)
 {

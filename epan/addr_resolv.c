@@ -98,6 +98,7 @@
 
 #define ENAME_HOSTS     "hosts"
 #define ENAME_SUBNETS   "subnets"
+#define ENAME_SUBNETS_V6 "subnetsipv6"
 #define ENAME_ETHERS    "ethers"
 #define ENAME_IPXNETS   "ipxnets"
 #define ENAME_MANUF     "manuf"
@@ -112,6 +113,7 @@
 #define HASHHOSTSIZE     2048
 #define HASHIPXNETSIZE    256
 #define SUBNETLENGTHSIZE   32  /*1-32 inc.*/
+#define SUBNETLENGTHSIZE_V6 128 /*1-128 inc.*/
 
 /* hash table used for IPv4 lookup */
 
@@ -133,6 +135,26 @@ typedef struct {
     sub_net_hashipv4_t** subnet_addresses; /* Hash table of subnet addresses */
 } subnet_length_entry_t;
 
+
+/* IPv6 subnet lookup structures */
+typedef struct sub_net_hashipv6 {
+    uint8_t                   addr[16];   /* masked network address */
+    uint8_t                   flags;
+    struct sub_net_hashipv6  *next;
+    char                      name[MAXNAMELEN];
+} sub_net_hashipv6_t;
+
+typedef struct {
+    size_t               mask_length;       /* 1-128 */
+    uint8_t              mask[16];          /* byte mask */
+    sub_net_hashipv6_t **subnet_addresses;  /* hash table */
+} subnet_length_entry_v6_t;
+
+typedef struct {
+    uint8_t     mask[16];
+    size_t      mask_length;
+    const char *name;
+} subnet_entry_v6_t;
 
 /* hash table used for IPX network lookup */
 
@@ -251,6 +273,9 @@ static GHashTable *enterprises_hashtable;
 static subnet_length_entry_t subnet_length_entries[SUBNETLENGTHSIZE]; /* Ordered array of entries */
 static bool have_subnet_entry;
 
+static subnet_length_entry_v6_t subnet_length_entries_v6[SUBNETLENGTHSIZE_V6]; /* IPv6 subnet entries */
+static bool have_subnet_entry_v6;
+
 static bool new_resolved_objects;
 
 static GPtrArray* extra_hosts_files;
@@ -332,19 +357,18 @@ static bool resolve_synchronously;
  *  GUI code to change them.
  */
 
-char *g_ethers_path;     /* global ethers file     */
-char *g_pethers_path;     /* personal ethers file   */
-char *g_wka_path;     /* global well-known-addresses file */
-char *g_manuf_path;     /* global manuf file      */
-char *g_pmanuf_path;     /* personal manuf file      */
-char *g_ipxnets_path;     /* global ipxnets file    */
-char *g_pipxnets_path;     /* personal ipxnets file  */
-char *g_services_path;     /* global services file   */
-char *g_pservices_path;     /* personal services file */
-char *g_pvlan_path;     /* personal vlans file    */
-char *g_ss7pcs_path;     /* personal ss7pcs file   */
-char *g_enterprises_path;   /* global enterprises file   */
-char *g_penterprises_path;  /* personal enterprises file */
+static char *g_ethers_path;     /* global ethers file     */
+static char *g_pethers_path;     /* personal ethers file   */
+static char *g_wka_path;     /* global well-known-addresses file */
+static char *g_manuf_path;     /* global manuf file      */
+static char *g_pmanuf_path;     /* personal manuf file      */
+static char *g_ipxnets_path;     /* global ipxnets file    */
+static char *g_pipxnets_path;     /* personal ipxnets file  */
+static char *g_services_path;     /* global services file   */
+static char *g_pservices_path;     /* personal services file */
+static char *g_pvlan_path;     /* personal vlans file    */
+static char *g_enterprises_path;   /* global enterprises file   */
+static char *g_penterprises_path;  /* personal enterprises file */
                                     /* first resolving call   */
 
 /*
@@ -396,7 +420,7 @@ static  wmem_list_t *async_dns_queue_head;
 static  GMutex      async_dns_queue_mtx;
 
 //UAT for providing a list of DNS servers to C-ARES for name resolution
-bool use_custom_dns_server_list;
+static bool use_custom_dns_server_list;
 struct dns_server_data {
     char *ipaddr;
     uint32_t udp_port;
@@ -1197,10 +1221,21 @@ fill_dummy_ip4(const unsigned addr, hashipv4_t* volatile tp)
             }
         }
 
-        /* There are more efficient ways to do this, but this is safe if we
-         * trust snprintf and MAXDNSNAMELEN
+        /* XXX - the subnet entry name could be up to MAXDNSNAMELEN, and
+         * buffer is WS_INET_ADDRSTRLEN chars, so the total length of
+         * this string could be up to MAXDNSNAMELEN+WS_INET_ADDRSTRLEN,
+         * which won't fit in the name field of a hashipv4_t, which is only
+         * MAXDNSNAMELEN chars.
+         *
+         * For now, we do it this way, to suppress compiler warnings.
+         * g_strlcpy() returns the length of the string being copied, which
+         * should be < MAXDNSNAMELEN as it does not include the trailing NUL,
+         * but let's be cautious.
          */
-        snprintf(tp->name, MAXDNSNAMELEN, "%s%s", subnet_entry.name, paddr);
+        size_t subnet_entry_name_len;
+        subnet_entry_name_len = g_strlcpy(tp->name, subnet_entry.name, MAXDNSNAMELEN);
+        if (subnet_entry_name_len < MAXDNSNAMELEN)
+                g_strlcpy(tp->name + subnet_entry_name_len, paddr, MAXDNSNAMELEN - subnet_entry_name_len);
 
         /* Evaluate the subnet in CIDR notation
          * Reuse buffers built above
@@ -1227,13 +1262,67 @@ fill_dummy_ip4(const unsigned addr, hashipv4_t* volatile tp)
 }
 
 
-/* Fill in an IP6 structure with the string form of the address.
+/* Forward declaration — defined later with the IPv6 subnet functions. */
+static subnet_entry_v6_t subnet6_lookup(const ws_in6_addr *addr);
+
+/* Fill in an IP6 structure with info from subnetIpv6 file or the string form
+ * of the address.
  */
 static void
 fill_dummy_ip6(hashipv6_t* volatile tp)
 {
+    ws_in6_addr addr;
+    memcpy(addr.bytes, tp->addr, 16);
+
     /* Overwrite if we get async DNS reply */
-    (void) g_strlcpy(tp->name, tp->ip6, MAXDNSNAMELEN);
+    subnet_entry_v6_t subnet_entry = subnet6_lookup(&addr);
+    if (subnet_entry.mask_length != 0) {
+        ws_in6_addr host_addr;
+        for (int i = 0; i < 16; i++)
+            host_addr.bytes[i] = addr.bytes[i] & ~subnet_entry.mask[i];
+
+        /* Build host-portion 16-bit groups directly from bytes — avoids
+         * ambiguity from IPv6 '::' zero-compression in string scanning. */
+        size_t first_host_group = subnet_entry.mask_length / 16;
+        wmem_strbuf_t *host_strbuf = wmem_strbuf_new_sized(addr_resolv_scope,
+                                                            WS_INET6_ADDRSTRLEN);
+        for (size_t g = first_host_group; g < 8; g++) {
+            if (g > first_host_group)
+                wmem_strbuf_append_c(host_strbuf, ':');
+            uint16_t grp = ((uint16_t)host_addr.bytes[g * 2] << 8)
+                           | host_addr.bytes[g * 2 + 1];
+            wmem_strbuf_append_printf(host_strbuf, "%x", (unsigned)grp);
+        }
+
+        /* Assemble name: "subnetName:host_portion" */
+        wmem_strbuf_t *name_strbuf = wmem_strbuf_new_sized(addr_resolv_scope,
+                                                            MAXDNSNAMELEN);
+        wmem_strbuf_append(name_strbuf, subnet_entry.name);
+        if (wmem_strbuf_get_len(host_strbuf) > 0) {
+            wmem_strbuf_append_c(name_strbuf, ':');
+            wmem_strbuf_append(name_strbuf, wmem_strbuf_get_str(host_strbuf));
+        }
+        g_strlcpy(tp->name, wmem_strbuf_get_str(name_strbuf), MAXDNSNAMELEN);
+        wmem_strbuf_destroy(name_strbuf);
+        wmem_strbuf_destroy(host_strbuf);
+
+        /* Build CIDR notation for cidr_addr */
+        ws_in6_addr net_addr;
+        for (int i = 0; i < 16; i++)
+            net_addr.bytes[i] = addr.bytes[i] & subnet_entry.mask[i];
+        char net_buf[WS_INET6_ADDRSTRLEN];
+        ip6_to_str_buf(&net_addr, net_buf, sizeof(net_buf));
+        wmem_strbuf_t *cidr_strbuf = wmem_strbuf_new_sized(addr_resolv_scope,
+                                                            WS_INET6_CIDRADDRSTRLEN);
+        wmem_strbuf_append_printf(cidr_strbuf, "%s/%zu", net_buf,
+                                  subnet_entry.mask_length);
+        g_strlcpy(tp->cidr_addr, wmem_strbuf_get_str(cidr_strbuf),
+                  WS_INET6_CIDRADDRSTRLEN);
+        wmem_strbuf_destroy(cidr_strbuf);
+    } else {
+        (void)g_strlcpy(tp->name, tp->ip6, MAXDNSNAMELEN);
+        (void)g_strlcpy(tp->cidr_addr, tp->ip6, WS_INET6_CIDRADDRSTRLEN);
+    }
 }
 
 static void
@@ -1738,6 +1827,7 @@ manuf_hash_new_entry(const uint8_t *addr, const char* name, const char* longname
     unsigned manuf_key;
     hashmanuf_t *manuf_value;
     char *endp;
+    size_t attempted_size;
 
     /* manuf needs only the 3 most significant octets of the ethernet address */
     manuf_key = (addr[0] << 16) + (addr[1] << 8) + addr[2];
@@ -1748,7 +1838,10 @@ manuf_hash_new_entry(const uint8_t *addr, const char* name, const char* longname
         (void) g_strlcpy(manuf_value->resolved_name, name, MAXNAMELEN);
         manuf_value->flags = NAME_RESOLVED;
         if (longname != NULL) {
-            (void) g_strlcpy(manuf_value->resolved_longname, longname, MAXNAMELEN);
+            attempted_size = g_strlcpy(manuf_value->resolved_longname, longname, MAXNAMELEN);
+            if (attempted_size >= MAXNAMELEN) {
+                ws_utf8_truncate(manuf_value->resolved_longname, MAXNAMELEN - 1);
+            }
         }
         else {
             (void) g_strlcpy(manuf_value->resolved_longname, name, MAXNAMELEN);
@@ -3193,6 +3286,180 @@ subnet_name_lookup_init(const char* app_env_var_prefix)
     g_free(subnetspath);
 }
 
+/* IPv6 Subnet Name Resolution */
+
+/* Compute a 16-byte subnet mask from a prefix length (1-128). */
+static void
+ipv6_get_subnet_mask(uint32_t mask_length, uint8_t mask[16])
+{
+    uint32_t full_bytes = mask_length / 8;
+    uint32_t remaining  = mask_length % 8;
+    memset(mask, 0, 16);
+    for (uint32_t i = 0; i < full_bytes; i++)
+        mask[i] = 0xff;
+    if (remaining > 0 && full_bytes < 16)
+        mask[full_bytes] = (uint8_t)(0xff << (8 - remaining));
+}
+
+static void
+subnet6_entry_set(const ws_in6_addr *subnet_addr, const uint32_t mask_length,
+                  const char *name)
+{
+    subnet_length_entry_v6_t *entry;
+    sub_net_hashipv6_t *tp;
+    uint8_t masked[16];
+    size_t hash_idx;
+
+    ws_assert(mask_length > 0 && mask_length <= 128);
+    entry = &subnet_length_entries_v6[mask_length - 1];
+
+    for (int i = 0; i < 16; i++)
+        masked[i] = subnet_addr->bytes[i] & entry->mask[i];
+
+    hash_idx = ipv6_oat_hash(masked) & (HASHHOSTSIZE - 1);
+
+    if (entry->subnet_addresses == NULL)
+        entry->subnet_addresses = (sub_net_hashipv6_t **)wmem_alloc0(
+            addr_resolv_scope, sizeof(sub_net_hashipv6_t *) * HASHHOSTSIZE);
+
+    if ((tp = entry->subnet_addresses[hash_idx]) != NULL) {
+        sub_net_hashipv6_t *new_tp;
+        while (tp->next) {
+            if (memcmp(tp->addr, masked, 16) == 0)
+                return; /* duplicate */
+            tp = tp->next;
+        }
+        if (memcmp(tp->addr, masked, 16) == 0)
+            return; /* duplicate at tail */
+        new_tp = wmem_new(addr_resolv_scope, sub_net_hashipv6_t);
+        tp->next = new_tp;
+        tp = new_tp;
+    } else {
+        tp = entry->subnet_addresses[hash_idx] =
+            wmem_new(addr_resolv_scope, sub_net_hashipv6_t);
+    }
+
+    tp->next = NULL;
+    memcpy(tp->addr, masked, 16);
+    (void)g_strlcpy(tp->name, name, MAXNAMELEN);
+    have_subnet_entry_v6 = true;
+}
+
+static subnet_entry_v6_t
+subnet6_lookup(const ws_in6_addr *addr)
+{
+    subnet_entry_v6_t result;
+    uint32_t i = SUBNETLENGTHSIZE_V6;
+
+    while (have_subnet_entry_v6 && i > 0) {
+        subnet_length_entry_v6_t *length_entry;
+        uint8_t masked[16];
+        size_t hash_idx;
+        sub_net_hashipv6_t *tp;
+
+        --i;
+        length_entry = &subnet_length_entries_v6[i];
+
+        if (length_entry->subnet_addresses == NULL)
+            continue;
+
+        for (int b = 0; b < 16; b++)
+            masked[b] = addr->bytes[b] & length_entry->mask[b];
+
+        hash_idx = ipv6_oat_hash(masked) & (HASHHOSTSIZE - 1);
+        tp = length_entry->subnet_addresses[hash_idx];
+
+        while (tp != NULL && memcmp(tp->addr, masked, 16) != 0)
+            tp = tp->next;
+
+        if (tp != NULL) {
+            memcpy(result.mask, length_entry->mask, 16);
+            result.mask_length = i + 1;
+            result.name = tp->name;
+            return result;
+        }
+    }
+
+    memset(result.mask, 0, 16);
+    result.mask_length = 0;
+    result.name = NULL;
+    return result;
+}
+
+static bool
+read_subnets_ipv6_file(const char *subnetspath)
+{
+    FILE *hf;
+    char line[MAX_LINELEN];
+    char *cp, *cp2;
+    ws_in6_addr host_addr;
+    uint32_t mask_length;
+
+    if ((hf = ws_fopen(subnetspath, "r")) == NULL)
+        return false;
+
+    while (fgetline(line, sizeof(line), hf) >= 0) {
+        if ((cp = strchr(line, '#')))
+            *cp = '\0';
+
+        if ((cp = strtok(line, " \t")) == NULL)
+            continue;
+
+        /* Expected format: <IPv6_address>/<prefix_length> */
+        cp2 = strchr(cp, '/');
+        if (cp2 == NULL)
+            continue;
+        *cp2 = '\0';
+        ++cp2;
+
+        if (!ws_inet_pton6(cp, &host_addr))
+            continue;
+
+        if (!ws_strtou32(cp2, NULL, &mask_length) || mask_length == 0 || mask_length > 128)
+            continue;
+
+        if ((cp = strtok(NULL, " \t")) == NULL)
+            continue;
+
+        subnet6_entry_set(&host_addr, mask_length, cp);
+    }
+
+    fclose(hf);
+    return true;
+}
+
+static void
+subnet6_name_lookup_init(const char *app_env_var_prefix)
+{
+    char *subnetspath;
+
+    for (uint32_t i = 0; i < SUBNETLENGTHSIZE_V6; ++i) {
+        subnet_length_entries_v6[i].subnet_addresses = NULL;
+        subnet_length_entries_v6[i].mask_length = i + 1;
+        ipv6_get_subnet_mask((uint32_t)(i + 1), subnet_length_entries_v6[i].mask);
+    }
+
+    /* Check profile directory before personal configuration */
+    subnetspath = get_persconffile_path(ENAME_SUBNETS_V6, true, app_env_var_prefix);
+    if (!read_subnets_ipv6_file(subnetspath)) {
+        if (errno != ENOENT)
+            report_open_failure(subnetspath, errno, false);
+        g_free(subnetspath);
+        subnetspath = get_persconffile_path(ENAME_SUBNETS_V6, false, app_env_var_prefix);
+        if (!read_subnets_ipv6_file(subnetspath) && errno != ENOENT)
+            report_open_failure(subnetspath, errno, false);
+    }
+    g_free(subnetspath);
+
+    /*
+     * Load the global IPv6 subnets file, if we have one.
+     */
+    subnetspath = get_datafile_path(ENAME_SUBNETS_V6, app_env_var_prefix);
+    if (!read_subnets_ipv6_file(subnetspath) && errno != ENOENT)
+        report_open_failure(subnetspath, errno, false);
+    g_free(subnetspath);
+}
+
 /* SS7 PC Name Resolution Portion */
 static hashss7pc_t *
 new_ss7pc(const uint8_t ni, const uint32_t pc)
@@ -3423,7 +3690,7 @@ addr_resolve_pref_init(module_t *nameres)
             "Resolve network (IP) addresses",
             "Resolve IPv4, IPv6, and IPX addresses into host names."
             " The next set of check boxes determines how name resolution should be performed."
-            " If no other options are checked name resolution is made from Wireshark's host file"
+            " If no other options are checked name resolution is made from Wireshark's host, subnets or subnetsipv6 file"
             " and capture file name resolution blocks.",
             &gbl_resolv_flags.network_name);
 
@@ -3802,6 +4069,7 @@ host_name_lookup_init(const char* app_env_var_prefix)
     }
 
     subnet_name_lookup_init(app_env_var_prefix);
+    subnet6_name_lookup_init(app_env_var_prefix);
 
     add_manually_resolved();
 
@@ -3836,6 +4104,23 @@ host_name_lookup_cleanup(void)
     }
 
     have_subnet_entry = false;
+
+    for(i = 0; i < SUBNETLENGTHSIZE_V6; ++i) {
+        sub_net_hashipv6_t *entry6, *next_entry6;
+        if (subnet_length_entries_v6[i].subnet_addresses != NULL) {
+            for (j = 0; j < HASHHOSTSIZE; j++) {
+                for (entry6 = subnet_length_entries_v6[i].subnet_addresses[j];
+                     entry6 != NULL; entry6 = next_entry6) {
+                    next_entry6 = entry6->next;
+                    wmem_free(addr_resolv_scope, entry6);
+                }
+            }
+            wmem_free(addr_resolv_scope, subnet_length_entries_v6[i].subnet_addresses);
+            subnet_length_entries_v6[i].subnet_addresses = NULL;
+        }
+    }
+    have_subnet_entry_v6 = false;
+
     new_resolved_objects = false;
 }
 

@@ -420,7 +420,7 @@ static int hf_dns_dnskey_flags_secure_entry_point;
 static int hf_dns_dnskey_flags_reserved;
 static int hf_dns_dnskey_protocol;
 static int hf_dns_dnskey_algorithm;
-static int hf_dns_dnskey_key_id;
+static int hf_dns_dnskey_key_tag;
 static int hf_dns_dnskey_public_key;
 static int hf_dns_key_flags;
 static int hf_dns_key_flags_authentication;
@@ -433,7 +433,7 @@ static int hf_dns_key_flags_mime;
 static int hf_dns_key_flags_signatory;
 static int hf_dns_key_protocol;
 static int hf_dns_key_algorithm;
-static int hf_dns_key_key_id;
+static int hf_dns_key_key_tag;
 static int hf_dns_key_public_key;
 static int hf_dns_px_preference;
 static int hf_dns_px_map822;
@@ -546,7 +546,7 @@ static int hf_dns_hip_hit;
 static int hf_dns_hip_pk;
 static int hf_dns_hip_rendezvous_server;
 static int hf_dns_dhcid_rdata;
-static int hf_dns_ds_key_id;
+static int hf_dns_ds_key_tag;
 static int hf_dns_ds_algorithm;
 static int hf_dns_apl_coded_prefix;
 static int hf_dns_ds_digest_type;
@@ -655,11 +655,19 @@ static expert_field ei_dns_depr_opc;
 static expert_field ei_ttl_high_bit_set;
 static expert_field ei_dns_tsig_alg;
 static expert_field ei_dns_undecoded_option;
-static expert_field ei_dns_key_id_buffer_too_short;
+static expert_field ei_dns_key_tag_buffer_too_short;
 static expert_field ei_dns_retransmit_request;
 static expert_field ei_dns_retransmit_response;
 static expert_field ei_dns_extraneous_data;
 static expert_field ei_dns_response_missing;
+static expert_field ei_dns_svcb_param_truncated;
+static expert_field ei_dns_svcb_param_bad_length;
+static expert_field ei_dns_svcb_param_bad_value;
+static expert_field ei_dns_svcb_param_duplicate_key;
+static expert_field ei_dns_svcb_param_key_order;
+static expert_field ei_dns_svcb_param_mandatory_duplicate;
+static expert_field ei_dns_svcb_param_mandatory_missing;
+static expert_field ei_dns_svcb_param_noalpn_missing_alpn;
 
 static dissector_table_t dns_tsig_dissector_table;
 
@@ -1011,8 +1019,8 @@ static const value_string dns_types_vals[] = {
   { DNS_T_PX,         "PX"         }, /* RFC 1664 */
   { DNS_T_GPOS,       "GPOS"       }, /* RFC 1712 */
   { DNS_T_AAAA,       "AAAA"       }, /* RFC 1886 */
-  { DNS_T_LOC,        "LOC"        }, /* RFC 1886 */
-  { DNS_T_NXT,        "NXT"        }, /* RFC 1876 */
+  { DNS_T_LOC,        "LOC"        }, /* RFC 1876 */
+  { DNS_T_NXT,        "NXT"        }, /* RFC 2535 */
   { DNS_T_EID,        "EID"        },
   { DNS_T_NIMLOC,     "NIMLOC"     },
   { DNS_T_SRV,        "SRV"        }, /* RFC 2052 */
@@ -1415,8 +1423,7 @@ static void qname_host_and_domain(char* name, int name_len, char* host, char* do
     for (i = 0; i < name_len; i++) {
       if (name[i] == '.') {
         host[i] = '\0';
-        if (i < name_len)
-          ws_label_strcpy(domain, 256, 0, (uint8_t*)&name[i + 1], 0);
+        ws_label_strcpy(domain, 256, 0, (uint8_t*)&name[i + 1], 0);
         break;
       }
       else {
@@ -1685,7 +1692,7 @@ make_local_part_domain(wmem_allocator_t* scope, const char* name)
     }
     else if (*p == '\\')
     {
-      if ((*(p + 1) != '\0') && (*(p + 1) == '.'))
+      if (*(p + 1) == '.')
       {
         /* Skip over the \. because it's intended to be a . */
         p += 1;
@@ -1698,7 +1705,7 @@ make_local_part_domain(wmem_allocator_t* scope, const char* name)
 
 
 static double
-rfc1867_size(tvbuff_t *tvb, int offset)
+rfc1876_size(tvbuff_t *tvb, int offset)
 {
   uint8_t val;
   double  size;
@@ -1715,7 +1722,7 @@ rfc1867_size(tvbuff_t *tvb, int offset)
 }
 
 static char *
-rfc1867_angle(tvbuff_t *tvb, int offset, bool longitude)
+rfc1876_angle(tvbuff_t *tvb, int offset, bool longitude)
 {
   uint32_t    angle;
   char        direction;
@@ -2023,12 +2030,11 @@ dissect_type_bitmap_nxt(proto_tree *rr_tree, packet_info* pinfo, tvbuff_t *tvb, 
 
 /*
  * SIG, KEY, and CERT RR algorithms.
- * http://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.txt (last updated 2017-01-09)
+ * http://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.txt (last updated 2026-06-28)
  */
 #define DNS_ALGO_RSAMD5               1 /* RSA/MD5 */
 #define DNS_ALGO_DH                   2 /* Diffie-Hellman */
-#define DNS_ALGO_DSA                  3 /* DSA */
-#define DNS_ALGO_ECC                  4 /* Elliptic curve crypto */
+#define DNS_ALGO_DSA                  3 /* DSA/SHA1 */
 #define DNS_ALGO_RSASHA1              5 /* RSA/SHA1 */
 #define DNS_ALGO_DSA_NSEC3_SHA1       6 /* DSA + NSEC3/SHA1 */
 #define DNS_ALGO_RSASHA1_NSEC3_SHA1   7 /* RSA/SHA1 + NSEC3/SHA1 */
@@ -2039,7 +2045,8 @@ dissect_type_bitmap_nxt(proto_tree *rr_tree, packet_info* pinfo, tvbuff_t *tvb, 
 #define DNS_ALGO_ECDSAP384SHA384     14 /* ECDSA Curve P-384 with SHA-384 */
 #define DNS_ALGO_ED25519             15 /* Ed25519 */
 #define DNS_ALGO_ED448               16 /* Ed448 */
-#define DNS_ALGO_HMACMD5            157 /* HMAC/MD5 */
+#define DNS_ALGO_SM2SM3              17 /* SM2 signing with SM3 hashing */
+#define DNS_ALGO_ECCGOST12           23 /* GOST R 34.10-2012 */
 #define DNS_ALGO_INDIRECT           252 /* Indirect key */
 #define DNS_ALGO_PRIVATEDNS         253 /* Private, domain name  */
 #define DNS_ALGO_PRIVATEOID         254 /* Private, OID */
@@ -2047,8 +2054,7 @@ dissect_type_bitmap_nxt(proto_tree *rr_tree, packet_info* pinfo, tvbuff_t *tvb, 
 static const value_string dnssec_algo_vals[] = {
   { DNS_ALGO_RSAMD5,            "RSA/MD5" },
   { DNS_ALGO_DH,                "Diffie-Hellman" },
-  { DNS_ALGO_DSA,               "DSA" },
-  { DNS_ALGO_ECC,               "Elliptic curve crypto" },
+  { DNS_ALGO_DSA,               "DSA/SHA1" },
   { DNS_ALGO_RSASHA1,           "RSA/SHA1" },
   { DNS_ALGO_DSA_NSEC3_SHA1,    "DSA + NSEC3/SHA1" },
   { DNS_ALGO_RSASHA1_NSEC3_SHA1,"RSA/SHA1 + NSEC3/SHA1" },
@@ -2059,7 +2065,8 @@ static const value_string dnssec_algo_vals[] = {
   { DNS_ALGO_ECDSAP384SHA384,   "ECDSA Curve P-384 with SHA-384" },
   { DNS_ALGO_ED25519,           "Ed25519" },
   { DNS_ALGO_ED448,             "Ed448" },
-  { DNS_ALGO_HMACMD5,           "HMAC/MD5" },
+  { DNS_ALGO_SM2SM3,            "SM2 signing with SM3 hashing" },
+  { DNS_ALGO_ECCGOST12,         "GOST R 34.10-2012" },
   { DNS_ALGO_INDIRECT,          "Indirect key" },
   { DNS_ALGO_PRIVATEDNS,        "Private, domain name" },
   { DNS_ALGO_PRIVATEOID,        "Private, OID" },
@@ -2128,25 +2135,25 @@ static const value_string esversions[] = {
 };
 
 /**
- *   Compute the key id of a KEY RR depending of the algorithm used.
+ *   Compute the key tag of a KEY/DNSKEY RR depending of the algorithm used.
  */
 static bool
-compute_key_id(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, int offset, int size, uint8_t algo, uint16_t *key_id)
+compute_key_tag(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, int offset, int size, uint8_t algo, uint16_t *key_tag)
 {
   uint32_t ac;
   uint8_t c1, c2;
 
   if (size < 4) {
     proto_item *item;
-    *key_id = 0;
-    item = proto_tree_add_expert(tree, pinfo, &ei_dns_key_id_buffer_too_short, tvb, offset, size);
+    *key_tag = 0;
+    item = proto_tree_add_expert(tree, pinfo, &ei_dns_key_tag_buffer_too_short, tvb, offset, size);
     proto_item_set_generated(item);
     return false;
   }
 
   switch( algo ) {
      case DNS_ALGO_RSAMD5:
-       *key_id = (uint16_t)(tvb_get_uint8(tvb, offset + size - 3) << 8) + tvb_get_uint8( tvb, offset + size - 2 );
+       *key_tag = (uint16_t)(tvb_get_uint8(tvb, offset + size - 3) << 8) + tvb_get_uint8( tvb, offset + size - 2 );
        break;
      default:
        for (ac = 0; size > 1; size -= 2, offset += 2) {
@@ -2159,7 +2166,7 @@ compute_key_id(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, int offset, 
          ac += c1 << 8;
        }
        ac += (ac >> 16) & 0xffff;
-       *key_id = (uint16_t)(ac & 0xffff);
+       *key_tag = (uint16_t)(ac & 0xffff);
        break;
   }
   return true;
@@ -2176,46 +2183,129 @@ dissect_dns_svcparam_base64(proto_tree *param_tree, packet_info* pinfo, proto_it
 }
 
 static int
+mandatory_key_cmp(const void *a, const void *b)
+{
+  if (GPOINTER_TO_UINT(a) < GPOINTER_TO_UINT(b))
+    return -1;
+  if (GPOINTER_TO_UINT(a) > GPOINTER_TO_UINT(b))
+    return 1;
+  return 0;
+}
+
+static int
 dissect_svc_params(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
   uint32_t       value;
+  uint32_t       key;
   uint32_t       svc_param_key;
   uint32_t       svc_param_offset;
   uint32_t       svc_param_length;
   uint32_t       svc_param_alpn_length;
   const uint8_t *dohpath;
+  bool           has_prev_key = false;
+  uint32_t       prev_key = 0;
+  bool           has_alpn = false;
+  bool           has_noalpn = false;
   int            cur_offset = 0;
   int            offset_end = tvb_captured_length(tvb);
   proto_item    *svcb_param_ti;
+  proto_item    *mandatory_ti = NULL;
+  proto_item    *noalpn_ti = NULL;
   proto_tree    *svcb_param_tree;
+  wmem_map_t    *seen_keys = wmem_map_new(pinfo->pool, g_direct_hash, g_direct_equal);
+  wmem_map_t    *mandatory_keys = wmem_map_new(pinfo->pool, g_direct_hash, g_direct_equal);
 
   while (cur_offset < offset_end) {
+    int bytes_remaining = offset_end - cur_offset;
+    int param_start;
+    int param_end;
+    bool malformed = false;
+
+    if (bytes_remaining < 4) {
+      svcb_param_ti = proto_tree_add_item(tree, proto_svc_params, tvb, cur_offset, bytes_remaining, ENC_NA);
+      expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_truncated,
+                             "Truncated SvcParam header: only %d byte(s) remain", bytes_remaining);
+      break;
+    }
+
     svcb_param_ti = proto_tree_add_item(tree, proto_svc_params, tvb, cur_offset, -1, ENC_NA);
     svcb_param_tree = proto_item_add_subtree(svcb_param_ti, ett_svc_param);
 
     proto_tree_add_item_ret_uint(svcb_param_tree, hf_svc_param_key, tvb, cur_offset, 2, ENC_BIG_ENDIAN, &svc_param_key);
     cur_offset += 2;
 
+    if (wmem_map_contains(seen_keys, GUINT_TO_POINTER(svc_param_key))) {
+      expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_duplicate_key,
+                             "Duplicate SvcParamKey %s (%u)",
+                             val_to_str(pinfo->pool, svc_param_key, dns_svcb_param_key_vals, "key%u"),
+                             svc_param_key);
+    }
+    if (has_prev_key && svc_param_key <= prev_key) {
+      expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_key_order,
+                             "SvcParam keys not in strictly increasing order: previous %s (%u), current %s (%u)",
+                             val_to_str(pinfo->pool, prev_key, dns_svcb_param_key_vals, "key%u"), prev_key,
+                             val_to_str(pinfo->pool, svc_param_key, dns_svcb_param_key_vals, "key%u"), svc_param_key);
+    }
+    wmem_map_insert(seen_keys, GUINT_TO_POINTER(svc_param_key), NULL);
+    prev_key = svc_param_key;
+    has_prev_key = true;
+
     proto_tree_add_item_ret_uint(svcb_param_tree, hf_svc_param_length, tvb, cur_offset, 2, ENC_BIG_ENDIAN, &svc_param_length);
     cur_offset += 2;
 
     proto_item_append_text(svcb_param_ti, ": %s", val_to_str(pinfo->pool, svc_param_key, dns_svcb_param_key_vals, "key%u"));
+    param_start = cur_offset;
+    if (svc_param_length > (uint32_t)(offset_end - param_start)) {
+      proto_item_set_len(svcb_param_ti, offset_end - (param_start - 4));
+      expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_truncated,
+                             "SvcParamValue length %u exceeds remaining bytes (%d)",
+                             svc_param_length, offset_end - param_start);
+      break;
+    }
+    param_end = param_start + (int)svc_param_length;
     proto_item_set_len(svcb_param_ti, svc_param_length + 4);
 
     switch(svc_param_key) {
       case DNS_SVCB_KEY_MANDATORY:
+        mandatory_ti = svcb_param_ti;
+        if ((svc_param_length % 2) != 0) {
+          malformed = true;
+          expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                                 "mandatory SvcParamValue length must be a multiple of 2 bytes, got %u",
+                                 svc_param_length);
+          break;
+        }
         for (svc_param_offset = 0; svc_param_offset < svc_param_length; svc_param_offset += 2) {
-          uint32_t key;
           proto_tree_add_item_ret_uint(svcb_param_tree, hf_svc_param_mandatory_key, tvb, cur_offset, 2, ENC_BIG_ENDIAN, &key);
+          if (wmem_map_contains(mandatory_keys, GUINT_TO_POINTER(key))) {
+            expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_mandatory_duplicate,
+                                   "mandatory contains duplicate key %s (%u)",
+                                   val_to_str(pinfo->pool, key, dns_svcb_param_key_vals, "key%u"),
+                                   key);
+          }
+          wmem_map_insert(mandatory_keys, GUINT_TO_POINTER(key), NULL);
           proto_item_append_text(svcb_param_ti, "%c%s", (svc_param_offset == 0 ? '=' : ','), val_to_str(pinfo->pool, key, dns_svcb_param_key_vals, "key%u"));
           cur_offset += 2;
         }
         break;
       case DNS_SVCB_KEY_ALPN:
+        has_alpn = true;
         for (svc_param_offset = 0; svc_param_offset < svc_param_length; ) {
           const uint8_t *alpn;
+          if (cur_offset >= param_end) {
+            malformed = true;
+            expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                                   "ALPN SvcParamValue ended unexpectedly");
+            break;
+          }
           proto_tree_add_item_ret_uint(svcb_param_tree, hf_svc_param_alpn_length, tvb, cur_offset, 1, ENC_BIG_ENDIAN, &svc_param_alpn_length);
           cur_offset += 1;
+          if (svc_param_alpn_length == 0 || (int)svc_param_alpn_length > (param_end - cur_offset)) {
+            malformed = true;
+            expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_value,
+                                   "Invalid ALPN item length %u in SvcParamValue", svc_param_alpn_length);
+            break;
+          }
           proto_tree_add_item_ret_string(svcb_param_tree, hf_svc_param_alpn, tvb, cur_offset, svc_param_alpn_length, ENC_ASCII|ENC_NA, pinfo->pool, &alpn);
           cur_offset += svc_param_alpn_length;
           proto_item_append_text(svcb_param_ti, "%c%s", (svc_param_offset == 0 ? '=' : ','), alpn);
@@ -2223,13 +2313,34 @@ dissect_svc_params(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
         }
         break;
       case DNS_SVCB_KEY_NOALPN:
+        has_noalpn = true;
+        noalpn_ti = svcb_param_ti;
+        if (svc_param_length != 0) {
+          malformed = true;
+          expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                                 "no-default-alpn SvcParamValue length must be 0, got %u",
+                                 svc_param_length);
+        }
         break;
       case DNS_SVCB_KEY_PORT:
+        if (svc_param_length != 2) {
+          malformed = true;
+          expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                                 "port SvcParamValue length must be 2, got %u", svc_param_length);
+          break;
+        }
         proto_tree_add_item_ret_uint(svcb_param_tree, hf_svc_param_port, tvb, cur_offset, 2, ENC_BIG_ENDIAN, &value);
         proto_item_append_text(svcb_param_ti, "=%u", value);
         cur_offset += 2;
         break;
       case DNS_SVCB_KEY_IPV4HINT:
+        if ((svc_param_length % 4) != 0) {
+          malformed = true;
+          expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                                 "ipv4hint SvcParamValue length must be a multiple of 4, got %u",
+                                 svc_param_length);
+          break;
+        }
         for (svc_param_offset = 0; svc_param_offset < svc_param_length; svc_param_offset += 4) {
           proto_tree_add_item(svcb_param_tree, hf_svc_param_ipv4hint_ip, tvb, cur_offset, 4, ENC_BIG_ENDIAN);
           proto_item_append_text(svcb_param_ti, "%c%s", (svc_param_offset == 0 ? '=' : ','), tvb_ip_to_str(pinfo->pool, tvb, cur_offset));
@@ -2243,6 +2354,13 @@ dissect_svc_params(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
         break;
       }
       case DNS_SVCB_KEY_IPV6HINT:
+        if ((svc_param_length % 16) != 0) {
+          malformed = true;
+          expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                                 "ipv6hint SvcParamValue length must be a multiple of 16, got %u",
+                                 svc_param_length);
+          break;
+        }
         for (svc_param_offset = 0; svc_param_offset < svc_param_length; svc_param_offset += 16) {
           proto_tree_add_item(svcb_param_tree, hf_svc_param_ipv6hint_ip, tvb, cur_offset, 16, ENC_NA);
           proto_item_append_text(svcb_param_ti, "%c%s", (svc_param_offset == 0 ? '=' : ','), tvb_ip6_to_str(pinfo->pool, tvb, cur_offset));
@@ -2255,6 +2373,12 @@ dissect_svc_params(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
         proto_item_append_text(svcb_param_ti, "=%s", dohpath);
         break;
       case DNS_SVCB_KEY_OHTTP:
+        if (svc_param_length != 0) {
+          malformed = true;
+          expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                                 "ohttp SvcParamValue length must be 0, got %u",
+                                 svc_param_length);
+        }
         break;
       case DNS_SVCB_KEY_ODOHCONFIG:
         dissect_dns_svcparam_base64(svcb_param_tree, pinfo, svcb_param_ti, hf_svc_param_odohconfig, tvb, cur_offset, svc_param_length);
@@ -2268,6 +2392,30 @@ dissect_svc_params(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* da
         }
         break;
     }
+
+    if (malformed && cur_offset > param_end) {
+      expert_add_info_format(pinfo, svcb_param_ti, &ei_dns_svcb_param_bad_length,
+                             "SvcParam parser advanced beyond SvcParamValue boundary");
+    }
+    cur_offset = param_end;
+  }
+
+  if (has_noalpn && !has_alpn && noalpn_ti != NULL) {
+    expert_add_info_format(pinfo, noalpn_ti, &ei_dns_svcb_param_noalpn_missing_alpn,
+                           "no-default-alpn present without alpn SvcParam");
+  }
+  if (mandatory_ti != NULL && wmem_map_size(mandatory_keys) > 0) {
+    wmem_list_t *mandatory_list = wmem_map_get_keys_sorted(NULL, mandatory_keys, mandatory_key_cmp);
+    for (wmem_list_frame_t *frame = wmem_list_head(mandatory_list); frame; frame = wmem_list_frame_next(frame)) {
+      uint32_t mandatory_key = GPOINTER_TO_UINT(wmem_list_frame_data(frame));
+      if (!wmem_map_contains(seen_keys, GUINT_TO_POINTER(mandatory_key))) {
+        expert_add_info_format(pinfo, mandatory_ti, &ei_dns_svcb_param_mandatory_missing,
+                               "mandatory references missing key %s (%u)",
+                               val_to_str(pinfo->pool, mandatory_key, dns_svcb_param_key_vals, "key%u"),
+                               mandatory_key);
+      }
+    }
+    wmem_destroy_list(mandatory_list);
   }
 
   return tvb_captured_length(tvb);
@@ -2945,7 +3093,7 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
       proto_item *tf, *ti_gen;
       proto_tree *flags_tree;
       uint8_t     algo;
-      uint16_t    key_id;
+      uint16_t    key_tag;
 
       tf = proto_tree_add_item(rr_tree, hf_dns_key_flags, tvb, cur_offset, 2, ENC_BIG_ENDIAN);
       flags_tree = proto_item_add_subtree(tf, ett_key_flags);
@@ -2974,8 +3122,8 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
       cur_offset += 1;
       rr_len     -= 1;
 
-      if (compute_key_id(rr_tree, pinfo, tvb, cur_offset-4, rr_len+4, algo, &key_id)) {
-        ti_gen = proto_tree_add_uint(rr_tree, hf_dns_key_key_id, tvb, 0, 0, key_id);
+      if (compute_key_tag(rr_tree, pinfo, tvb, cur_offset-4, rr_len+4, algo, &key_tag)) {
+        ti_gen = proto_tree_add_uint(rr_tree, hf_dns_key_key_tag, tvb, 0, 0, key_tag);
         proto_item_set_generated(ti_gen);
       }
 
@@ -3064,23 +3212,23 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
         cur_offset++;
 
         ti = proto_tree_add_item(rr_tree, hf_dns_loc_size, tvb, cur_offset, 1, ENC_BIG_ENDIAN);
-        proto_item_append_text(ti, " (%g m)", rfc1867_size(tvb, cur_offset));
+        proto_item_append_text(ti, " (%g m)", rfc1876_size(tvb, cur_offset));
         cur_offset++;
 
         ti = proto_tree_add_item(rr_tree, hf_dns_loc_horizontal_precision, tvb, cur_offset, 1, ENC_BIG_ENDIAN);
-        proto_item_append_text(ti, " (%g m)", rfc1867_size(tvb, cur_offset));
+        proto_item_append_text(ti, " (%g m)", rfc1876_size(tvb, cur_offset));
         cur_offset++;
 
         ti = proto_tree_add_item(rr_tree, hf_dns_loc_vertical_precision, tvb, cur_offset, 1, ENC_BIG_ENDIAN);
-        proto_item_append_text(ti, " (%g m)", rfc1867_size(tvb, cur_offset));
+        proto_item_append_text(ti, " (%g m)", rfc1876_size(tvb, cur_offset));
         cur_offset++;
 
         ti = proto_tree_add_item(rr_tree, hf_dns_loc_latitude, tvb, cur_offset, 4, ENC_BIG_ENDIAN);
-        proto_item_append_text(ti, " (%s)", rfc1867_angle(tvb, cur_offset, false));
+        proto_item_append_text(ti, " (%s)", rfc1876_angle(tvb, cur_offset, false));
         cur_offset += 4;
 
         ti = proto_tree_add_item(rr_tree, hf_dns_loc_longitude, tvb, cur_offset, 4, ENC_BIG_ENDIAN);
-        proto_item_append_text(ti, " (%s)", rfc1867_angle(tvb, cur_offset, true));
+        proto_item_append_text(ti, " (%s)", rfc1876_angle(tvb, cur_offset, true));
         cur_offset += 4;
 
         ti = proto_tree_add_item(rr_tree, hf_dns_loc_altitude, tvb, cur_offset, 4, ENC_BIG_ENDIAN);
@@ -3573,7 +3721,7 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
     {
       int     rr_len = data_len;
 
-      proto_tree_add_item(rr_tree, hf_dns_ds_key_id, tvb, cur_offset, 2, ENC_BIG_ENDIAN);
+      proto_tree_add_item(rr_tree, hf_dns_ds_key_tag, tvb, cur_offset, 2, ENC_BIG_ENDIAN);
       cur_offset += 2;
       rr_len     -= 2;
 
@@ -3748,7 +3896,7 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
       int         rr_len = data_len;
       proto_item *tf, *ti_gen;
       proto_tree *flags_tree;
-      uint16_t    key_id;
+      uint16_t    key_tag;
       uint8_t algo;
 
       tf = proto_tree_add_item(rr_tree, hf_dns_dnskey_flags, tvb, cur_offset, 2, ENC_BIG_ENDIAN);
@@ -3772,8 +3920,8 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
       cur_offset += 1;
       rr_len     -= 1;
 
-      if (compute_key_id(rr_tree, pinfo, tvb, cur_offset-4, rr_len+4, algo, &key_id)) {
-        ti_gen = proto_tree_add_uint(rr_tree, hf_dns_dnskey_key_id, tvb, 0, 0, key_id);
+      if (compute_key_tag(rr_tree, pinfo, tvb, cur_offset-4, rr_len+4, algo, &key_tag)) {
+        ti_gen = proto_tree_add_uint(rr_tree, hf_dns_dnskey_key_tag, tvb, 0, 0, key_tag);
         proto_item_set_generated(ti_gen);
       }
 
@@ -3826,10 +3974,8 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
         /* Base 32 Encoding with Extended Hex Alphabet (see RFC 4648 section 7) */
         const char    *base32hex = "0123456789abcdefghijklmnopqrstuv";
         wmem_strbuf_t *hash_value_base32hex = wmem_strbuf_new(pinfo->pool, "");
-        int            group, in_offset, out_offset;
-        for (in_offset = 0, out_offset = 0;
-            in_offset / 8 < hash_len;
-            in_offset += 5, out_offset += 1) {
+        unsigned       group, in_offset;
+        for (in_offset = 0; in_offset / 8 < hash_len; in_offset += 5) {
           group = tvb_get_bits8(tvb, cur_offset * 8 + in_offset, 5);
           wmem_strbuf_append_c(hash_value_base32hex, base32hex[group]);
         }
@@ -6911,12 +7057,12 @@ proto_register_dns(void)
         NULL, HFILL }},
 
     { &hf_dns_dnskey_flags_secure_entry_point,
-      { "Key Signing Key", "dns.dnskey.flags.secure_entry_point",
+      { "Secure Entry Point", "dns.dnskey.flags.secure_entry_point",
         FT_BOOLEAN, 16, TFS(&tfs_yes_no), DNSKEY_FLAGS_SEP,
         NULL, HFILL }},
 
     { &hf_dns_dnskey_flags_reserved,
-      { "Key Signing Key", "dns.dnskey.flags.reserved",
+      { "Reserved", "dns.dnskey.flags.reserved",
         FT_UINT16, BASE_HEX, NULL, DNSKEY_FLAGS_RSV,
         "Must be zero", HFILL }},
 
@@ -6930,8 +7076,8 @@ proto_register_dns(void)
         FT_UINT8, BASE_DEC, VALS(dnssec_algo_vals), 0x0,
         "Identifies the public key's cryptographic algorithm and determines the format of the Public Key field", HFILL }},
 
-    { &hf_dns_dnskey_key_id,
-      { "Key id", "dns.dnskey.key_id",
+    { &hf_dns_dnskey_key_tag,
+      { "Key Tag", "dns.dnskey.key_tag",
         FT_UINT16, BASE_DEC, NULL, 0x0,
         NULL, HFILL }},
 
@@ -6995,8 +7141,8 @@ proto_register_dns(void)
         FT_UINT8, BASE_DEC, VALS(dnssec_algo_vals), 0x0,
         NULL, HFILL }},
 
-    { &hf_dns_key_key_id,
-      { "Key ID", "dns.key.key_id",
+    { &hf_dns_key_key_tag,
+      { "Key Tag", "dns.key.key_tag",
         FT_UINT16, BASE_DEC, NULL, 0x0,
         NULL, HFILL }},
 
@@ -7224,7 +7370,7 @@ proto_register_dns(void)
 
     { &hf_dns_cert_key_tag,
       { "Key Tag", "dns.cert.key_tag",
-        FT_UINT16, BASE_HEX, NULL, 0x0,
+        FT_UINT16, BASE_DEC, NULL, 0x0,
         NULL, HFILL }},
 
     { &hf_dns_cert_algorithm,
@@ -7601,9 +7747,9 @@ proto_register_dns(void)
         FT_BYTES, BASE_NONE, NULL, 0,
         NULL, HFILL }},
 
-    { &hf_dns_ds_key_id,
-      { "Key id", "dns.ds.key_id",
-        FT_UINT16, BASE_HEX, NULL, 0,
+    { &hf_dns_ds_key_tag,
+      { "Key Tag", "dns.ds.key_tag",
+        FT_UINT16, BASE_DEC, NULL, 0,
         NULL, HFILL }},
 
     { &hf_dns_ds_algorithm,
@@ -7970,11 +8116,19 @@ proto_register_dns(void)
     { &ei_dns_depr_opc, { "dns.depr.opc", PI_PROTOCOL, PI_WARN, "Deprecated opcode", EXPFILL }},
     { &ei_ttl_high_bit_set, { "dns.ttl.high_bit_set", PI_PROTOCOL, PI_WARN, "The uppermost bit of the TTL is set (RFC 2181, section 8)", EXPFILL }},
     { &ei_dns_tsig_alg, { "dns.tsig.noalg", PI_UNDECODED, PI_WARN, "No dissector for algorithm", EXPFILL }},
-    { &ei_dns_key_id_buffer_too_short, { "dns.key_id_buffer_too_short", PI_PROTOCOL, PI_WARN, "Buffer too short to compute a key id", EXPFILL }},
+    { &ei_dns_key_tag_buffer_too_short, { "dns.key_tag_buffer_too_short", PI_PROTOCOL, PI_WARN, "Buffer too short to compute a key tag", EXPFILL }},
     { &ei_dns_retransmit_request, { "dns.retransmit_request", PI_PROTOCOL, PI_WARN, "DNS query retransmission", EXPFILL }},
     { &ei_dns_retransmit_response, { "dns.retransmit_response", PI_PROTOCOL, PI_WARN, "DNS response retransmission", EXPFILL }},
     { &ei_dns_extraneous_data, { "dns.extraneous", PI_UNDECODED, PI_NOTE, "Extraneous data", EXPFILL }},
     { &ei_dns_response_missing, { "dns.response_missing", PI_PROTOCOL, PI_WARN, "DNS response missing", EXPFILL }},
+    { &ei_dns_svcb_param_truncated, { "dns.svcb.param.truncated", PI_MALFORMED, PI_ERROR, "Truncated SvcParam", EXPFILL }},
+    { &ei_dns_svcb_param_bad_length, { "dns.svcb.param.bad_length", PI_MALFORMED, PI_ERROR, "Invalid SvcParam length", EXPFILL }},
+    { &ei_dns_svcb_param_bad_value, { "dns.svcb.param.bad_value", PI_MALFORMED, PI_ERROR, "Invalid SvcParam value", EXPFILL }},
+    { &ei_dns_svcb_param_duplicate_key, { "dns.svcb.param.duplicate_key", PI_MALFORMED, PI_WARN, "Duplicate SvcParam key", EXPFILL }},
+    { &ei_dns_svcb_param_key_order, { "dns.svcb.param.key_order", PI_MALFORMED, PI_WARN, "SvcParam keys not in ascending order", EXPFILL }},
+    { &ei_dns_svcb_param_mandatory_duplicate, { "dns.svcb.param.mandatory.duplicate_key", PI_MALFORMED, PI_WARN, "Duplicate key in mandatory list", EXPFILL }},
+    { &ei_dns_svcb_param_mandatory_missing, { "dns.svcb.param.mandatory.missing_key", PI_MALFORMED, PI_WARN, "mandatory references missing SvcParam key", EXPFILL }},
+    { &ei_dns_svcb_param_noalpn_missing_alpn, { "dns.svcb.param.no_default_alpn_missing_alpn", PI_MALFORMED, PI_WARN, "no-default-alpn present without alpn", EXPFILL }},
   };
 
   static int *ett[] = {

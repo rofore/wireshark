@@ -1130,26 +1130,28 @@ dissect_kafka_compact_array(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo,
                         int *p_count)
 {
     uint64_t count;
+    int signed_count;
     int32_t len;
 
-    len = tvb_get_varint(tvb, offset, FT_VARINT_MAX_LEN, &count, ENC_VARINT_PROTOBUF);
+    len = tvb_get_varint(tvb, offset, 5, &count, ENC_VARINT_PROTOBUF);
     if (len == 0) {
         expert_add_info(pinfo, proto_tree_get_parent(tree), &ei_kafka_bad_varint);
         return tvb_captured_length(tvb);
     }
-    if(count > (uint64_t)INT64_MAX) {
+    /*
+     * Compact arrays store count+1
+     * https://cwiki.apache.org/confluence/display/KAFKA/KIP-482%3A+The+Kafka+Protocol+should+Support+Optional+Tagged+Fields
+     * Callers know to treat -1 as a NULL array.
+     */
+    if(ckd_sub(&signed_count, count, 1)) {
         expert_add_info(pinfo, proto_tree_get_parent(tree), &ei_kafka_bad_array_length);
         return offset + len;
     }
     offset += len;
 
-    /*
-     * Compact arrays store count+1
-     * https://cwiki.apache.org/confluence/display/KAFKA/KIP-482%3A+The+Kafka+Protocol+should+Support+Optional+Tagged+Fields
-     */
-    offset = dissect_kafka_array_elements(tree, tvb, pinfo, offset, api_version, func, (int)(count - 1));
+    offset = dissect_kafka_array_elements(tree, tvb, pinfo, offset, api_version, func, signed_count);
 
-    if (p_count != NULL) *p_count = (int)(count - 1);
+    if (p_count != NULL) *p_count = signed_count;
 
     return offset;
 }
@@ -1281,11 +1283,13 @@ dissect_kafka_compact_string(proto_tree *tree, int hf_item, tvbuff_t *tvb, packe
 {
     unsigned len;
     uint64_t length;
+    int signed_length;
     proto_item *pi;
 
-    len = tvb_get_varint(tvb, offset, FT_VARINT_MAX_LEN, &length, ENC_VARINT_PROTOBUF);
+    /* This is also an unsigned varint (not varlong), so up to 5 bytes. */
+    len = tvb_get_varint(tvb, offset, 5, &length, ENC_VARINT_PROTOBUF);
 
-    if (len == 0) {
+    if (len == 0 || ckd_sub(&signed_length, length, 1)) {
         pi = proto_tree_add_item(tree, hf_item, tvb, offset, 0, ENC_NA);
         expert_add_info(pinfo, pi, &ei_kafka_bad_varint);
         if (p_offset) {
@@ -1300,16 +1304,17 @@ dissect_kafka_compact_string(proto_tree *tree, int hf_item, tvbuff_t *tvb, packe
     if (length == 0) {
         proto_tree_add_string(tree, hf_item, tvb, offset, len, NULL);
     } else {
-        proto_tree_add_string(tree, hf_item, tvb, offset, len + (int)length - 1,
-                              kafka_tvb_get_string(pinfo->pool, tvb, offset + len, (int)length - 1));
+        proto_tree_add_string(tree, hf_item, tvb, offset, len + signed_length,
+                              kafka_tvb_get_string(pinfo->pool, tvb, offset + len, signed_length));
     }
 
     if (p_offset != NULL) *p_offset = offset + len;
-    if (p_length != NULL) *p_length = (int)length - 1;
+    if (p_length != NULL) *p_length = signed_length;
 
     offset += len;
     if (length > 0) {
-        offset += (int)length - 1;
+        /* If this would overflow, the proto_tree_add_string call overflowed. */
+        offset += signed_length;
     }
 
     return offset;

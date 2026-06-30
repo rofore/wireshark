@@ -423,6 +423,7 @@ column_dump_column_formats(void)
   "tshark.exe -o \"gui.column.format:"
     "\\\"No.\\\",\\\"%%m\\\","
     "\\\"Time\\\",\\\"%%t\\\","
+    "\\\"Delta\\\",\\\"%%Gt\\\","
     "\\\"Source\\\",\\\"%%s\\\","
     "\\\"Destination\\\",\\\"%%d\\\","
     "\\\"Protocol\\\",\\\"%%p\\\","
@@ -432,6 +433,7 @@ column_dump_column_formats(void)
   "tshark -o 'gui.column.format:"
     "\"No.\",\"%%m\","
     "\"Time\",\"%%t\","
+    "\"Delta\",\"%%Gt\","
     "\"Source\",\"%%s\","
     "\"Destination\",\"%%d\","
     "\"Protocol\",\"%%p\","
@@ -1210,6 +1212,7 @@ col_finalize(column_info *cinfo)
     }
 
     cinfo->col_expr.col_expr[i] = "";
+    cinfo->col_expr.col_expr_val[i][0] = '\0';
   }
 
   cinfo->col_expr.col_expr[i] = NULL;

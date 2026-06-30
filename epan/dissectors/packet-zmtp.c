@@ -28,7 +28,7 @@
 #include <epan/tfs.h>
 #include <wsutil/array.h>
 #include <tap.h>
-#include <ui/tap-credentials.h>
+#include <epan/credentials.h>
 
 #include "packet-tcp.h"
 
@@ -535,7 +535,7 @@ dissect_zmtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
 {
     proto_tree *zmtp_tree;
     proto_item *root_ti;
-    int offset = 0;
+    unsigned offset = 0;
     char* str_flags;
 
     /* Protocol column */

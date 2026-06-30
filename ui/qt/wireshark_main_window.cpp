@@ -9,6 +9,9 @@
 
 #include "main_application.h"
 #include "wireshark_main_window.h"
+#include "in_packet_search.h"
+#include "search_frame.h"
+#include <ui/qt/widgets/capture_card_widget.h>
 
 /*
  * The generated Ui_WiresharkMainWindow::setupUi() can grow larger than our configured limit,
@@ -77,6 +80,7 @@ DIAG_ON(frame-larger-than=)
 #include <ui/qt/utils/stock_icon.h>
 #include <ui/qt/utils/variant_pointer.h>
 #include <ui/qt/utils/workspace_state.h>
+#include <ui/qt/utils/software_update.h>
 
 #include <QAction>
 #include <QActionGroup>
@@ -91,6 +95,10 @@ DIAG_ON(frame-larger-than=)
 #include <QTreeWidget>
 #include <QUrl>
 #include <ui/tap-aggregation.h>
+
+#ifdef HAVE_LUA
+#include "lua_debugger.h"
+#endif
 
 // If we ever add support for multiple windows this will need to be replaced.
 static WiresharkMainWindow *gbl_cur_main_window_;
@@ -340,13 +348,20 @@ WiresharkMainWindow::WiresharkMainWindow(QWidget *parent) :
     time_display_actions_(NULL),
     time_precision_actions_(NULL),
     funnel_statistics_(NULL),
+    action_telephony_dis_streams_(NULL),
     freeze_focus_(NULL),
     was_maximized_(false),
     capture_stopping_(false),
-    capture_filter_valid_(false)
+    // An empty capture filter is valid (capture everything), and the filter box
+    // starts empty, so default to true. The widget reports false only once an
+    // invalid filter is actually typed.
+    capture_filter_valid_(true)
 #ifdef HAVE_LIBPCAP
     , capture_options_dialog_(NULL)
     , info_data_()
+    , in_packet_search_(nullptr)
+#else
+    , in_packet_search_(nullptr)
 #endif
 {
     if (!gbl_cur_main_window_) {
@@ -365,13 +380,28 @@ WiresharkMainWindow::WiresharkMainWindow(QWidget *parent) :
     // The fewer children we have at this point the better.
     main_ui_->setupUi(this);
 
+    main_ui_->mainStack->setFocusPolicy(Qt::NoFocus);
+    main_ui_->centralWidget->setFocusPolicy(Qt::NoFocus);
+    action_telephony_dis_streams_ = new QAction(tr("DIS Streams"), this);
+    action_telephony_dis_streams_->setObjectName(QStringLiteral("actionTelephonyDisStreams"));
+    action_telephony_dis_streams_->setToolTip(tr("Show and analyze DIS radio streams"));
+
+#ifdef HAVE_LUA
+    QAction *luaDebuggerAction = new QAction(tr("Lua Debugger"), this);
+    connect(luaDebuggerAction, &QAction::triggered, this,
+            &WiresharkMainWindow::openLuaDebuggerDialog);
+    main_ui_->menuTools->addAction(luaDebuggerAction);
+
+    // Separate the Lua plugins coming after the Lua debugger
+    main_ui_->menuTools->addSeparator();
+#endif
+
     // Initialize base class menu pointers for recent captures handling
     recent_captures_menu_ = main_ui_->menuOpenRecentCaptureFile;
     no_recent_files_action_ = main_ui_->actionDummyNoFilesFound;
 
-#ifdef HAVE_SOFTWARE_UPDATE
-    update_action_ = new QAction(tr("Check for Updates…"), main_ui_->menuHelp);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(SoftwareUpdate::plattformSupported());
+
 #if defined(HAVE_LIBNL) && defined(HAVE_NL80211)
     wireless_frame_ = new WirelessFrame(this);
     main_ui_->wirelessToolBar->addWidget(wireless_frame_);
@@ -413,50 +443,32 @@ WiresharkMainWindow::WiresharkMainWindow(QWidget *parent) :
     //To prevent users use features before initialization complete
     //Otherwise unexpected problems may occur
     setFeaturesEnabled(false);
-    connect(mainApp, &MainApplication::appInitialized, this, [this]() { setFeaturesEnabled(); });
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::applyGlobalCommandLineOptions);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::zoomText);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::initViewColorizeMenu);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::addStatsPluginsToMenu);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::addDynamicMenus);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::addPluginIFStructures);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::initConversationMenus);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::initExportObjectsMenus);
-    connect(mainApp, &MainApplication::appInitialized, this, &WiresharkMainWindow::initFollowStreamMenus);
-    connect(mainApp, &MainApplication::appInitialized, this,
-            [=]() { addDisplayFilterTranslationActions(main_ui_->menuEditCopy); });
+    mainApp->whenInitialized(this, [this]() { onAppInitialized(); });
 
     connect(mainApp, &MainApplication::profileChanging, this, &WiresharkMainWindow::saveWindowGeometry);
     connect(mainApp, &MainApplication::preferencesChanged, this, &WiresharkMainWindow::layoutPanes);
     connect(mainApp, &MainApplication::preferencesChanged, this, &WiresharkMainWindow::layoutToolbars);
     connect(mainApp, &MainApplication::preferencesChanged, this, &WiresharkMainWindow::updatePreferenceActions);
-    connect(mainApp, &MainApplication::preferencesChanged, this, &WiresharkMainWindow::zoomText);
     connect(mainApp, &MainApplication::preferencesChanged, this, &WiresharkMainWindow::updateTitlebar);
-    connect(mainApp, &MainApplication::aggregationVisiblity,
-        [this] {
-            main_ui_->actionAggregationView->setVisible(prefs.enable_aggregation);
-        });
-    connect(mainApp, &MainApplication::aggregationChanged, [this]() { if (recent.aggregation_view) { aggregationViewChanged(true); } });
+    connect(mainApp, &MainApplication::preferencesChanged, this, &WiresharkMainWindow::updateAggregationView);
+    connect(mainApp, &MainApplication::aggregationChanged, this, &WiresharkMainWindow::updateAggregationView);
 
     connect(WorkspaceState::instance(), &WorkspaceState::recentCaptureFilesChanged, this, &WiresharkMainWindow::updateRecentCaptures);
     connect(WorkspaceState::instance(), &WorkspaceState::recentFileStatusChanged, this, &WiresharkMainWindow::updateRecentCaptures);
     connect(mainApp, &MainApplication::preferencesChanged, this, &WiresharkMainWindow::updateRecentCaptures);
     updateRecentCaptures();
 
-#if defined(HAVE_SOFTWARE_UPDATE) && defined(Q_OS_WIN)
-    connect(mainApp, &MainApplication::softwareUpdateRequested, this, &WiresharkMainWindow::softwareUpdateRequested,
-        Qt::BlockingQueuedConnection);
-#endif
+    df_combo_box_ = new DisplayFilterEntry(this);
 
-    df_combo_box_ = new DisplayFilterCombo(this);
+    connect(df_combo_box_, &DisplayFilterEntry::filterPackets, this, &WiresharkMainWindow::applyFilter);
 
     funnel_statistics_ = new FunnelStatistics(this, capture_file_);
-    connect(df_combo_box_, &QComboBox::editTextChanged, funnel_statistics_, &FunnelStatistics::displayFilterTextChanged);
+    connect(df_combo_box_, &QLineEdit::textChanged, funnel_statistics_, &FunnelStatistics::displayFilterTextChanged);
     connect(funnel_statistics_, &FunnelStatistics::setDisplayFilter, this, &WiresharkMainWindow::setDisplayFilter);
     connect(funnel_statistics_, &FunnelStatistics::openCaptureFile, this,
             [=](QString cf_path, QString filter) { openCaptureFile(cf_path, filter); });
 
-    connect(df_combo_box_, &QComboBox::editTextChanged, this, &WiresharkMainWindow::updateDisplayFilterTranslationActions);
+    connect(df_combo_box_, &QLineEdit::textChanged, this, &WiresharkMainWindow::updateDisplayFilterTranslationActions);
 
     file_set_dialog_ = new FileSetDialog(this);
     connect(file_set_dialog_, &FileSetDialog::fileSetOpenCaptureFile, this, [=](QString cf_path) { openCaptureFile(cf_path); });
@@ -523,32 +535,33 @@ WiresharkMainWindow::WiresharkMainWindow(QWidget *parent) :
     connect(main_ui_->goToGo, &QPushButton::pressed, this, &WiresharkMainWindow::goToGoClicked);
     connect(main_ui_->goToCancel, &QPushButton::pressed, this, &WiresharkMainWindow::goToCancelClicked);
 
-// A billion-1 is equivalent to the inputMask 900000000 previously used
-// Avoid QValidator::Intermediate values by using a top value of all 9's
-#define MAX_GOTO_LINE 999999999
+    // A billion-1 is equivalent to the inputMask 900000000 previously used
+    // Avoid QValidator::Intermediate values by using a top value of all 9's
+    #define MAX_GOTO_LINE 999999999
 
-QIntValidator *goToLineQiv = new QIntValidator(0,MAX_GOTO_LINE,this);
-main_ui_->goToLineEdit->setValidator(goToLineQiv);
+    QIntValidator *goToLineQiv = new QIntValidator(0,MAX_GOTO_LINE,this);
+    main_ui_->goToLineEdit->setValidator(goToLineQiv);
 
-#ifdef HAVE_SOFTWARE_UPDATE
-    QAction *update_sep = main_ui_->menuHelp->insertSeparator(main_ui_->actionHelpAbout);
-    main_ui_->menuHelp->insertAction(update_sep, update_action_);
-    connect(update_action_, &QAction::triggered, this, &WiresharkMainWindow::checkForUpdates);
-#endif
-    master_split_.setObjectName("splitterMaster");
-    master_split_.setAccessibleName(tr("Main View Splitter"));
-    master_split_.setAccessibleDescription(tr("Contains the packet list, protocol tree, and packet bytes."));
+    if (SoftwareUpdate::plattformSupported())
+    {
+        connect(main_ui_->actionHelpCheckUpdates, &QAction::triggered,  this, []() {
+            SoftwareUpdate::instance()->performUIUpdate();
+        });
+    } else {
+        main_ui_->actionHelpCheckUpdates->setToolTip(tr("Software update checking is not available on this platform."));
+    }
+
+    master_split_ = main_ui_->splitterMaster;
     extra_split_.setObjectName("splitterExtra");
     extra_split_.setAccessibleName(tr("Extra View Splitter"));
     extra_split_.setAccessibleDescription(tr("Contains packet extras and bytes views."));
-    master_split_.setChildrenCollapsible(false);
+    extra_split_.setFocusPolicy(Qt::NoFocus);
     extra_split_.setChildrenCollapsible(false);
-    main_ui_->mainStack->addWidget(&master_split_);
 
     empty_pane_.setObjectName("emptyPane");
     empty_pane_.setVisible(false);
 
-    packet_list_ = new PacketList(&master_split_);
+    packet_list_ = new PacketList(master_split_);
     main_ui_->wirelessTimelineWidget->setPacketList(packet_list_);
     connect(packet_list_, &PacketList::framesSelected, this, &WiresharkMainWindow::setMenusForSelectedPacket);
     connect(packet_list_, &PacketList::framesSelected, this, &WiresharkMainWindow::framesSelected);
@@ -558,14 +571,20 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     action->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
     connect(main_ui_->menuPacketComment, &QMenu::aboutToShow, this, &WiresharkMainWindow::setEditCommentsMenu);
 
-    proto_tree_ = new ProtoTree(&master_split_);
+    proto_tree_ = new ProtoTree(master_split_);
     proto_tree_->installEventFilter(this);
+
+    in_packet_search_ = new InPacketSearch(proto_tree_, this);
+    in_packet_search_->installDelegate();
+    if (main_ui_->searchFrame) {
+        main_ui_->searchFrame->setInPacketSearch(in_packet_search_);
+    }
 
     packet_list_->setProtoTree(proto_tree_);
     packet_list_->setProfileSwitcher(profile_switcher_);
     packet_list_->installEventFilter(this);
 
-    packet_diagram_ = new PacketDiagram(&master_split_);
+    packet_diagram_ = new PacketDiagram(master_split_);
 
     main_stack_ = main_ui_->mainStack;
     welcome_page_ = main_ui_->welcomePage;
@@ -585,7 +604,7 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     connect(mainApp, &WiresharkApplication::captureActive,
             this, &WiresharkMainWindow::captureActive);
 
-    data_source_tab_ = new DataSourceTab(&master_split_);
+    data_source_tab_ = new DataSourceTab(master_split_);
 
     // Packet list and proto tree must exist before these are called.
     setMenusForSelectedPacket();
@@ -599,8 +618,9 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     updateRecentActions();
     setForCaptureInProgress(false);
 
-    setTabOrder(df_combo_box_->lineEdit(), packet_list_);
+    setTabOrder(df_combo_box_, packet_list_);
     setTabOrder(packet_list_, proto_tree_);
+    setTabOrder(proto_tree_, data_source_tab_);
 
     connect(&capture_file_, &CaptureFile::captureEvent, this, &WiresharkMainWindow::captureEventHandler);
     connect(&capture_file_, &CaptureFile::captureEvent, mainApp, &WiresharkApplication::captureEventHandler);
@@ -609,7 +629,6 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
 
     connect(mainApp, &MainApplication::freezePacketList, packet_list_, &PacketList::freezePacketList);
     connect(mainApp, &MainApplication::columnsChanged, packet_list_, &PacketList::columnsChanged);
-    connect(mainApp, &MainApplication::colorsChanged, packet_list_, &PacketList::colorsChanged);
     connect(mainApp, &MainApplication::preferencesChanged, packet_list_, &PacketList::preferencesChanged);
     connect(mainApp, &MainApplication::recentPreferencesRead, this, &WiresharkMainWindow::applyRecentPaneGeometry);
     connect(mainApp, &MainApplication::recentPreferencesRead, this, &WiresharkMainWindow::updateRecentActions);
@@ -621,7 +640,7 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
 
     connect(main_ui_->mainStack, &QStackedWidget::currentChanged, this, &WiresharkMainWindow::mainStackChanged);
 
-    connect(welcome_page_, &WelcomePage::startCapture, this, [this](QStringList interfaces) { startCapture(interfaces); });
+    connect(welcome_page_->captureCard(), &CaptureCardWidget::startCapture, this, [this](QStringList interfaces) { startCapture(interfaces); });
     connect(welcome_page_, &WelcomePage::recentFileActivated, this, [this](QString cfile) { openCaptureFile(cfile); });
 
     connect(main_ui_->addressEditorFrame, &AddressEditorFrame::redissectPackets,
@@ -644,10 +663,6 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
             packet_list_, &PacketList::setCaptureFile);
     connect(this, &WiresharkMainWindow::setCaptureFile,
             proto_tree_, &ProtoTree::setCaptureFile);
-
-    connect(mainApp, &MainApplication::zoomMonospaceFont, packet_list_, &PacketList::setMonospaceFont);
-    connect(mainApp, &MainApplication::zoomRegularFont, packet_list_, &PacketList::setRegularFont);
-    connect(mainApp, &MainApplication::zoomMonospaceFont, proto_tree_, &ProtoTree::setMonospaceFont);
 
     connectFileMenuActions();
     connectEditMenuActions();
@@ -680,6 +695,9 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     connect(proto_tree_, &ProtoTree::redissectPacketsRequested,
             this, &WiresharkMainWindow::redissectPackets);
 
+    connect(proto_tree_, &ProtoTree::showDistributionDialog,
+            this, qOverload<const QString&>(&WiresharkMainWindow::showDistributionDialog));
+
     connect(main_ui_->statusBar, &MainStatusBar::showExpertInfo, this, [=]() {
         statCommandExpertInfo(NULL, NULL);
     });
@@ -700,11 +718,11 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     if (iface_tree) {
         connect(iface_tree, &QTreeWidget::itemSelectionChanged, this, &WiresharkMainWindow::interfaceSelectionChanged);
     }
-    connect(main_ui_->welcomePage, &WelcomePage::captureFilterSyntaxChanged,
+    connect(welcome_page_->captureCard(), &CaptureCardWidget::captureFilterSyntaxChanged,
             this, &WiresharkMainWindow::captureFilterSyntaxChanged);
 
     connect(this, &WiresharkMainWindow::showExtcapOptions, this, &WiresharkMainWindow::showExtcapOptionsDialog);
-    connect(this->welcome_page_, &WelcomePage::showExtcapOptions, this, &WiresharkMainWindow::showExtcapOptionsDialog);
+    connect(welcome_page_->captureCard(), &CaptureCardWidget::showExtcapOptions, this, &WiresharkMainWindow::showExtcapOptionsDialog);
 
 #endif // HAVE_LIBPCAP
 
@@ -826,8 +844,6 @@ void WiresharkMainWindow::addInterfaceToolbar(const iface_toolbar *toolbar_entry
     menu->insertAction(before, action);
 
     InterfaceToolbar *interface_toolbar = new InterfaceToolbar(this, toolbar_entry);
-    connect(mainApp, &MainApplication::appInitialized, interface_toolbar, &InterfaceToolbar::interfaceListChanged);
-    connect(mainApp, &MainApplication::localInterfaceListChanged, interface_toolbar, &InterfaceToolbar::interfaceListChanged);
 
     QToolBar *toolbar = new QToolBar(this);
     toolbar->addWidget(interface_toolbar);
@@ -896,7 +912,6 @@ void WiresharkMainWindow::updateStyleSheet()
 
 #endif
     welcome_page_->updateStyleSheets();
-    df_combo_box_->updateStyleSheet();
 }
 
 bool WiresharkMainWindow::eventFilter(QObject *obj, QEvent *event) {
@@ -908,8 +923,8 @@ bool WiresharkMainWindow::eventFilter(QObject *obj, QEvent *event) {
         QKeyEvent *kevt = static_cast<QKeyEvent *>(event);
         if (kevt->text().length() > 0 && kevt->text()[0].isPrint() &&
             !(kevt->modifiers() & Qt::ControlModifier)) {
-            df_combo_box_->lineEdit()->insert(kevt->text());
-            df_combo_box_->lineEdit()->setFocus();
+            df_combo_box_->insert(kevt->text());
+            df_combo_box_->setFocus();
             return true;
         }
     }
@@ -936,6 +951,16 @@ void WiresharkMainWindow::keyPressEvent(QKeyEvent *event) {
     // Explicitly focus on the display filter combo.
     if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_Slash) {
         df_combo_box_->setFocus(Qt::ShortcutFocusReason);
+        return;
+    }
+
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_Tab) {
+        cyclePane();
+        return;
+    }
+
+    if (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier) && event->key() == Qt::Key_Backtab) {
+        cyclePane(true);
         return;
     }
 
@@ -974,15 +999,26 @@ void WiresharkMainWindow::closeEvent(QCloseEvent *event) {
            taking a long time? (#19831) We could set the capture file state
            to FILE_READ_ABORTED to make it stop quicker, but we might need to
            warn about unsaved packets. We don't know if we're waiting to save
-           in testCaptureFileClose() having already warned about that, or if
-           the capture was stopped via other means. Call testCaptureFileClose
+           in tryClosingCaptureFile() having already warned about that, or if
+           the capture was stopped via other means. Call tryClosingCaptureFile
            with special handling if capture_stopping_ is true? */
         event->ignore();
         return;
     }
 
+#ifdef HAVE_LUA
+    /* Refuse to close while the Lua debugger is paused; the debugger
+     * defers and re-delivers the close once the Lua C stack has
+     * unwound. Running tryClosingCaptureFile() / mainApp->quit() with
+     * the Lua dissector still on the C stack would tear down capture /
+     * epan state and abort in wmem_cleanup_scopes() at exit. */
+    if (LuaDebugger::tryDeferMainWindowClose(event)) {
+        return;
+    }
+#endif
+
     QString before_what(tr(" before quitting"));
-    if (!testCaptureFileClose(before_what, Quit)) {
+    if (!tryClosingCaptureFile(before_what, Quit)) {
         event->ignore();
         return;
     }
@@ -1183,20 +1219,20 @@ void WiresharkMainWindow::saveWindowGeometry()
         recent.gui_geometry_main_maximized = isMaximized();
     }
 
-    if (master_split_.sizes().length() > 0) {
-        recent.gui_geometry_main_upper_pane = master_split_.sizes()[0];
+    if (master_split_->sizes().length() > 0) {
+        recent.gui_geometry_main_upper_pane = master_split_->sizes()[0];
     }
 
     g_free(recent.gui_geometry_main_master_split);
     g_free(recent.gui_geometry_main_extra_split);
-    recent.gui_geometry_main_master_split = g_strdup(master_split_.saveState().toHex().constData());
+    recent.gui_geometry_main_master_split = g_strdup(master_split_->saveState().toHex().constData());
     recent.gui_geometry_main_extra_split = g_strdup(extra_split_.saveState().toHex().constData());
 
     // Saving the QSplitter state is more accurate (#19361), but save
     // the old GTK-style pane information for backwards compatibility
     // for switching back and forth with older versions.
-    if (master_split_.sizes().length() > 2) {
-        recent.gui_geometry_main_lower_pane = master_split_.sizes()[1];
+    if (master_split_->sizes().length() > 2) {
+        recent.gui_geometry_main_lower_pane = master_split_->sizes()[1];
     } else if (extra_split_.sizes().length() > 0) {
         recent.gui_geometry_main_lower_pane = extra_split_.sizes()[0];
     }
@@ -1388,7 +1424,7 @@ void WiresharkMainWindow::importCaptureFile() {
     ImportTextDialog import_dlg;
 
     QString before_what(tr(" before importing a capture"));
-    if (!testCaptureFileClose(before_what))
+    if (!tryClosingCaptureFile(before_what))
         return;
 
     import_dlg.exec();
@@ -1787,7 +1823,15 @@ void WiresharkMainWindow::exportDissections(export_type_e export_type) {
     ed_dlg->show();
 }
 
-bool WiresharkMainWindow::testCaptureFileClose(QString before_what, FileCloseContext context) {
+void WiresharkMainWindow::enableAggregationView(bool enable) const {
+    main_ui_->actionAggregationView->setEnabled(enable);
+    QString tooltip = enable ?
+        tr("Aggregation View — displays frames grouped by your configured aggregation fields.") :
+        tr("Aggregation View — displays frames grouped by your configured aggregation fields. To activate, go to Preferences → Aggregation.");
+    main_ui_->actionAggregationView->setToolTip(tooltip);
+}
+
+bool WiresharkMainWindow::tryClosingCaptureFile(QString before_what, FileCloseContext context) {
     bool capture_in_progress = false;
     bool do_close_file = false;
 
@@ -2407,9 +2451,6 @@ void WiresharkMainWindow::setMenusForCaptureFile(bool force_disable)
         can_save_as = cf_can_save_as(capture_file_.capFile());
     }
 
-    main_ui_->actionAggregationView->setVisible(prefs.enable_aggregation);
-    main_ui_->actionAggregationView->setChecked(recent.aggregation_view);
-
     main_ui_->actionViewReload_as_File_Format_or_Capture->setEnabled(enable);
     main_ui_->actionFileMerge->setEnabled(can_write);
     main_ui_->actionFileClose->setEnabled(enable);
@@ -2444,10 +2485,8 @@ void WiresharkMainWindow::setMenusForCaptureFile(bool force_disable)
 
     main_ui_->actionViewReload->setEnabled(enable);
 
-#ifdef HAVE_SOFTWARE_UPDATE
     // We might want to enable or disable automatic checks here as well.
-    update_action_->setEnabled(!can_save);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(SoftwareUpdate::plattformSupported() && !can_save);
 }
 
 void WiresharkMainWindow::setMenusForCaptureInProgress(bool capture_in_progress) {
@@ -2474,10 +2513,8 @@ void WiresharkMainWindow::setMenusForCaptureInProgress(bool capture_in_progress)
 
     main_ui_->menuFileSet->setEnabled(!capture_in_progress);
     main_ui_->actionFileQuit->setEnabled(true);
-#ifdef HAVE_SOFTWARE_UPDATE
     // We might want to enable or disable automatic checks here as well.
-    update_action_->setEnabled(!capture_in_progress);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(SoftwareUpdate::plattformSupported() && !capture_in_progress);
 
     main_ui_->actionStatisticsCaptureFileProperties->setEnabled(capture_in_progress);
 
@@ -2502,9 +2539,7 @@ void WiresharkMainWindow::setMenusForCaptureInProgress(bool capture_in_progress)
 
 void WiresharkMainWindow::setMenusForCaptureStopping() {
     main_ui_->actionFileQuit->setEnabled(false);
-#ifdef HAVE_SOFTWARE_UPDATE
-    update_action_->setEnabled(false);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(false);
     main_ui_->actionStatisticsCaptureFileProperties->setEnabled(false);
 #ifdef HAVE_LIBPCAP
     main_ui_->actionCaptureStart->setChecked(false);
@@ -2534,9 +2569,6 @@ void WiresharkMainWindow::setForCapturedPackets(bool have_captured_packets)
     main_ui_->actionGoFirstConversationPacket->setEnabled(have_captured_packets);
     main_ui_->actionGoLastConversationPacket->setEnabled(have_captured_packets);
 
-    main_ui_->actionViewZoomIn->setEnabled(have_captured_packets);
-    main_ui_->actionViewZoomOut->setEnabled(have_captured_packets);
-    main_ui_->actionViewNormalSize->setEnabled(have_captured_packets);
     main_ui_->actionViewResizeColumns->setEnabled(have_captured_packets);
     main_ui_->actionViewRedissect->setEnabled(have_captured_packets);
 
@@ -2544,6 +2576,10 @@ void WiresharkMainWindow::setForCapturedPackets(bool have_captured_packets)
     main_ui_->actionStatisticsProtocolHierarchy->setEnabled(have_captured_packets);
     main_ui_->actionStatisticsIOGraph->setEnabled(have_captured_packets);
     main_ui_->actionStatisticsPlot->setEnabled(have_captured_packets);
+
+    if (have_captured_packets && !packet_list_->hasFocus()) {
+        packet_list_->setFocus();
+    }
 }
 
 void WiresharkMainWindow::setMenusForFileSet(bool enable_list_files) {
@@ -2788,6 +2824,7 @@ void WiresharkMainWindow::addDynamicMenus()
     mainApp->addDynamicMenuGroupItem(REGISTER_TELEPHONY_GROUP_3GPP_UU, main_ui_->actionTelephonyLteRlcGraph);
     mainApp->addDynamicMenuGroupItem(REGISTER_TELEPHONY_GROUP_MTP3, main_ui_->actionTelephonyMtp3Summary);
     mainApp->addDynamicMenuGroupItem(REGISTER_TELEPHONY_GROUP_UNSORTED, main_ui_->actionTelephonySipFlows);
+    mainApp->addDynamicMenuGroupItem(REGISTER_TELEPHONY_GROUP_UNSORTED, action_telephony_dis_streams_);
 
     // Fill in each menu
     foreach(register_stat_group_t menu_group, menu_groups_) {
@@ -3139,3 +3176,10 @@ void WiresharkMainWindow::openTLSKeylogDialog()
     tlskeylog_dialog_->raise();
     tlskeylog_dialog_->activateWindow();
 }
+
+#ifdef HAVE_LUA
+void WiresharkMainWindow::openLuaDebuggerDialog()
+{
+    LuaDebugger::open(this);
+}
+#endif

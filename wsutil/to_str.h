@@ -23,18 +23,19 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * uint8_to_hex()
+ * @brief Converts bytes to a hexadecimal string.
  *
  * Output uint8_t hex representation to 'out', and return pointer after last character (out + 2).
  * It will always output full representation (padded with 0).
  *
  * String is not NUL terminated by this routine.
  * There needs to be at least 2 bytes in the buffer.
+ *
+ * @param out Pointer to the output buffer where the hexadecimal string will be written.
+ * @param val The byte value to convert.
+ * @return A pointer to the position immediately after the last written character (out + 2)
  */
 WS_DLL_PUBLIC char *uint8_to_hex(char *out, uint8_t val);
-
-WS_DEPRECATED_X("Use uint8_to_hex instead")
-static inline char *guint8_to_hex(char *out, uint8_t val) { return uint8_to_hex(out, val); }
 
 /**
  * @brief Converts a 16-bit word to a fixed-width hexadecimal string.
@@ -351,9 +352,6 @@ WS_DLL_PUBLIC char *int64_to_str_back(char *ptr, int64_t value);
  */
 WS_DLL_PUBLIC void uint32_to_str_buf(uint32_t u, char *buf, size_t buf_len);
 
-WS_DEPRECATED_X("Use uint32_to_str_buf instead")
-static inline void guint32_to_str_buf(uint32_t u, char *buf, size_t buf_len) { uint32_to_str_buf(u, buf, buf_len); }
-
 /**
  * @brief Converts a 64-bit unsigned integer to a decimal string.
  *
@@ -366,15 +364,6 @@ static inline void guint32_to_str_buf(uint32_t u, char *buf, size_t buf_len) { u
  * @param buf_len Size of the destination buffer, including space for the NUL terminator.
  */
 WS_DLL_PUBLIC void uint64_to_str_buf(uint64_t u, char *buf, size_t buf_len);
-
-WS_DEPRECATED_X("Use uint64_to_str_buf instead")
-static inline void guint64_to_str_buf(uint64_t u, char *buf, size_t buf_len) { uint64_to_str_buf(u, buf, buf_len); }
-
-WS_DEPRECATED_X("Use ip_num_to_str_buf() or ip_addr_to_str() instead")
-WS_DLL_PUBLIC void ip_to_str_buf(const uint8_t *ad, char *buf, const int buf_len);
-
-WS_DEPRECATED_X("Use ip_num_to_str() or ip_addr_to_str() instead")
-WS_DLL_PUBLIC char *ip_to_str(wmem_allocator_t *scope, const uint8_t *ad);
 
 /**
  * @brief Converts a 32-bit IPv4 address to string format.

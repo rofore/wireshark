@@ -18,6 +18,7 @@
 
 #include <wsutil/utf8_entities.h>
 #include <ui/qt/utils/color_utils.h>
+#include <ui/qt/utils/theme_manager.h>
 #include <app/application_flavor.h>
 
 #ifdef HAVE_LUA
@@ -32,10 +33,37 @@
 /*
  * Update frequency for the splash screen, given in milliseconds.
  */
-const int info_update_freq_ = 65; // ~15 fps
+static const int info_update_freq_ = 65; // ~15 fps
+
+// Layout constants for the splash overlay
+static const int kLogoSize = 64;
+static const int kCardPadding = 16;
+static const int kCardCornerRadius = kCardPadding / 2;
+static const int kCardHeight = 100;
+static const qreal kCardVerticalPosition = 0.38;
+static const int kTitleHeight = 22;
+static const qreal kTitleFontScale = 1.05;
+static const int kSubtextHeight = kTitleHeight - 4;
+static const qreal kSubtextFontScale = 1.0;
+static const int kSubtextAlpha = 160;
+static const int kBarHeight = 6;
+static const int kCardBgAlpha = 200;
+static const int kCardBgAlphaLight = 190;
+static const int kCardBorderAlpha = 30;
+static const int kCardBorderAlphaLight = 25;
+static const int kBarTrackAlpha = 25;
+static const int kBarTrackAlphaLight = 20;
+static const int kVignetteEdgeAlpha = 178;
+static const int kVignetteEdgeAlphaLight = 140;
+static const int kVignetteCenterAlpha = 30;
+static const int kVignetteCenterAlphaLight = 10;
+static const int kBarFillAlpha = 200;
+
+SplashOverlay *SplashOverlay::instance_ = nullptr;
 
 void splash_update(register_action_e action, const char *message, void *) {
-    emit mainApp->registerUpdate(action, message);
+    if (SplashOverlay::instance_)
+        SplashOverlay::instance_->splashUpdate(action, message);
 }
 
 SplashOverlay::SplashOverlay(QWidget *parent) :
@@ -44,6 +72,7 @@ SplashOverlay::SplashOverlay(QWidget *parent) :
     register_cur_(0),
     register_max_(RA_BASE_COUNT)
 {
+    instance_ = this;
     setAttribute(Qt::WA_TranslucentBackground);
 
 #ifdef HAVE_LUA
@@ -63,8 +92,12 @@ SplashOverlay::SplashOverlay(QWidget *parent) :
     fade_animation_->setEndValue(0.0);
     fade_animation_->setEasingCurve(QEasingCurve::OutCubic);
     connect(fade_animation_, &QPropertyAnimation::finished, this, &QObject::deleteLater);
+}
 
-    connect(mainApp, &MainApplication::splashUpdate, this, &SplashOverlay::splashUpdate);
+SplashOverlay::~SplashOverlay()
+{
+    if (instance_ == this)
+        instance_ = nullptr;
 }
 
 void SplashOverlay::fadeOut()
@@ -77,11 +110,20 @@ void SplashOverlay::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    bool dark = ColorUtils::themeIsDark();
+    bool dark = ThemeManager::isDark();
+    ThemeManager *theme = ThemeManager::instance();
+    // ThemePaletteBuilder has already pushed the mode-correct palette
+    // to qApp, so Base/Mid are the authoritative source here.  Don't
+    // use ThemeManager::color(PaletteBase/Mid) — those tokens are only
+    // populated when the theme defines an explicit override, and the
+    // default theme doesn't, so they resolve to an invalid QColor
+    // (rendered as opaque black).
+    const QPalette appPalette = QApplication::palette();
 
     // --- Radial vignette background ---
-    QColor edge_color = dark ? QColor(0, 0, 0, 178) : QColor(0, 0, 0, 140);
-    QColor center_color = dark ? QColor(0, 0, 0, 30) : QColor(0, 0, 0, 10);
+    // Scrim over the window-behind: mode-independent black, alpha-modulated.
+    QColor edge_color(0, 0, 0, dark ? kVignetteEdgeAlpha : kVignetteEdgeAlphaLight);
+    QColor center_color(0, 0, 0, dark ? kVignetteCenterAlpha : kVignetteCenterAlphaLight);
 
     QPointF center(width() / 2.0, height() / 2.0);
     qreal radius = qMax(width(), height()) * 0.75;
@@ -93,69 +135,88 @@ void SplashOverlay::paintEvent(QPaintEvent *)
     painter.fillRect(rect(), vignette);
 
     // --- App logo ---
-    const int logo_size = 64;
-    const int logo_card_gap = 16;
     QString icon_path = application_flavor_is_wireshark()
         ? QStringLiteral(":/wsicon/wsicon256.png")
         : QStringLiteral(":/ssicon/ssicon256.png");
     QPixmap logo(icon_path);
     if (!logo.isNull()) {
-        QPixmap scaled = logo.scaled(logo_size, logo_size,
+        QPixmap scaled = logo.scaled(kLogoSize, kLogoSize,
             Qt::KeepAspectRatio, Qt::SmoothTransformation);
         int logo_x = (width() - scaled.width()) / 2;
-        int logo_y = static_cast<int>(height() * 0.38) - scaled.height() - logo_card_gap;
+        int logo_y = static_cast<int>(height() * kCardVerticalPosition) - scaled.height() - kCardPadding;
         painter.drawPixmap(logo_x, logo_y, scaled);
     }
 
-    // --- Progress card (60% of width, minimum 320px) ---
+    // --- Progress card ---
     const int card_w = qMax(320, static_cast<int>(width() * 0.6));
-    const int card_h = 80;
     int card_x = (width() - card_w) / 2;
-    int card_y = static_cast<int>(height() * 0.38);
-    QRectF card_rect(card_x, card_y, card_w, card_h);
+    int card_y = static_cast<int>(height() * kCardVerticalPosition);
+    QRectF card_rect(card_x, card_y, card_w, kCardHeight);
 
-    QColor card_bg = dark ? QColor(40, 40, 46, 200) : QColor(255, 255, 255, 190);
-    QColor card_border = dark ? QColor(255, 255, 255, 30) : QColor(0, 0, 0, 25);
+    QColor card_bg = appPalette.color(QPalette::Base);
+    card_bg.setAlpha(dark ? kCardBgAlpha : kCardBgAlphaLight);
+    QColor card_border = appPalette.color(QPalette::Mid);
+    card_border.setAlpha(dark ? kCardBorderAlpha : kCardBorderAlphaLight);
 
     painter.setPen(QPen(card_border, 1.0));
     painter.setBrush(card_bg);
-    painter.drawRoundedRect(card_rect, 8, 8);
+    painter.drawRoundedRect(card_rect, kCardCornerRadius, kCardCornerRadius);
 
-    // --- Action label ---
-    const int padding = 16;
-    const int text_h = 20;
-    QRectF text_rect(card_x + padding, card_y + padding, card_w - 2 * padding, text_h);
+    QColor text_color = palette().color(QPalette::Text);
 
-    QColor text_color = dark ? QColor(220, 220, 225) : QColor(50, 50, 55);
+    // --- Action title (bold, slightly larger) ---
+    QRectF title_rect(card_x + kCardPadding, card_y + kCardPadding,
+                      card_w - 2 * kCardPadding, kTitleHeight);
+
+    QFont title_font = font();
+    title_font.setPointSizeF(font().pointSizeF() * kTitleFontScale);
+    title_font.setBold(true);
+    painter.setFont(title_font);
     painter.setPen(text_color);
 
-    QFont label_font = font();
-    label_font.setPointSizeF(font().pointSizeF() * 0.9);
-    painter.setFont(label_font);
+    QString elided_title = painter.fontMetrics().elidedText(
+        action_text_, Qt::ElideMiddle, static_cast<int>(title_rect.width()));
+    painter.drawText(title_rect, Qt::AlignLeft | Qt::AlignVCenter, elided_title);
 
-    QString elided = painter.fontMetrics().elidedText(
-        action_text_, Qt::ElideMiddle, static_cast<int>(text_rect.width()));
-    painter.drawText(text_rect, Qt::AlignLeft | Qt::AlignVCenter, elided);
+    // --- Action subtext (smaller, dimmer) ---
+    if (!action_subtext_.isEmpty()) {
+        QRectF sub_rect(card_x + kCardPadding,
+                        card_y + kCardPadding + kTitleHeight + 2,
+                        card_w - 2 * kCardPadding, kSubtextHeight);
+
+        QFont sub_font = font();
+        sub_font.setPointSizeF(font().pointSizeF() * kSubtextFontScale);
+        painter.setFont(sub_font);
+
+        QColor sub_color = text_color;
+        sub_color.setAlpha(kSubtextAlpha);
+        painter.setPen(sub_color);
+
+        QString elided_sub = painter.fontMetrics().elidedText(
+            action_subtext_, Qt::ElideMiddle, static_cast<int>(sub_rect.width()));
+        painter.drawText(sub_rect, Qt::AlignLeft | Qt::AlignVCenter, elided_sub);
+    }
 
     // --- Progress bar ---
-    const int bar_h = 6;
-    const int bar_y = card_y + card_h - padding - bar_h;
-    QRectF bar_bg_rect(card_x + padding, bar_y, card_w - 2 * padding, bar_h);
+    const int bar_y = card_y + kCardHeight - kCardPadding - kBarHeight;
+    QRectF bar_bg_rect(card_x + kCardPadding, bar_y, card_w - 2 * kCardPadding, kBarHeight);
 
-    QColor bar_bg = dark ? QColor(255, 255, 255, 25) : QColor(0, 0, 0, 20);
+    QColor bar_bg = appPalette.color(QPalette::Mid);
+    bar_bg.setAlpha(dark ? kBarTrackAlpha : kBarTrackAlphaLight);
     painter.setPen(Qt::NoPen);
     painter.setBrush(bar_bg);
-    painter.drawRoundedRect(bar_bg_rect, bar_h / 2.0, bar_h / 2.0);
+    painter.drawRoundedRect(bar_bg_rect, kBarHeight / 2.0, kBarHeight / 2.0);
 
     if (register_max_ > 0 && register_cur_ > 0) {
         qreal fraction = qMin(1.0, static_cast<qreal>(register_cur_) / register_max_);
-        qreal fill_w = (card_w - 2 * padding) * fraction;
+        qreal fill_w = (card_w - 2 * kCardPadding) * fraction;
 
-        QRectF bar_fill_rect(card_x + padding, bar_y, fill_w, bar_h);
-        QColor bar_fill = dark ? QColor(130, 170, 255, 200) : QColor(52, 101, 164, 200);
+        QRectF bar_fill_rect(card_x + kCardPadding, bar_y, fill_w, kBarHeight);
+        QColor bar_fill = theme->color(ThemeManager::BrandPrimary);
+        bar_fill.setAlpha(kBarFillAlpha);
 
         painter.setBrush(bar_fill);
-        painter.drawRoundedRect(bar_fill_rect, bar_h / 2.0, bar_h / 2.0);
+        painter.drawRoundedRect(bar_fill_rect, kBarHeight / 2.0, kBarHeight / 2.0);
     }
 }
 
@@ -231,17 +292,19 @@ void SplashOverlay::splashUpdate(register_action_e action, const char *message)
         break;
     }
 
+    QString sub_msg;
     if (message) {
         if (!strncmp(message, "proto_register_", 15))
             message += 15;
         else if (!strncmp(message, "proto_reg_handoff_", 18))
             message += 18;
-        action_msg.append(" ").append(message);
+        sub_msg = QString(message);
     }
 
     action_text_ = action_msg;
-    update();
+    action_subtext_ = sub_msg;
+    repaint();
 
-    mainApp->processEvents(QEventLoop::ExcludeUserInputEvents | QEventLoop::ExcludeSocketNotifiers, 1);
+    mainApp->processEvents(QEventLoop::ExcludeUserInputEvents | QEventLoop::ExcludeSocketNotifiers, info_update_freq_);
     elapsed_timer_.restart();
 }

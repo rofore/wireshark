@@ -3,10 +3,12 @@
 0ksection
 0x%02x
 0x%08x
+100ge
 10base
 10baset1s
 10gbase
 10gig
+11abg
 11bgn
 16apsk
 1xrtt
@@ -22,6 +24,7 @@
 3gpp2
 3pcap
 5views
+6910p
 7login
 80211n
 80mhz
@@ -104,6 +107,7 @@ allocators
 alteon
 altera
 altsvc
+alveo
 american
 ampdu
 amperage
@@ -186,6 +190,7 @@ asynchronously
 asyncio
 asyncmap
 atapi
+atest
 athens
 atheros
 atime
@@ -410,6 +415,7 @@ chan1
 chan2
 chandle
 changelog
+chanjour
 channelisation
 channelised
 channelized
@@ -582,6 +588,7 @@ cp56time
 cp56time2a
 cpdlc
 cpich
+cplane
 cplusplus
 cpmcistate
 cppcheck
@@ -907,14 +914,17 @@ econet
 ecpri
 ed137a
 ed137b
+edata
 edhoc
 editcap
 edonkey
 eeprom
 eesti
 effecter
+eg20t
 egprs
 egroup
+ehtsig
 eigrp
 einval
 elektronik
@@ -925,6 +935,7 @@ elseif
 elsif
 emlmr
 emlsr
+emmitsburg
 emption
 emulates
 emule
@@ -949,6 +960,7 @@ endforeach
 endian
 endianness
 endif
+endoff
 endpoint
 endpt
 endtry
@@ -1055,6 +1067,7 @@ extopt
 extpfx
 extractors
 extrainformation
+extunit
 eyesdn
 f1removal
 f1setup
@@ -1077,6 +1090,7 @@ fcfcs
 fcpflags
 fcslen
 fdata
+fdinfo
 featureful
 february
 fhandle
@@ -1260,6 +1274,7 @@ hartip
 hasattr
 hashed
 hashes
+hauppauge
 hazelcast
 hbreq
 hbresp
@@ -1271,6 +1286,7 @@ hebrew
 heimdal
 hellman
 helsinki
+hesiga
 heuristic
 heuristicly
 heuristics
@@ -1390,6 +1406,8 @@ infiniband
 infix
 infocomm
 infolist
+informatica
+informatik
 informationitem
 informationlist
 informations
@@ -1461,6 +1479,8 @@ ioepoch
 ioerr
 ioflag
 iograph
+iomgr
+iommu
 ionospheric
 iotecha
 iowait
@@ -1635,6 +1655,7 @@ literals
 lithionics
 lithuanian
 llcgprs
+lldpdatatbl
 lldpdu
 llogd
 lnpdqp
@@ -1767,6 +1788,7 @@ miami
 michal
 microapp
 microbit
+microsec
 midamble
 middlebox
 migratable
@@ -1776,6 +1798,7 @@ milli
 millimeters
 millimetre
 millimetres
+millisec
 millisecs
 milliwatt
 mingw
@@ -1815,6 +1838,7 @@ monday
 monlist
 monmap
 monterrey
+moorestown
 moscow
 motorola
 mountdev
@@ -1848,6 +1872,7 @@ mqsysp
 mrcpv
 mrdisc
 mrpic
+msauth
 msbuild
 mscldap
 msgasy
@@ -1855,6 +1880,7 @@ msgasync
 msgflag
 msgid
 msglen
+msgread
 msgreq
 msgsend
 msgtype
@@ -2136,6 +2162,7 @@ opmode
 opnode
 opnum
 opreply
+optane
 optarg
 opterr
 optimisation
@@ -2172,10 +2199,14 @@ overlay1mask
 overlay2mask
 overnet
 overridable
+owamp
 p2pstar
 p4rpc
 p8118e
+p8118h
+p8118x
 p8118z
+p8128z
 pacch
 packard
 packetcable
@@ -2246,6 +2277,7 @@ peristency
 persian
 persistency
 persresv
+pfcpsr
 pfname
 pfsync
 pgpool
@@ -2266,11 +2298,13 @@ pinfo
 pixmap
 pkinit
 pktdata
+pktlen
 plaintext
 planar
 plano
 plcinterface
 plessey
+plink
 plixer
 plmnid
 plottable1d
@@ -2580,6 +2614,7 @@ rekey
 rekeying
 relephem
 relocatable
+relposned
 remapping
 remediation
 removability
@@ -2592,6 +2627,7 @@ reordercap
 reorigination
 reparse
 replot
+repoid
 representable
 reproducible
 reprogrammable
@@ -2846,6 +2882,7 @@ showtechnic
 shtdn
 siapp
 sidelink
+sigcfgmask
 sigcomp
 sighup
 siginfo
@@ -2938,6 +2975,7 @@ srcdst
 srcip
 srcport
 sresmask
+sriov
 srtcp
 srvcc
 srvreq
@@ -2987,6 +3025,7 @@ stringz
 stringzpad
 strix
 strlen
+strptr
 strtod
 strtoul
 struct
@@ -3059,6 +3098,7 @@ swedish
 swisscom
 swissvoice
 switchinfo
+switchtec
 swout
 sybase
 sydney
@@ -3092,6 +3132,7 @@ systemd
 t7entry
 tablemod
 tabular
+taglen
 taiwan
 tallinn
 tanzania
@@ -3133,6 +3174,7 @@ telfonica
 telia
 telkom
 telnet
+telostech
 telstra
 teléfonos
 teredo
@@ -3154,6 +3196,7 @@ thunderx
 thursday
 tieto
 timefmt
+timegps
 timeout
 timeserv
 timeslot
@@ -3169,6 +3212,7 @@ titlebar
 tlvlen
 tlvtype
 tmflags
+tmpdir
 tname
 tobago
 toggled
@@ -3247,6 +3291,7 @@ twopc
 txchannel
 txmcsmap
 txpwr
+txrate
 txsta
 txtmod
 type1
@@ -3276,11 +3321,15 @@ udpcp
 udpdump
 udphdr
 udrei
+ueids
 uganda
+uhrsig
 uievent
 uimsbf
 uint16
+uint16t
 uint32
+uint32t
 uint8
 uinteger
 ulmap
@@ -3455,6 +3504,7 @@ unvoiced
 updatability
 updatable
 upiri
+uplane
 uplanet
 uplink
 upload
@@ -3462,6 +3512,8 @@ uploaded
 uploading
 uploads
 uptime
+upvalue
+upvalues
 uring
 urlencoded
 urllib
@@ -3494,6 +3546,7 @@ v1410
 v1530
 v1610
 v2client
+v6133cl
 valgrind
 validations
 validator
@@ -3627,6 +3680,8 @@ wscbor
 wslog
 wslua
 wsluarm
+wsrepodir
+wsrepofile
 wstring
 wsutil
 wusps
@@ -3636,6 +3691,7 @@ x509af
 x509ce
 x509if
 x509sat
+x58le
 xattr
 xattrs
 xauth
@@ -3668,11 +3724,14 @@ xsltproc
 xtension
 xtest
 xtreme
+xtypes
 xxhash
 yyextra
 yyscanner
 yyterminate
 yytext
+z36xxx
+z37xxx
 z3950
 zbncp
 zboss

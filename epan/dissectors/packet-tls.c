@@ -407,6 +407,12 @@ ssl_session_key_count(void)
         if (g_hash_table_contains(mk_map->tls13_server_appdata, key)) {
             count++;
         }
+        if (g_hash_table_contains(mk_map->ech_secret, key)) {
+            count++;
+        }
+        if (g_hash_table_contains(mk_map->ech_config, key)) {
+            count++;
+        }
     }
     return count;
 }
@@ -493,6 +499,12 @@ ssl_export_sessions(size_t* length)
         }
         if ((value = g_hash_table_lookup(mk_map->tls13_exporter, key))) {
             tls_export_client_randoms_func(key, value, (void*)keylist, "EXPORTER_SECRET ");
+        }
+        if ((value = g_hash_table_lookup(mk_map->ech_secret, key))) {
+            tls_export_client_randoms_func(key, value, (void*)keylist, "ECH_SECRET ");
+        }
+        if ((value = g_hash_table_lookup(mk_map->ech_config, key))) {
+            tls_export_client_randoms_func(key, value, (void*)keylist, "ECH_CONFIG ");
         }
     }
 
@@ -596,20 +608,32 @@ ssl_reset_uat(void)
 static char *
 tls_follow_conv_filter(epan_dissect_t *edt _U_, packet_info *pinfo, unsigned *stream, unsigned *sub_stream _U_)
 {
-    conversation_t *conv = find_conversation_pinfo_strat(pinfo, 0);
-    if (!conv) {
-        return NULL;
-    }
-    void *conv_data = conversation_get_proto_data(conv, proto_tls);
-    if (conv_data == NULL) {
-        return NULL;
+    /* This function wants to return "the" TLS stream for the frame.
+     * If there are multiple, we prefer the inner one. While edt should
+     * be non-NULL, because the pinfo lifetime is tied to the epan_dissect_t,
+     * edt->tree can be NULL (e.g., when called by sharkd), which makes
+     * it impossible to use anything in the tree as opposed to pinfo. */
+
+    char *filter = NULL;
+    const SslPacketInfo *pi = NULL;
+    uint8_t max_layer_num = proto_get_layer_num(pinfo, proto_tls);
+
+    /* The result from proto_get_layer_num is 1-indexed, and
+     * includes times that the TLS dissector is called for times
+     * that represent multiple PDUs in a frame (e.g., due to TCP
+     * segmentation) in addition to times that represent nesting.
+     */
+    for (uint8_t curr_layer_num = max_layer_num; curr_layer_num; --curr_layer_num) {
+        /* The (nesting) layer number in p_get_proto_data is 0-indexed. */
+        pi = p_get_proto_data(wmem_file_scope(), pinfo, proto_tls, curr_layer_num - 1);
+        if (pi) {
+            *stream = pi->stream;
+            filter = ws_strdup_printf("tls.stream eq %u", *stream);
+            break;
+        }
     }
 
-    SslDecryptSession *ssl_session = (SslDecryptSession *)conv_data;
-    SslSession *session = &ssl_session->session;
-
-    *stream = session->stream;
-    return ws_strdup_printf("tls.stream eq %u", session->stream);
+    return filter;
 }
 
 static char *
@@ -629,6 +653,8 @@ ssl_follow_tap_listener(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _
 
     /* Skip packets without decrypted payload data. */
     if (!pi || !pi->records) return TAP_PACKET_DONT_REDRAW;
+
+    if (follow_info->stream_id != pi->stream) return TAP_PACKET_DONT_REDRAW;
 
     /* Compute the packet's sender. */
     if (follow_info->client_port == 0) {
@@ -821,6 +847,7 @@ dissect_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     int                is_from_server;
     struct tcpinfo    *tcpinfo;
     struct tlsinfo     tlsinfo;
+
     /*
      * A single packet may contain multiple TLS records. Two possible scenarios:
      *
@@ -830,7 +857,7 @@ dissect_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
      * To support the second case, 'curr_layer_num_ssl' is used as identifier
      * for the current TLS layer.
      */
-    uint8_t            curr_layer_num_ssl = pinfo->curr_proto_layer_num;
+    uint8_t            curr_layer_num_ssl = p_get_proto_depth(pinfo, proto_tls);
 
     ti = NULL;
     ssl_tree   = NULL;
@@ -876,8 +903,7 @@ dissect_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
      */
     conversation = find_or_create_conversation_strat(pinfo);
 
-
-    ssl_session_save = ssl_session = ssl_get_session(conversation, tls_handle);
+    ssl_session_save = ssl_session = ssl_get_session(conversation, tls_handle, curr_layer_num_ssl);
     session = &ssl_session->session;
     is_from_server = ssl_packet_from_server(session, ssl_associations, pinfo);
 
@@ -894,6 +920,11 @@ dissect_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
          ssl_session = NULL;
 
     ssl_debug_printf("  conversation = %p, ssl_session = %p\n", (void *)conversation, (void *)ssl_session);
+
+    /* Increment the proto depth, so any nested TLS gets the new depth.
+     * Make sure to decrement this when leaving the function.
+     * (XXX - Do we need a TRY...FINALLY or CLEANUP_CB_PUSH?) */
+    p_set_proto_depth(pinfo, proto_tls, curr_layer_num_ssl + 1);
 
     /* Initialize the protocol column; we'll override it later when we
      * detect a different version or flavor of TLS (assuming we don't
@@ -1039,11 +1070,12 @@ dissect_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 
         /* Desegmentation return check */
         if (need_desegmentation) {
-          ssl_debug_printf("  need_desegmentation: offset = %d, reported_length_remaining = %d\n",
+            ssl_debug_printf("  need_desegmentation: offset = %d, reported_length_remaining = %d\n",
                            offset, tvb_reported_length_remaining(tvb, offset));
-          /* Make data available to ssl_follow_tap_listener */
-          tap_queue_packet(tls_follow_tap, pinfo, p_get_proto_data(wmem_file_scope(), pinfo, proto_tls, curr_layer_num_ssl));
-          return tvb_captured_length(tvb);
+            /* Make data available to ssl_follow_tap_listener */
+            tap_queue_packet(tls_follow_tap, pinfo, p_get_proto_data(wmem_file_scope(), pinfo, proto_tls, curr_layer_num_ssl));
+            p_set_proto_depth(pinfo, proto_tls, curr_layer_num_ssl);
+            return tvb_captured_length(tvb);
         }
     }
 
@@ -1166,6 +1198,7 @@ dissect_ssl(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     /* Make data available to ssl_follow_tap_listener */
     tap_queue_packet(tls_follow_tap, pinfo, p_get_proto_data(wmem_file_scope(), pinfo, proto_tls, curr_layer_num_ssl));
 
+    p_set_proto_depth(pinfo, proto_tls, curr_layer_num_ssl);
     return ret;
 }
 
@@ -1199,10 +1232,12 @@ dissect_tls13_handshake(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, voi
      */
     unsigned           record_id = GPOINTER_TO_UINT(data);
 
+    uint8_t curr_layer_num_ssl = p_get_proto_depth(pinfo, proto_tls);
+
     ssl_debug_printf("\n%s enter frame #%u (%s)\n", G_STRFUNC, pinfo->num, (pinfo->fd->visited)?"already visited":"first time");
 
     conversation = find_or_create_conversation(pinfo);
-    ssl_session = ssl_get_session(conversation, tls13_handshake_handle);
+    ssl_session = ssl_get_session(conversation, tls13_handshake_handle, curr_layer_num_ssl);
     session = &ssl_session->session;
     is_from_server = ssl_packet_from_server(session, ssl_associations, pinfo);
     if (session->version == SSL_VER_UNKNOWN) {
@@ -1496,6 +1531,9 @@ decrypt_tls13_early_data(tvbuff_t *tvb, packet_info *pinfo, uint32_t offset,
     ssl->state |= SSL_SEEN_0RTT_APPDATA;
 
     ssl_load_keyfile(ssl_options.keylog_filename, &ssl_keylog_file, &ssl_master_key_map);
+    // Early data can only be used with a PSK. (The early secret is computed w/o
+    // input from the (EC)DHE even if psk_dhe_ke is used.)
+    tls_load_psk(ssl, ssl_options.psk);
     StringInfo *secret = tls13_load_secret(ssl, &ssl_master_key_map, false, TLS_SECRET_0RTT_APP);
     if (!secret) {
         ssl_debug_printf("Missing secrets, early data decryption not possible!\n");
@@ -2992,7 +3030,8 @@ dissect_tls_handshake(tvbuff_t *tvb, packet_info *pinfo,
             if (frag_info && frag_info->record_id != record_id) {
                 frag_info = NULL;
             }
-        } else if (frag_info->offset != 0) {
+        }
+        else {
             // The full TVB is in the middle of a handshake message and needs more data.
             tls_show_handshake_details(pinfo, tree, version, frag_info->type, false, is_first_msg, false,
                     tvb, offset, offset_end - offset);
@@ -3143,15 +3182,9 @@ dissect_tls_handshake_full(tvbuff_t *tvb, packet_info *pinfo,
 
         /*
          * Add handshake message (including type, length, etc.) to hash (for
-         * Extended Master Secret).
-         * Hash ClientHello up to and including ClientKeyExchange. As the
-         * premaster secret is looked up during ChangeCipherSpec processing (an
-         * implementation detail), we must skip the CertificateVerify message
-         * which can appear between CKE and CCS when mutual auth is enabled.
+         * Extended Master Secret or TLS 1.3 secrets when using psk_ke).
          */
-        if (msg_type != SSL_HND_CERT_VERIFY) {
-            ssl_calculate_handshake_hash(ssl, tvb, hs_offset, 4 + length);
-        }
+        ssl_calculate_handshake_hash(ssl, tvb, hs_offset, 4 + length, msg_type, is_from_server);
 
         /* now dissect the handshake message, if necessary */
         switch ((HandshakeType) msg_type) {
@@ -3172,6 +3205,11 @@ dissect_tls_handshake_full(tvbuff_t *tvb, packet_info *pinfo,
                  * Cannot call tls13_change_key here with TLS_SECRET_HANDSHAKE
                  * since the server may not agree on using TLS 1.3. If
                  * early_data is advertised, it must be TLS 1.3 though.
+                 *
+                 * XXX - If we want to calculate the key from a PSK, it might
+                 * be better to do it now. There's a rare possibility that the
+                 * Server Hello could be received before the first 0RTT-APPDATA,
+                 * which would throw off the handshake transcript hash.
                  */
                 if (ssl) {
                     tls_save_crandom(ssl, &ssl_master_key_map);
@@ -3188,6 +3226,10 @@ dissect_tls_handshake_full(tvbuff_t *tvb, packet_info *pinfo,
                         offset, offset + length, session, ssl, false, is_hrr);
                 if (ssl) {
                     ssl_load_keyfile(ssl_options.keylog_filename, &ssl_keylog_file, &ssl_master_key_map);
+                    if (ssl->has_psk && !ssl->has_key_share) {
+                        // Server negotiated psk_ke; load the PSK if have one.
+                        tls_load_psk(ssl, ssl_options.psk);
+                    }
                     /* Create client and server decoders for TLS 1.3.
                      * Create client decoder based on HS secret only if there is
                      * no early data, or if there is no decryptable early data. */
@@ -4057,7 +4099,10 @@ void ssl_set_master_secret(uint32_t frame_num, address *addr_srv, address *addr_
         conversation = conversation_new(frame_num, addr_srv, addr_cli, conversation_pt_to_conversation_type(ptype), port_srv, port_cli, 0);
         ssl_debug_printf("  new conversation = %p created\n", (void *)conversation);
     }
-    ssl = ssl_get_session(conversation, tls_handle);
+    /* XXX - This need to be updated to handle tunneling. This API call was
+     * only ever used by external dissectors and plugins. For now just support
+     * the outer TLS layer. */
+    ssl = ssl_get_session(conversation, tls_handle, 0);
 
     ssl_debug_printf("  conversation = %p, ssl_session = %p\n", (void *)conversation, (void *)ssl);
 
@@ -4330,12 +4375,11 @@ tls_get_cipher_info(packet_info *pinfo, uint16_t cipher_suite, int *cipher_algo,
             return false;
         }
 
-        void *conv_data = conversation_get_proto_data(conv, proto_tls);
-        if (conv_data == NULL) {
+        SslDecryptSession *ssl_session = tls_get_session(conv, proto_tls, p_get_proto_depth(pinfo, proto_tls));
+        if (ssl_session == NULL) {
             return false;
         }
 
-        SslDecryptSession *ssl_session = (SslDecryptSession *)conv_data;
         cipher_suite = ssl_session->session.cipher;
     }
     const SslCipherSuite *suite = ssl_find_cipher(cipher_suite);
@@ -4394,7 +4438,7 @@ tls13_get_quic_secret(packet_info *pinfo, bool is_from_server, int type, unsigne
         return 0;
     }
 
-    SslDecryptSession *ssl = (SslDecryptSession *)conversation_get_proto_data(conv, proto_tls);
+    SslDecryptSession *ssl = tls_get_session(conv, proto_tls, p_get_proto_depth(pinfo, proto_tls));
     if (ssl == NULL) {
         return 0;
     }
@@ -4465,7 +4509,7 @@ tls_get_alpn(packet_info *pinfo)
         return NULL;
     }
 
-    SslDecryptSession *session = (SslDecryptSession *)conversation_get_proto_data(conv, proto_tls);
+    SslDecryptSession *session = tls_get_session(conv, proto_tls, p_get_proto_depth(pinfo, proto_tls));
     if (session == NULL) {
         return NULL;
     }
@@ -4481,7 +4525,7 @@ tls_get_client_alpn(packet_info *pinfo)
         return NULL;
     }
 
-    SslDecryptSession *session = (SslDecryptSession *)conversation_get_proto_data(conv, proto_tls);
+    SslDecryptSession *session = tls_get_session(conv, proto_tls, p_get_proto_depth(pinfo, proto_tls));
     if (session == NULL) {
         return NULL;
     }
@@ -4563,12 +4607,11 @@ tls13_exporter(packet_info *pinfo, bool is_early,
         return false;
     }
 
-    void *conv_data = conversation_get_proto_data(conv, proto_tls);
-    if (conv_data == NULL) {
+    SslDecryptSession *ssl_session = tls_get_session(conv, proto_tls, p_get_proto_depth(pinfo, proto_tls));
+    if (ssl_session == NULL) {
         return false;
     }
 
-    SslDecryptSession *ssl_session = (SslDecryptSession *)conv_data;
     ssl_load_keyfile(ssl_options.keylog_filename, &ssl_keylog_file, &ssl_master_key_map);
     key_map = is_early ? ssl_master_key_map.tls13_early_exporter
                        : ssl_master_key_map.tls13_exporter;
@@ -5249,6 +5292,8 @@ proto_reg_handoff_ssl(void)
     dissector_add_string("http.upgrade", "TLS/1.1", tls_handle);
     dissector_add_string("http.upgrade", "TLS/1.2", tls_handle);
     dissector_add_string("http.upgrade", "TLS/1.3", tls_handle);
+    /* Ivanti VPNs (unregistered with IANA) */
+    dissector_add_string("http.upgrade", "IF-T/TLS", tls_handle);
 
     /* RFC 9934 */
     dissector_add_string("rfc7468.preeb_label", "ECHCONFIG", create_dissector_handle(dissect_tls_echconfig, proto_tls));

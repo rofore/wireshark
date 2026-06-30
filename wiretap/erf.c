@@ -42,6 +42,7 @@
 #include <wsutil/strtoi.h>
 #include <wsutil/glib-compat.h>
 #include <wsutil/ws_padding_to.h>
+#include <wsutil/nstime.h>
 
 #include "wtap_module.h"
 #include "file_wrappers.h"
@@ -999,7 +1000,7 @@ static void erf_dump_priv_init_gen_time(erf_dump_t *dump_priv) {
 
   real_time = g_get_real_time();
   /* Convert TimeVal to ERF timestamp */
-  dump_priv->gen_time = ((real_time / G_USEC_PER_SEC) << 32) + ((real_time % G_USEC_PER_SEC) << 32) / 1000 / 1000;
+  dump_priv->gen_time = ((real_time / WS_USECS_PER_SEC) << 32) + ((real_time % WS_USECS_PER_SEC) << 32) / 1000 / 1000;
 }
 
 
@@ -1624,7 +1625,7 @@ static bool erf_write_anchor_meta_update_phdr(wtap_dumper *wdh, erf_dump_t *dump
    * Now construct the metadata Anchor record with the same Anchor ID
    */
 
-  meta_ehdrs = g_array_new(false, false, sizeof(struct erf_ehdr));
+  meta_ehdrs = g_array_new(FALSE, FALSE, sizeof(struct erf_ehdr));
 
   /* We need up to 4 extension headers on the Provenance metadata record */
   /*Required*/
@@ -1769,7 +1770,7 @@ static erf_dump_t *erf_dump_priv_create(void) {
   dump_priv->prev_erf_type = 0;
   dump_priv->user_comment_ptr = NULL;
   dump_priv->periodic_sections = NULL;
-  dump_priv->periodic_extra_ehdrs = g_array_new(false, false, sizeof(struct erf_ehdr));
+  dump_priv->periodic_extra_ehdrs = g_array_new(FALSE, FALSE, sizeof(struct erf_ehdr));
   dump_priv->rand = g_rand_new();
 
   return dump_priv;
@@ -2670,7 +2671,7 @@ static int populate_capture_host_info(erf_t *erf_priv, wtap *wth, union wtap_pse
      *
      * If we have no app_version, this will just use app_name.
      */
-    // coverity[var_deref_model:FALSE]
+    // coverity[var_deref_model:false]
     tmp = g_strjoin(" ", app_name ? app_name : "(Unknown application)", app_version, NULL);
     wtap_block_set_string_option_value(shb_hdr, OPT_SHB_USERAPPL, tmp, strlen(tmp));
     g_free(tmp);

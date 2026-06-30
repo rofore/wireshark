@@ -37,6 +37,7 @@
 #include <epan/exceptions.h>
 #include <epan/show_exception.h>
 #include <epan/unit_strings.h>
+#include <epan/credentials.h>
 #include <glib.h>
 #include "packet-http.h"
 #include "packet-http2.h"
@@ -44,8 +45,6 @@
 #include "packet-tls.h"
 #include "packet-acdr.h"
 #include "packet-media-type.h"
-
-#include <ui/tap-credentials.h>
 
 void proto_register_http(void);
 void proto_reg_handoff_http(void);
@@ -103,6 +102,7 @@ static int hf_http_connection;
 static int hf_http_cookie;
 static int hf_http_cookie_pair;
 static int hf_http_accept;
+static int hf_http_accept_query;
 static int hf_http_referer;
 static int hf_http_accept_language;
 static int hf_http_accept_encoding;
@@ -154,8 +154,12 @@ static expert_field ei_http_tls_port;
 static expert_field ei_http_leading_crlf;
 static expert_field ei_http_excess_data;
 static expert_field ei_http_bad_header_name;
+static expert_field ei_http_header_name_trailing_ws;
+static expert_field ei_http_bad_header_value_nul;
 static expert_field ei_http_decompression_failed;
 static expert_field ei_http_decompression_disabled;
+static expert_field ei_http_response_code_invalid;
+static expert_field ei_http_request_uri_invalid;
 
 static dissector_handle_t http_handle;
 static dissector_handle_t http_tcp_handle;
@@ -385,6 +389,7 @@ static int is_http_request_or_reply(packet_info *pinfo, const char *data, unsign
 static unsigned chunked_encoding_dissector(tvbuff_t **tvb_ptr, packet_info *pinfo,
 					proto_tree *tree, unsigned offset);
 static bool valid_header_name(const unsigned char *line, unsigned header_len);
+static bool invalid_header_value_char(uint8_t c);
 static bool process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 			   const unsigned char *line, unsigned linelen, unsigned colon_offset,
 			   packet_info *pinfo, proto_tree *tree,
@@ -952,43 +957,40 @@ determine_http_location_target(wmem_allocator_t *scope, const char *base_url, co
 			final_target = wmem_strdup_printf(scope, "%s%s", base_url_no_query, location_url);
 			return final_target;
 		}
-		/* A leading slash means to put the location after the netloc */
-		else if (g_str_has_prefix(location_url, "/")) {
+		else {
 			/* We have already tested strstr(base_url) above */
 			char *scheme_end;
-			char *netloc_end;
-			int netloc_length;
-
 			scheme_end = strstr(base_url_no_query, "://");
 			if (!(scheme_end)) {
 				return NULL;
 			}
 			scheme_end += strlen("://");
-			if (!(*scheme_end)) {
-				return NULL;
-			}
-			netloc_end = strstr(scheme_end, "/");
-			if (!(netloc_end)) {
-				return NULL;
-			}
-			netloc_length = (int) (netloc_end - base_url_no_query);
-			final_target = wmem_strdup_printf(scope, "%.*s%s", netloc_length, base_url_no_query, location_url);
-			return final_target;
-		}
-		/* Otherwise, it replaces the last element in the URI */
-		else {
-			char *scheme_end = strstr(base_url_no_query, "://") + 3;
-			char *end_of_path = g_strrstr(scheme_end, "/");
+			/* A leading slash means to put the location after the netloc */
+			if (g_str_has_prefix(location_url, "/")) {
+				char *netloc_end;
+				int netloc_length;
 
-			if (end_of_path != NULL) {
-				int base_through_path = (int) (end_of_path - base_url_no_query);
-				final_target = wmem_strdup_printf(scope, "%.*s/%s", base_through_path, base_url_no_query, location_url);
+				netloc_end = strstr(scheme_end, "/");
+				if (!(netloc_end)) {
+					return NULL;
+				}
+				netloc_length = (int) (netloc_end - base_url_no_query);
+				final_target = wmem_strdup_printf(scope, "%.*s%s", netloc_length, base_url_no_query, location_url);
+				return final_target;
 			}
+			/* Otherwise, it replaces the last element in the URI */
 			else {
-				final_target = wmem_strdup_printf(scope, "%s/%s", base_url_no_query, location_url);
-			}
+				const char *end_of_path = g_strrstr(scheme_end, "/");
 
-			return final_target;
+				if (end_of_path != NULL) {
+					int base_through_path = (int) (end_of_path - base_url_no_query);
+					final_target = wmem_strdup_printf(scope, "%.*s/%s", base_through_path, base_url_no_query, location_url);
+				}
+				else {
+					final_target = wmem_strdup_printf(scope, "%s/%s", base_url_no_query, location_url);
+				}
+				return final_target;
+			}
 		}
 	}
 	return NULL;
@@ -1098,7 +1100,7 @@ get_http_conversation_data(packet_info *pinfo, conversation_t **conversation)
 		conv_data = wmem_new0(wmem_file_scope(), http_conv_t);
 		conv_data->chunk_offsets_fwd = wmem_map_new(wmem_file_scope(), g_direct_hash, g_direct_equal);
 		conv_data->chunk_offsets_rev = wmem_map_new(wmem_file_scope(), g_direct_hash, g_direct_equal);
-		conv_data->req_list = NULL;
+		conv_data->req_list = wmem_list_new(wmem_file_scope());
 		conv_data->matches_table = wmem_map_new(wmem_file_scope(), g_direct_hash, g_direct_equal);
 
 		conversation_add_proto_data(*conversation, proto_http,
@@ -1191,15 +1193,13 @@ http_get_header_value(packet_info* pinfo, const char *name, bool the_other_direc
 	if (conv_data) {
 		const http_req_res_t *req_res = conv_data->req_res_tail;
 		if (req_res && req_res->private_data) {
-			const http_req_res_private_data_t *private = (http_req_res_private_data_t *)req_res->private_data;
-			if (private) {
-				wmem_map_t *headers = (conv_data->server_port == pinfo->destport && the_other_direction) || (
-					                      conv_data->server_port == pinfo->srcport && !the_other_direction)
-					                      ? private->response_headers
-					                      : private->request_headers;
-				if (headers) {
-					return wmem_map_lookup(headers, name);
-				}
+			const http_req_res_private_data_t *private_data = (http_req_res_private_data_t *)req_res->private_data;
+			wmem_map_t *headers = (conv_data->server_port == pinfo->destport && the_other_direction) || (
+									  conv_data->server_port == pinfo->srcport && !the_other_direction)
+									  ? private_data->response_headers
+									  : private_data->request_headers;
+			if (headers) {
+				return wmem_map_lookup(headers, name);
 			}
 		}
 	}
@@ -2587,7 +2587,7 @@ dissecting_body:
 	}
 
 	/* Detect protocol changes after receiving full response headers. */
-	if (http_type == MEDIA_CONTAINER_HTTP_RESPONSE && curr && pinfo->desegment_offset <= 0 && pinfo->desegment_len <= 0) {
+	if (http_type == MEDIA_CONTAINER_HTTP_RESPONSE && curr && pinfo->desegment_offset <= 0 && pinfo->desegment_len == 0) {
 		dissector_handle_t next_handle = NULL;
 		bool server_acked = false;
 
@@ -2719,8 +2719,13 @@ basic_response_dissector(packet_info *pinfo, tvbuff_t *tvb, proto_tree *tree,
 			 http_conv_t *conv_data _U_, http_req_res_t *curr)
 {
 	const unsigned char *next_token;
+	const unsigned char *status_code_token;
 	unsigned tokenlen;
-	char response_code_chars[4];
+	unsigned i;
+	unsigned expert_len;
+	bool invalid_status_code_token = false;
+	int status_code_offset;
+	proto_item *ti;
 	proto_item *r_ti;
 	http_info_value_t *stat_info = p_get_proto_data(pinfo->pool, pinfo, proto_http, HTTP_PROTO_DATA_INFO);
 
@@ -2734,38 +2739,59 @@ basic_response_dissector(packet_info *pinfo, tvbuff_t *tvb, proto_tree *tree,
 			    ENC_ASCII);
 	/* Advance to the start of the next token. */
 	offset += (int) (next_token - line);
-	line = next_token;
 
 	/*
 	 * The second token is the Status Code.
 	 */
-	tokenlen = get_token_len(line, lineend, &next_token);
+	status_code_token = next_token;
+	status_code_offset = offset;
+	tokenlen = get_token_len(status_code_token, lineend, &next_token);
+
+	/* Validate status code token */
+	if (tokenlen != 3) {
+		invalid_status_code_token = true;
+	} else {
+		for (i = 0; i < tokenlen; i++) {
+			if (!g_ascii_isdigit(status_code_token[i])) {
+				invalid_status_code_token = true;
+				break;
+			}
+		}
+	}
+
+	expert_len = tokenlen;
+	if (expert_len == 0 && tvb_reported_length_remaining(tvb, status_code_offset) > 0)
+		expert_len = 1;
+
+	if (tokenlen >= 3) {
+		ws_buftou32(status_code_token, 3, NULL, &stat_info->response_code);
+		if (curr) {
+			curr->response_code = stat_info->response_code;
+		}
+	}
+
+	ti = proto_tree_add_uint(tree, hf_http_response_code, tvb, status_code_offset,
+				 tokenlen < 3 ? expert_len : 3,
+			    stat_info->response_code);
+	if (expert_len > 3)
+		proto_item_set_len(ti, expert_len);
+
+	if (invalid_status_code_token) {
+		expert_add_info_format(pinfo, ti, &ei_http_response_code_invalid,
+			"Invalid HTTP response status code token: \"%s\" (expected exactly 3 digits)",
+			format_text(pinfo->pool, (const char *)status_code_token, tokenlen));
+	}
 	if (tokenlen < 3)
 		return;
 
-	/* The Status Code characters must be copied into a null-terminated
-	 * buffer for strtoul() to parse them into an unsigned integer value.
-	 */
-	memcpy(response_code_chars, line, 3);
-	response_code_chars[3] = '\0';
-
-	stat_info->response_code =
-		(unsigned)strtoul(response_code_chars, NULL, 10);
-	if (curr) {
-		curr->response_code = stat_info->response_code;
-	}
-
-	proto_tree_add_uint(tree, hf_http_response_code, tvb, offset, 3,
-			    stat_info->response_code);
-
 	r_ti = proto_tree_add_string(tree, hf_http_response_code_desc,
-		tvb, offset, 3, val_to_str(pinfo->pool, stat_info->response_code,
+		tvb, status_code_offset, 3, val_to_str(pinfo->pool, stat_info->response_code,
 		vals_http_status_code, "Unknown (%d)"));
 
 	proto_item_set_generated(r_ti);
 
 	/* Advance to the start of the next token. */
-	offset += (int) (next_token - line);
+	offset += (int) (next_token - status_code_token);
 	line = next_token;
 
 	/*
@@ -2820,10 +2846,9 @@ chunked_encoding_dissector(tvbuff_t **tvb_ptr, packet_info *pinfo,
 	while (datalen > 0) {
 		uint32_t  chunk_size;
 		unsigned  chunk_offset;
-		uint8_t	 *chunk_string;
 		unsigned  linelen;
+		unsigned  endoff;
 		bool	  found;
-		char	 *c;
 
 		found = tvb_find_line_end_remaining(tvb, offset, &linelen , &chunk_offset);
 
@@ -2832,23 +2857,7 @@ chunked_encoding_dissector(tvbuff_t **tvb_ptr, packet_info *pinfo,
 			break;
 		}
 
-		chunk_string = tvb_get_string_enc(pinfo->pool, tvb, offset, linelen, ENC_ASCII);
-
-		if (chunk_string == NULL) {
-			/* Can't get the chunk size line */
-			break;
-		}
-
-		c = (char*)chunk_string;
-
-		/*
-		 * We don't care about the extensions.
-		 */
-		if ((c = strchr(c, ';'))) {
-			*c = '\0';
-		}
-
-		chunk_size = (uint32_t)strtol((char*)chunk_string, NULL, 16);
+		tvb_get_string_uint(tvb, offset, linelen, ENC_STR_HEX, &chunk_size, &endoff);
 
 		if (chunk_size > datalen) {
 			/*
@@ -2998,7 +3007,7 @@ http_conversation_is_connect(conversation_t *conv, uint32_t frame_num)
 /* Call a subdissector to handle HTTP CONNECT's traffic */
 static void
 http_payload_subdissector(tvbuff_t *tvb, proto_tree *tree,
-			  packet_info *pinfo, http_conv_t *conv_data, void* data)
+			  packet_info *pinfo, http_conv_t *conv_data, struct tcpinfo *tcpinfo)
 {
 	uint32_t *ptr = NULL;
 	uint32_t uri_port, saved_port, srcport, destport;
@@ -3019,18 +3028,22 @@ http_payload_subdissector(tvbuff_t *tvb, proto_tree *tree,
 		 * The string was successfully split in two
 		 * Create a proxy-connect subtree
 		 */
-		if(tree) {
-			item = proto_tree_add_item(tree, proto_http, tvb, 0, -1, ENC_NA);
-			proxy_tree = proto_item_add_subtree(item, ett_http);
+		item = proto_tree_add_item(tree, proto_http, tvb, 0, -1, ENC_NA);
+		proxy_tree = proto_item_add_subtree(item, ett_http);
 
-			item = proto_tree_add_string(proxy_tree, hf_http_proxy_connect_host,
-						     tvb, 0, 0, strings[0]);
-			proto_item_set_generated(item);
+		item = proto_tree_add_string(proxy_tree, hf_http_proxy_connect_host,
+					     tvb, 0, 0, strings[0]);
+		proto_item_set_generated(item);
 
-			item = proto_tree_add_uint(proxy_tree, hf_http_proxy_connect_port,
-						   tvb, 0, 0, (uint32_t)strtol(strings[1], NULL, 10) );
-			proto_item_set_generated(item);
+		if (!ws_strtou32(strings[1], NULL, &uri_port)) {
+			proto_tree_add_expert_format(proxy_tree, pinfo, &ei_http_request_uri_invalid,
+						     tvb, 0, 0, "Invalid target port number (%s)", strings[1]);
+			return;
 		}
+
+		item = proto_tree_add_uint(proxy_tree, hf_http_proxy_connect_port,
+					   tvb, 0, 0, uri_port);
+		proto_item_set_generated(item);
 
 		/* Set the port and address to the proxied ones so that
 		 * decode_tcp_ports doesn't call the current conversation
@@ -3039,7 +3052,6 @@ http_payload_subdissector(tvbuff_t *tvb, proto_tree *tree,
 		 * or set the conversation dissector don't affect the original
 		 * conversation but the proxied one.
 		 */
-		uri_port = (int)strtol(strings[1], NULL, 10); /* Convert string to a base-10 integer */
 
 		/* Just use the string as a string address. */
 		set_address(&uri_addr, AT_STRINGZ, (int)strlen(strings[0]) + 1, strings[0]);
@@ -3086,7 +3098,7 @@ http_payload_subdissector(tvbuff_t *tvb, proto_tree *tree,
 			*ptr = uri_port;
 			decode_tcp_ports(tvb, 0, pinfo, tree,
 				pinfo->srcport, pinfo->destport, NULL,
-				(struct tcpinfo *)data);
+				tcpinfo);
 			*ptr = saved_port;
 			copy_address_shallow(addrp, &saved_addr);
 		}
@@ -3175,7 +3187,8 @@ is_http_request_or_reply(packet_info *pinfo, const char *data, unsigned linelen,
 				strncmp(data, "TRACE", indx) == 0 ||
 				strncmp(data, "PATCH", indx) == 0 ||  /* RFC 5789 */
 				strncmp(data, "LABEL", indx) == 0 ||  /* RFC 3253 8.2 */
-				strncmp(data, "MERGE", indx) == 0) {  /* RFC 3253 11.2 */
+				strncmp(data, "MERGE", indx) == 0 ||  /* RFC 3253 11.2 */
+				strncmp(data, "QUERY", indx) == 0) {  /* RFC 10008 */
 				*type = MEDIA_CONTAINER_HTTP_REQUEST;
 				isHttpRequestOrReply = true;
 			}
@@ -3332,6 +3345,7 @@ static const header_info headers[] = {
 	{ "Connection", &hf_http_connection, HDR_NO_SPECIAL },
 	{ "Cookie", &hf_http_cookie, HDR_COOKIE },
 	{ "Accept", &hf_http_accept, HDR_NO_SPECIAL },
+	{ "Accept-Query", &hf_http_accept_query, HDR_NO_SPECIAL },
 	{ "Referer", &hf_http_referer, HDR_REFERER },
 	{ "Accept-Language", &hf_http_accept_language, HDR_NO_SPECIAL },
 	{ "Accept-Encoding", &hf_http_accept_encoding, HDR_NO_SPECIAL },
@@ -3358,7 +3372,7 @@ get_hf_for_header(char* header_name)
 {
 	int* hf_id = NULL;
 
-	if (header_fields_hash) {
+	if (header_fields_hash && header_name) {
 		hf_id = (int*) g_hash_table_lookup(header_fields_hash, header_name);
 	} else {
 		hf_id = NULL;
@@ -3533,6 +3547,13 @@ valid_header_name(const unsigned char *line, unsigned header_len)
 }
 
 static bool
+invalid_header_value_char(uint8_t c)
+{
+    /* NUL is not allowed in field values. */
+    return c == '\0';
+}
+
+static bool
 process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 	       const unsigned char *line, unsigned linelen, unsigned colon_offset,
 	       packet_info *pinfo, proto_tree *tree, headers_t *eh_ptr,
@@ -3551,8 +3572,10 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 	char *header_name;
 	char *p;
 	unsigned char *up;
-	proto_item *hdr_item, *it;
+	proto_item *hdr_item = NULL, *it;
 	unsigned f;
+	bool header_name_trailing_ws;
+	bool header_value_bad_char;
 	int* hf_id;
 	tap_credential_t* auth;
 	http_req_res_t  *curr_req_res = (http_req_res_t *)p_get_proto_data(wmem_file_scope(), pinfo,
@@ -3564,6 +3587,9 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 	len = next_offset - offset;
 	line_end_offset = offset + linelen;
 	header_len = colon_offset - offset;
+	header_name_trailing_ws = header_len > 0 &&
+	    (line[header_len - 1] == ' ' || line[header_len - 1] == '\t');
+	header_value_bad_char = false;
 
 	/**
 	 * Not a valid header name? Just add a line plus expert info.
@@ -3585,6 +3611,9 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 		it = proto_tree_add_item(tree, hf_index, tvb, offset, len, ENC_NA|ENC_ASCII);
 		proto_item_set_text(it, "%s", format_text(pinfo->pool, (char*)line, len));
 		expert_add_info(pinfo, it, &ei_http_bad_header_name);
+		if (header_name_trailing_ws) {
+			expert_add_info(pinfo, it, &ei_http_header_name_trailing_ws);
+		}
 		return false;
 	}
 
@@ -3638,6 +3667,12 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 	value_bytes = (uint8_t *)wmem_alloc(PINFO_FD_VISITED(pinfo) ? pinfo->pool : header_value_map_allocator, value_bytes_len+1);
 	memcpy(value_bytes, &line[value_offset - offset], value_bytes_len);
 	value_bytes[value_bytes_len] = '\0';
+	for (f = 0; f < value_bytes_len; f++) {
+		if (invalid_header_value_char(value_bytes[f])) {
+			header_value_bad_char = true;
+			break;
+		}
+	}
 	value = (char*)tvb_get_string_enc(pinfo->pool, tvb, value_offset, value_bytes_len, ENC_ASCII);
 	/* The length of the value might change after UTF-8 sanitization */
 	value_len = (int)strlen(value);
@@ -3657,22 +3692,22 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 			if (!hf_id) {
 				if (http_type == MEDIA_CONTAINER_HTTP_REQUEST ||
 					http_type == MEDIA_CONTAINER_HTTP_RESPONSE) {
-					it = proto_tree_add_item(tree,
+					hdr_item = proto_tree_add_item(tree,
 						http_type == MEDIA_CONTAINER_HTTP_RESPONSE ?
 						hf_http_response_line :
 						hf_http_request_line,
 						tvb, offset, len,
 						ENC_NA|ENC_ASCII);
-					proto_item_set_text(it, "%s",
+					proto_item_set_text(hdr_item, "%s",
 							format_text(pinfo->pool, (char*)line, len));
 				} else {
 					char* str = format_text(pinfo->pool, (char*)line, len);
-					proto_tree_add_string_format(tree, hf_http_unknown_header, tvb, offset,
+					hdr_item = proto_tree_add_string_format(tree, hf_http_unknown_header, tvb, offset,
 						len, str, "%s", str);
 				}
 
 			} else {
-				proto_tree_add_string_format(tree,
+				hdr_item = proto_tree_add_string_format(tree,
 					*hf_id, tvb, offset, len, value,
 					"%s", format_text(pinfo->pool, (char*)line, len));
 				if (http_type == MEDIA_CONTAINER_HTTP_REQUEST ||
@@ -3687,6 +3722,9 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 							format_text(pinfo->pool, (char*)line, len));
 					proto_item_set_hidden(it);
 				}
+			}
+			if (header_value_bad_char && hdr_item) {
+				expert_add_info(pinfo, hdr_item, &ei_http_bad_header_value_nul);
 			}
 		}
 	} else {
@@ -3743,6 +3781,10 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 		} else
 			hdr_item = NULL;
 
+		if (header_value_bad_char && hdr_item) {
+			expert_add_info(pinfo, hdr_item, &ei_http_bad_header_value_nul);
+		}
+
 		/*
 		 * Do any special processing that particular headers
 		 * require.
@@ -3764,7 +3806,7 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 			auth->num = pinfo->num;
 			auth->password_hf_id = *headers[hf_index].hf;
 			auth->proto = "HTTP header auth";
-			auth->username = wmem_strdup(pinfo->pool, TAP_CREDENTIALS_PLACEHOLDER);
+			auth->username = wmem_strdup(pinfo->pool, CREDENTIALS_PLACEHOLDER);
 			tap_queue_packet(credentials_tap, pinfo, auth);
 			break;
 
@@ -4026,11 +4068,7 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 				req_trans->abs_time = pinfo->fd->abs_ts;
 				req_trans->request_uri = curr_req_res->request_uri;
 
-				/* XXX - This leaks if matching responses aren't
-				 * found (the data does not, but the list node
-				 * does.) A wmem_list would prevent that.
-				 */
-				conv_data->req_list = g_slist_append(conv_data->req_list, req_trans);
+				wmem_list_append(conv_data->req_list, req_trans);
 				curr_req_res->req_has_range = true;
 			}
 			}
@@ -4059,7 +4097,7 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 				request_trans_t *req_trans;
 				match_trans_t *match_trans = NULL;
 				nstime_t  ns;
-				GSList *iter = NULL;
+				wmem_list_frame_t *frame;
 
 				/* Note SP instead of '=' in ABNF. */
 				const char *pos = strchr(value, ' ');
@@ -4102,12 +4140,13 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 				* handling of such edge cases is more difficult.
 				*/
 				req_trans = NULL;
-				if (conv_data->req_list && conv_data->req_list->data) {
-					for (iter = conv_data->req_list; iter; iter = iter->next) {
-						if (((request_trans_t*)iter->data)->first_range_num == first_crange_num) {
-							req_trans = iter->data;
-							break;
-						}
+				for (frame = wmem_list_head(conv_data->req_list);
+						frame; frame = wmem_list_frame_next(frame)) {
+
+					request_trans_t* frame_req_trans = wmem_list_frame_data(frame);
+					if (frame_req_trans->first_range_num == first_crange_num) {
+						req_trans = frame_req_trans;
+						break;
 					}
 				}
 
@@ -4127,19 +4166,13 @@ process_header(tvbuff_t *tvb, unsigned offset, unsigned next_offset,
 
 					/* Remove and free all of the list entries up to and including the
 					*  matching one from req_list. */
-					if (conv_data->req_list) {
-						GSList *top_of_list = NULL;
+					while ((frame = wmem_list_head(conv_data->req_list))) {
 
-						top_of_list = conv_data->req_list;
-						while (top_of_list && top_of_list->data != req_trans) {
-
-						    top_of_list = g_slist_delete_link(top_of_list, top_of_list);
+						if (wmem_list_frame_data(frame) == req_trans) {
+							wmem_list_remove_frame(conv_data->req_list, frame);
+							break;
 						}
-						if (top_of_list && top_of_list->data == req_trans) {
-
-						    top_of_list = g_slist_delete_link(top_of_list, top_of_list);
-						}
-						conv_data->req_list = top_of_list;
+						wmem_list_remove_frame(conv_data->req_list, frame);
 					}
 				}
 			}
@@ -4503,7 +4536,7 @@ dissect_http_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data
 			copy_address_wmem(wmem_file_scope(), &conv_data->server_addr, &pinfo->dst);
 			conv_data->server_port = pinfo->destport;
 		}
-		http_payload_subdissector(tvb, tree, pinfo, conv_data, data);
+		http_payload_subdissector(tvb, tree, pinfo, conv_data, tcpinfo);
 
 		return tvb_captured_length(tvb);
 	}
@@ -4561,16 +4594,7 @@ static bool
 dissect_http_heur_tls(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
 	unsigned offset = 0, next_offset, linelen;
-	conversation_t  *conversation;
-	http_conv_t	*conv_data;
-
-	conversation = find_or_create_conversation(pinfo);
-	conv_data = (http_conv_t *)conversation_get_proto_data(conversation, proto_http);
-	/* A http conversation was previously started, assume it is still active */
-	if (conv_data) {
-		dissect_http_tls(tvb, pinfo, tree, data);
-		return true;
-	}
+	struct tlsinfo *tlsinfo = (struct tlsinfo *)data;
 
 	/* Check if we have a line terminated by CRLF
 	 * Return the length of the line (not counting the line terminator at
@@ -4589,6 +4613,7 @@ dissect_http_heur_tls(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void 
 		return false;
 	}
 
+	*(tlsinfo->app_handle) = http_tls_handle;
 	dissect_http_tls(tvb, pinfo, tree, data);
 	return true;
 }
@@ -4823,6 +4848,10 @@ proto_register_http(void)
 	      { "Accept", "http.accept",
 		FT_STRING, BASE_NONE, NULL, 0x0,
 		"HTTP Accept", HFILL }},
+	    { &hf_http_accept_query,
+	      { "Accept-Query", "http.accept_query",
+		FT_STRING, BASE_NONE, NULL, 0x0,
+		"HTTP Accept-Query", HFILL }},
 	    { &hf_http_referer,
 	      { "Referer", "http.referer",
 		FT_STRING, BASE_NONE, NULL, 0x0,
@@ -4955,8 +4984,12 @@ proto_register_http(void)
 		{ &ei_http_excess_data, { "http.excess_data", PI_PROTOCOL, PI_WARN, "Excess data after a body (not a new request/response), previous Content-Length bogus?", EXPFILL }},
 		{ &ei_http_leading_crlf, { "http.leading_crlf", PI_MALFORMED, PI_ERROR, "Leading CRLF previous message in the stream may have extra CRLF", EXPFILL }},
 		{ &ei_http_bad_header_name, { "http.bad_header_name", PI_PROTOCOL, PI_WARN, "Illegal characters found in header name", EXPFILL }},
+		{ &ei_http_header_name_trailing_ws, { "http.header_name.trailing_whitespace", PI_PROTOCOL, PI_WARN, "Whitespace before header colon", EXPFILL }},
+		{ &ei_http_bad_header_value_nul, { "http.header_value.invalid_nul_char", PI_PROTOCOL, PI_WARN, "Invalid NUL byte in HTTP header value", EXPFILL }},
 		{ &ei_http_decompression_failed, { "http.decompression_failed", PI_UNDECODED, PI_WARN, "Decompression failed", EXPFILL }},
-		{ &ei_http_decompression_disabled, { "http.decompression_disabled", PI_UNDECODED, PI_CHAT, "Decompression disabled", EXPFILL }}
+		{ &ei_http_decompression_disabled, { "http.decompression_disabled", PI_UNDECODED, PI_CHAT, "Decompression disabled", EXPFILL }},
+		{ &ei_http_response_code_invalid, { "http.response.code.invalid", PI_MALFORMED, PI_WARN, "Invalid HTTP response status code token", EXPFILL }},
+		{ &ei_http_request_uri_invalid, { "http.request.uri.invalid", PI_MALFORMED, PI_ERROR, "Invalid request target", EXPFILL }},
 
 	};
 
@@ -5067,10 +5100,12 @@ proto_register_http(void)
 	    "TCP port for protocols using HTTP", proto_http, FT_UINT16, BASE_DEC);
 
 	/*
-	 * Maps the lowercase Upgrade header value.
-	 * https://tools.ietf.org/html/rfc7230#section-8.6
+	 * Maps the Upgrade header value.
+	 * https://datatracker.ietf.org/doc/html/rfc9110#section-16.7
+	 * "A protocol-name token is case-insensitive and registered with the
+	 * preferred case to be generated by senders."
 	 */
-	upgrade_subdissector_table = register_dissector_table("http.upgrade", "HTTP Upgrade", proto_http, FT_STRING, STRING_CASE_SENSITIVE);
+	upgrade_subdissector_table = register_dissector_table("http.upgrade", "HTTP Upgrade", proto_http, FT_STRING, STRING_CASE_INSENSITIVE);
 
 	/*
 	 * Heuristic dissectors SHOULD register themselves in

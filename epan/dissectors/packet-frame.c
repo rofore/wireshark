@@ -104,6 +104,11 @@ static int hf_frame_cb_pen;
 static int hf_frame_cb_copy_allowed;
 static int hf_frame_comment;
 static int hf_frame_encoding;
+static int hf_frame_cust_opt;
+static int hf_frame_cust_opt_pen;
+static int hf_frame_cust_opt_copy_allowed;
+static int hf_frame_cust_opt_string;
+static int hf_frame_cust_opt_data;
 
 static int ett_frame;
 static int ett_ifname;
@@ -188,6 +193,7 @@ static dissector_table_t wtap_encap_dissector_table;
 static dissector_table_t wtap_fts_rec_dissector_table;
 static dissector_table_t block_pen_dissector_table;
 static dissector_table_t binary_option_pen_dissector_table;
+static dissector_table_t string_option_pen_dissector_table;
 static dissector_table_t packet_block_option_dissector_table;
 
 /* The number of tree items required to add an exception to the tree */
@@ -490,21 +496,43 @@ handle_packet_option(wtap_block_t block _U_, unsigned option_id,
     wtap_opttype_e option_type _U_, wtap_optval_t *optval, void *user_data)
 {
 	struct custom_binary_opt_cb_data *cb_data = (struct custom_binary_opt_cb_data *)user_data;
+	proto_item *ti;
+	proto_tree *opt_tree;
 
 	switch (option_id) {
 
 	case OPT_CUSTOM_STR_COPY:
 	case OPT_CUSTOM_STR_NO_COPY:
 		/* Display it */
+		cb_data->data.optval = optval;
+		if (!dissector_try_uint_with_data(string_option_pen_dissector_table,
+		    optval->custom_stringval.pen, cb_data->tvb,
+		    cb_data->pinfo, cb_data->tree, false, &cb_data->data)) {
+			ti = proto_tree_add_item(cb_data->tree, hf_frame_cust_opt, cb_data->tvb, 0, tvb_reported_length(cb_data->tvb), ENC_NA);
+			opt_tree = proto_item_add_subtree(ti, ett_verdict);
+			proto_tree_add_uint(opt_tree, hf_frame_cust_opt_pen, cb_data->tvb, 0, 0,
+							 optval->custom_stringval.pen);
+			proto_tree_add_boolean(opt_tree, hf_frame_cust_opt_copy_allowed, cb_data->tvb, 0, 0, option_id == OPT_CUSTOM_STR_COPY);
+			proto_tree_add_string(opt_tree, hf_frame_cust_opt_string, cb_data->tvb, 0, 0, optval->custom_stringval.string);
+		}
 		break;
 
 	case OPT_CUSTOM_BIN_COPY:
 	case OPT_CUSTOM_BIN_NO_COPY:
 		/* Process it */
 		cb_data->data.optval = optval;
-		dissector_try_uint_with_data(binary_option_pen_dissector_table,
+		if (!dissector_try_uint_with_data(binary_option_pen_dissector_table,
 		    optval->custom_binaryval.pen, cb_data->tvb,
-		    cb_data->pinfo, cb_data->tree, false, &cb_data->data);
+		    cb_data->pinfo, cb_data->tree, false, &cb_data->data)) {
+
+			ti = proto_tree_add_item(cb_data->tree, hf_frame_cust_opt, cb_data->tvb, 0, tvb_reported_length(cb_data->tvb), ENC_NA);
+			opt_tree = proto_item_add_subtree(ti, ett_verdict);
+			proto_tree_add_uint(opt_tree, hf_frame_cust_opt_pen, cb_data->tvb, 0, 0,
+							 optval->custom_binaryval.pen);
+			proto_tree_add_boolean(opt_tree, hf_frame_cust_opt_copy_allowed, cb_data->tvb, 0, 0, option_id == OPT_CUSTOM_BIN_COPY);
+			proto_tree_add_bytes_with_length(opt_tree, hf_frame_cust_opt_data, cb_data->tvb, 0, 0, optval->custom_binaryval.data.custom_data, (unsigned)optval->custom_binaryval.data.custom_data_len);
+
+		}
 		break;
 
 	default:
@@ -515,6 +543,25 @@ handle_packet_option(wtap_block_t block _U_, unsigned option_id,
 	}
 
 	return true;
+}
+
+static void
+add_color_filter_to_tree(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo,
+                         const color_filter_t *colorf)
+{
+	ensure_tree_item(tree, 1);
+	const char *display_name = colorf->filter_name;
+	if (color_filter_is_session_disabled(colorf->filter_name)) {
+		display_name = wmem_strdup_printf(pinfo->pool, "[PAUSED] %s", colorf->filter_name);
+	}
+	proto_item *item = proto_tree_add_string(tree, hf_frame_color_filter_name, tvb,
+	                                         0, 0, display_name);
+	proto_item_set_generated(item);
+
+	ensure_tree_item(tree, 1);
+	item = proto_tree_add_string(tree, hf_frame_color_filter_text, tvb,
+	                             0, 0, colorf->filter_text);
+	proto_item_set_generated(item);
 }
 
 static int
@@ -959,32 +1006,32 @@ dissect_frame(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 
 	if (pinfo->rec->rec_type == REC_TYPE_PACKET) {
 		if (do_frame_dissection) {
-			/* Check for existences of P2P pseudo header */
+			/* Check for existence of P2P pseudo header */
 			if (pinfo->p2p_dir != P2P_DIR_UNKNOWN) {
 				proto_tree_add_int(fh_tree, hf_frame_p2p_dir, tvb,
 						   0, 0, pinfo->p2p_dir);
 			}
 
-			/* Check for existences of MTP2 link number */
+			/* Check for existence of MTP2 link number */
 			if ((pinfo->pseudo_header != NULL) &&
 			    (pinfo->rec->rec_header.packet_header.pkt_encap == WTAP_ENCAP_MTP2_WITH_PHDR)) {
 				proto_tree_add_uint(fh_tree, hf_frame_link_number, tvb,
 						    0, 0, pinfo->link_number);
 			}
 		}
-
-		/*
-		 * Process custom options.
-		 */
-		struct custom_binary_opt_cb_data cb_data;
-
-		cb_data.pinfo = pinfo;
-		cb_data.tvb = tvb;
-		cb_data.tree = fh_tree;
-		cb_data.data.optval = NULL;
-		wtap_block_foreach_option(fr_data->pkt_block,
-		    handle_packet_option, &cb_data);
 	}
+
+	/*
+	 * Process custom options.
+	 */
+	struct custom_binary_opt_cb_data cb_data;
+
+	cb_data.pinfo = pinfo;
+	cb_data.tvb = tvb;
+	cb_data.tree = fh_tree;
+	cb_data.data.optval = NULL;
+	wtap_block_foreach_option(fr_data->pkt_block,
+	    handle_packet_option, &cb_data);
 
 	/* If there is Darwin data, call the dissector */
 	if (p_get_proto_data(wmem_file_scope(), pinfo, proto_darwin, 0) != NULL) {
@@ -1114,11 +1161,8 @@ dissect_frame(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 				    pinfo->rec->rec_header.custom_block_header.pen,
 				    tvb, pinfo, parent_tree)) {
 					col_set_str(pinfo->cinfo, COL_PROTOCOL, "PCAPNG");
-					proto_tree_add_uint_format_value(fh_tree, hf_frame_cb_pen, tvb, 0, 0,
-					                                 pinfo->rec->rec_header.custom_block_header.pen,
-					                                 "%s (%u)",
-					                                 enterprises_lookup(pinfo->rec->rec_header.custom_block_header.pen, "Unknown"),
-					                                 pinfo->rec->rec_header.custom_block_header.pen);
+					proto_tree_add_uint(fh_tree, hf_frame_cb_pen, tvb, 0, 0,
+					                    pinfo->rec->rec_header.custom_block_header.pen);
 					proto_tree_add_boolean(fh_tree, hf_frame_cb_copy_allowed, tvb, 0, 0, pinfo->rec->rec_header.custom_block_header.copy_allowed);
 					col_add_fstr(pinfo->cinfo, COL_INFO, "Custom Block: PEN = %s (%d), will%s be copied",
 					             enterprises_lookup(pinfo->rec->rec_header.custom_block_header.pen, "Unknown"),
@@ -1255,91 +1299,55 @@ dissect_frame(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
 		pinfo->fd->color_filter = color_filter;
 		pinfo->fd->need_colorize = 0;
 
-		/* Store matches in proto_data for display code below to access.
-		 * free any previously stored list (from a prior dissect pass) first. */
+		/* Always clear any previously stored match list, then store the new
+		 * one (if any).  Clearing unconditionally ensures stale matches do
+		 * not linger when a rule change causes the packet to stop matching. */
+		wmem_list_t *old_matches = (wmem_list_t *)p_get_proto_data(wmem_file_scope(), pinfo, proto_frame, 0);
+		if (old_matches) {
+			wmem_destroy_list(old_matches);
+			p_remove_proto_data(wmem_file_scope(), pinfo, proto_frame, 0);
+		}
 		if (matches) {
-			wmem_list_t *old_matches = (wmem_list_t *)p_get_proto_data(wmem_file_scope(), pinfo, proto_frame, 0);
-			if (old_matches) {
-				wmem_destroy_list(old_matches);
-				p_remove_proto_data(wmem_file_scope(), pinfo, proto_frame, 0);
-			}
 			p_add_proto_data(wmem_file_scope(), pinfo, proto_frame, 0, matches);
 		}
 	} else {
 		color_filter = pinfo->fd->color_filter;
 	}
 
-	bool has_color_info = (color_filter != NULL);
-
-	/* Retrieve all matching filters from proto_data (stored during colorization above).
-	 * This enables multi-color display for both GUI and TShark. */
-	wmem_list_t *matches = NULL;
 	if (fh_tree) {
-		matches = (wmem_list_t *)p_get_proto_data(wmem_file_scope(), pinfo, proto_frame, 0);
-		if (matches && !has_color_info) {
-			/* All filters are paused, but we still want to show them so user can resume */
-			has_color_info = true;
-		}
+		/* Retrieve all matching filters from proto_data (stored during colorization above).
+		 * This enables multi-color display for both GUI and TShark. */
+		wmem_list_t *matches = (wmem_list_t *)p_get_proto_data(wmem_file_scope(), pinfo, proto_frame, 0);
 		/* If proto_data was cleared (e.g., after rescan_packets() without color priming)
 		 * but we have a known primary color filter, re-run colorization now. The full
 		 * protocol tree has already been built by sub-dissectors above, so dfilter
 		 * evaluation works correctly without prior priming. */
-		if (!matches && has_color_info && prefs.gui_packet_list_multi_color_details) {
+		if (!matches && color_filter != NULL && prefs.gui_packet_list_multi_color_details) {
 			color_filters_colorize_packet_all(fr_data->color_edt, wmem_file_scope(), &matches);
 			if (matches) {
 				p_add_proto_data(wmem_file_scope(), pinfo, proto_frame, 0, matches);
 			}
 		}
-	}
 
-	if (has_color_info && fh_tree) {
 		/* Show all matching color filters if packet details multi-color is enabled.
 		 * This is controlled independently from packet list and scrollbar display. */
 		if (matches && prefs.gui_packet_list_multi_color_details) {
-				/* Show all matching color filters from stored list */
-				for (wmem_list_frame_t *lf = wmem_list_head(matches); lf != NULL; lf = wmem_list_frame_next(lf)) {
-					const color_filter_t *colorf = (const color_filter_t *)wmem_list_frame_data(lf);
-					/* Skip conversation color filters (temporary filters) */
-					if (strncmp(colorf->filter_name, CONVERSATION_COLOR_PREFIX,
-						    strlen(CONVERSATION_COLOR_PREFIX)) == 0) {
-						continue;
-					}
-
-					ensure_tree_item(fh_tree, 1);
-					/* Add [PAUSED] prefix if filter is session disabled */
-					const char *display_name = colorf->filter_name;
-					if (color_filter_is_session_disabled(colorf->filter_name)) {
-						display_name = wmem_strdup_printf(pinfo->pool, "[PAUSED] %s", colorf->filter_name);
-					}
-					item = proto_tree_add_string(fh_tree, hf_frame_color_filter_name, tvb,
-								     0, 0, display_name);
-					proto_item_set_generated(item);
-
-					ensure_tree_item(fh_tree, 1);
-					item = proto_tree_add_string(fh_tree, hf_frame_color_filter_text, tvb,
-								     0, 0, colorf->filter_text);
-					proto_item_set_generated(item);
-				}
-			} else {
-				/* Fallback to single filter if no stored matches */
+			/* Show all matching color filters from stored list */
+			for (wmem_list_frame_t *lf = wmem_list_head(matches); lf != NULL; lf = wmem_list_frame_next(lf)) {
+				const color_filter_t *colorf = (const color_filter_t *)wmem_list_frame_data(lf);
 				/* Skip conversation color filters (temporary filters) */
-				if (strncmp(color_filter->filter_name, CONVERSATION_COLOR_PREFIX,
-					    strlen(CONVERSATION_COLOR_PREFIX)) != 0) {
-					ensure_tree_item(fh_tree, 1);
-					/* Add [PAUSED] prefix if filter is session disabled */
-					const char *display_name = color_filter->filter_name;
-					if (color_filter_is_session_disabled(color_filter->filter_name)) {
-						display_name = wmem_strdup_printf(pinfo->pool, "[PAUSED] %s", color_filter->filter_name);
-					}
-					item = proto_tree_add_string(fh_tree, hf_frame_color_filter_name, tvb,
-								     0, 0, display_name);
-					proto_item_set_generated(item);
-					ensure_tree_item(fh_tree, 1);
-					item = proto_tree_add_string(fh_tree, hf_frame_color_filter_text, tvb,
-								     0, 0, color_filter->filter_text);
-					proto_item_set_generated(item);
+				if (strncmp(colorf->filter_name, CONVERSATION_COLOR_PREFIX, strlen(CONVERSATION_COLOR_PREFIX)) == 0) {
+					continue;
 				}
+				add_color_filter_to_tree(fh_tree, tvb, pinfo, colorf);
 			}
+		} else if (color_filter != NULL) {
+			/* Fallback to single filter if no stored matches */
+			/* Skip conversation color filters (temporary filters) */
+			if (strncmp(color_filter->filter_name, CONVERSATION_COLOR_PREFIX, strlen(CONVERSATION_COLOR_PREFIX)) != 0) {
+				add_color_filter_to_tree(fh_tree, tvb, pinfo, color_filter);
+			}
+		}
 	}
 
 	tap_queue_packet(frame_tap, pinfo, NULL);
@@ -1634,7 +1642,7 @@ static void common_register_frame(bool use_packets)
 
 		{ &hf_frame_cb_pen,
 		  { "Private Enterprise Number", "frame.cb_pen",
-		    FT_UINT32, BASE_DEC, NULL, 0x0,
+		    FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
 		    "IANA assigned private enterprise number (PEN)", HFILL }},
 
 		{ &hf_frame_cb_copy_allowed,
@@ -1647,6 +1655,30 @@ static void common_register_frame(bool use_packets)
 		    FT_UINT32, BASE_DEC, VALS(packet_char_enc_types), 0x0,
 		    "Character encoding (ASCII, EBCDIC...)", HFILL }},
 
+		{ &hf_frame_cust_opt,
+		  { "Custom Option", "frame.custom_opt",
+		    FT_NONE, BASE_NONE, NULL, 0x0,
+		    NULL, HFILL }},
+
+		{ &hf_frame_cust_opt_pen,
+		  { "Private Enterprise Number", "frame.custom_opt.pen",
+		    FT_UINT32, BASE_ENTERPRISES, STRINGS_ENTERPRISES, 0x0,
+		    "IANA assigned private enterprise number (PEN)", HFILL }},
+
+		{ &hf_frame_cust_opt_copy_allowed,
+		  { "Copying", "frame.custom_opt.copy",
+		    FT_BOOLEAN, BASE_NONE, TFS(&tfs_allowed_not_allowed), 0x0,
+		    "Whether the custom option will be written or not", HFILL }},
+
+		{ &hf_frame_cust_opt_string,
+		  { "String data", "frame.custom_opt.string",
+		    FT_STRING, BASE_NONE, NULL, 0x0,
+		    NULL, HFILL }},
+
+		{ &hf_frame_cust_opt_data,
+		  { "Binary data", "frame.custom_opt.binary",
+		    FT_BYTES, BASE_NONE, NULL, 0x0,
+		    NULL, HFILL }},
 	};
 
 	static hf_register_info hf_encap =
@@ -1714,6 +1746,8 @@ static void common_register_frame(bool use_packets)
 	    "PcapNG custom block PEN", proto_frame, FT_UINT32, BASE_DEC);
 	binary_option_pen_dissector_table = register_dissector_table("pcapng_custom_binary_option",
 	    "PcapNG custom binary option PEN", proto_frame, FT_UINT32, BASE_DEC);
+	string_option_pen_dissector_table = register_dissector_table("pcapng_custom_string_option",
+	    "PcapNG custom string option PEN", proto_frame, FT_UINT32, BASE_DEC);
 	packet_block_option_dissector_table = register_dissector_table("pcapng_packet_block_option",
 	    "PcapNG packet block option", proto_frame, FT_UINT32, BASE_DEC);
 	register_capture_dissector_table("wtap_encap", "Wiretap encapsulation type");

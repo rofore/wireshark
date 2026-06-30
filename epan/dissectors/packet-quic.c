@@ -514,8 +514,8 @@ quic_multipath_negotiated(quic_info_data_t *conn);
 
 /* Returns the QUIC draft version or 0 if not applicable. */
 static inline uint8_t quic_draft_version(uint32_t version) {
-    /* IETF Draft versions */
-    if ((version >> 8) == 0xff0000) {
+    /* IETF Draft versions (draft-34 is the final draft version) */
+    if ((version ^ 0xff000000) <= 34) {
        return (uint8_t) version;
     }
     /* Facebook mvfst, based on draft -22. */
@@ -1098,7 +1098,7 @@ quic_connection_equal(const void *a, const void *b)
     return cid1->len == cid2->len && !memcmp(cid1->cid, cid2->cid, cid1->len);
 }
 
-static gboolean
+static bool
 quic_cids_has_match(const quic_cid_item_t *items, quic_cid_t *raw_cid)
 {
     while (items) {
@@ -4605,7 +4605,7 @@ dissect_quic_long_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *quic_tre
         }
         if (!error) {
             uint32_t pkn32 = 0;
-            int hp_cipher_algo = long_packet_type != QUIC_LPT_INITIAL && conn ? conn->cipher_algo : GCRY_CIPHER_AES128;
+            int hp_cipher_algo = long_packet_type != QUIC_LPT_INITIAL ? conn->cipher_algo : GCRY_CIPHER_AES128;
             // PKN is after type(1) + version(4) + DCIL+DCID + SCIL+SCID
             unsigned pn_offset = 1 + 4 + 1 + dcid.len + 1 + scid.len;
             if (long_packet_type == QUIC_LPT_INITIAL) {
@@ -5336,7 +5336,7 @@ static bool dissect_quic_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
      * Supported Version (multiple of 4 bytes.)
      */
     conversation_t *conversation = NULL;
-    int offset = 0;
+    unsigned offset = 0;
     uint8_t flags, dcid, scid;
     uint32_t version;
     bool is_quic = false;
@@ -5369,7 +5369,7 @@ static bool dissect_quic_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
         return false;
     }
     offset += 1 + dcid;
-    if (offset >= (int)tvb_captured_length(tvb)) {
+    if (offset >= tvb_captured_length(tvb)) {
         return false;
     }
     scid = tvb_get_uint8(tvb, offset);

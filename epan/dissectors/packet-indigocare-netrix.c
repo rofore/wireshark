@@ -182,7 +182,7 @@ dissect_netrix(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_, void *da
 
 	/* Read header */
 	tvb_find_uint8_remaining(tvb, current_offset, INDIGOCARE_NETRIX_STX, &header_offset);
-	if(!ws_strtoi32((char*)tvb_get_string_enc(pinfo->pool, tvb, current_offset, header_offset - current_offset, ENC_ASCII|ENC_NA), NULL, &header)) {
+	if(!tvb_get_string_int(tvb, current_offset, header_offset - current_offset, ENC_STR_DEC, &header, NULL)) {
 		/* Warn about invalid header? */
 		return 0;
 	}
@@ -251,7 +251,7 @@ dissect_netrix(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_, void *da
 	while (tvb_get_uint8(tvb, current_offset) != INDIGOCARE_NETRIX_ETX) {
 		identifier_start = current_offset;
 		tvb_find_uint8_remaining(tvb, current_offset, INDIGOCARE_NETRIX_US, &identifier_offset);
-		ws_strtoi32((char*)tvb_get_string_enc(pinfo->pool, tvb, current_offset, identifier_offset - current_offset, ENC_ASCII|ENC_NA), NULL, &record_identifier);
+		tvb_get_string_int(tvb, current_offset, identifier_offset - current_offset, ENC_STR_DEC, &record_identifier, NULL);
 		current_offset = identifier_offset + 1;
 
 		data_start = current_offset;
@@ -461,7 +461,7 @@ proto_register_netrix(void)
 		NULL, HFILL }
 	},
 	{ &hf_netrix_header_search_conversiontables_none_type,
-		{ "Search converstiontables: no results", "netrix.searchconversiontables.noresult",
+		{ "Search conversiontables: no results", "netrix.searchconversiontables.noresult",
 		FT_NONE, BASE_NONE,
 		NULL, 0x0,
 		NULL, HFILL }

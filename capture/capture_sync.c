@@ -35,6 +35,8 @@
 #include <glib-unix.h>
 #endif
 
+#include <app/application_flavor.h>
+
 #ifdef HAVE_SYS_WAIT_H
 # include <sys/wait.h>
 #endif
@@ -76,8 +78,7 @@
 
 #include "ui/capture.h"
 #include <capture/capture_sync.h>
-
-#include "sync_pipe.h"
+#include <capture/sync_pipe.h>
 
 #ifdef _WIN32
 #include "capture/capture-wpcap.h"
@@ -110,7 +111,7 @@ static const char *sync_pipe_signame(int);
  */
 #define PIPE_BUF_SIZE (SP_MAX_MSG_LEN+4)
 
-static gboolean sync_pipe_input_cb(GIOChannel *pipe_io, capture_session *cap_session);
+static bool sync_pipe_input_cb(GIOChannel *pipe_io, capture_session *cap_session);
 static int sync_pipe_wait_for_child(ws_process_id fork_child, char **msgp);
 static void pipe_convert_header(const unsigned char *header, char *indicator, unsigned *block_len);
 static ssize_t pipe_read_block(GIOChannel *pipe_io, char *indicator, unsigned len, char *msg,
@@ -240,7 +241,7 @@ sync_pipe_handle_log_msg(const char *buffer) {
 
 /* Initialize an argument list and add dumpcap to it. */
 static char **
-init_pipe_args(const char* app_name, int *argc) {
+init_pipe_args(int *argc) {
     char *exename;
     char **argv;
 
@@ -272,7 +273,7 @@ init_pipe_args(const char* app_name, int *argc) {
     }
 
     argv = sync_pipe_add_arg(argv, argc, "--application-flavor");
-    argv = sync_pipe_add_arg(argv, argc, app_name);
+    argv = sync_pipe_add_arg(argv, argc, application_flavor_name_lower());
 
     /* sync_pipe_add_arg strdupes exename, so we should free our copy */
     g_free(exename);
@@ -702,7 +703,7 @@ sync_pipe_start(capture_options *capture_opts, GPtrArray *capture_comments,
         return false;
     }
 
-    argv = init_pipe_args(capture_opts->app_name, &argc);
+    argv = init_pipe_args(&argc);
     if (!argv) {
         /* We don't know where to find dumpcap. */
         report_failure("We don't know where to find dumpcap.");
@@ -1329,7 +1330,7 @@ sync_pipe_run_command(char **argv, char **data, char **primary_msg,
 
 
 int
-sync_interface_set_80211_chan(const char* app_name, const char *iface, const char *freq, const char *type,
+sync_interface_set_80211_chan(const char *iface, const char *freq, const char *type,
                               const char *center_freq1, const char *center_freq2,
                               char **data, char **primary_msg,
                               char **secondary_msg, void (*update_cb)(void))
@@ -1338,7 +1339,7 @@ sync_interface_set_80211_chan(const char* app_name, const char *iface, const cha
     char **argv;
     char *opt;
 
-    argv = init_pipe_args(app_name, &argc);
+    argv = init_pipe_args(&argc);
 
     if (!argv) {
         *primary_msg = g_strdup("We don't know where to find dumpcap.");
@@ -1380,7 +1381,7 @@ sync_interface_set_80211_chan(const char* app_name, const char *iface, const cha
  * must be freed with g_free().
  */
 int
-sync_if_bpf_filter_open(const char* app_name, const char *ifname, const char* filter, int linktype,
+sync_if_bpf_filter_open(const char *ifname, const char* filter, int linktype,
                         bool optimize, char **data, char **primary_msg,
                         char **secondary_msg, void (*update_cb)(void))
 {
@@ -1400,7 +1401,7 @@ sync_if_bpf_filter_open(const char* app_name, const char *ifname, const char* fi
         }
     }
 
-    argv = init_pipe_args(app_name, &argc);
+    argv = init_pipe_args(&argc);
 
     if (!argv) {
         *primary_msg = g_strdup("We don't know where to find dumpcap.");
@@ -1442,7 +1443,7 @@ sync_if_bpf_filter_open(const char* app_name, const char *ifname, const char* fi
  * must be freed with g_free().
  */
 int
-sync_interface_list_open(const char* app_name, char **data, char **primary_msg,
+sync_interface_list_open(char **data, char **primary_msg,
                          char **secondary_msg, void (*update_cb)(void))
 {
     int argc;
@@ -1451,7 +1452,7 @@ sync_interface_list_open(const char* app_name, char **data, char **primary_msg,
 
     ws_debug("sync_interface_list_open");
 
-    argv = init_pipe_args(app_name, &argc);
+    argv = init_pipe_args(&argc);
 
     if (!argv) {
         *primary_msg = g_strdup("We don't know where to find dumpcap..");
@@ -1480,7 +1481,7 @@ sync_interface_list_open(const char* app_name, char **data, char **primary_msg,
  * must be freed with g_free().
  */
 int
-sync_if_capabilities_open(const char* app_name, const char *ifname, bool monitor_mode, const char* auth,
+sync_if_capabilities_open(const char *ifname, bool monitor_mode, const char* auth,
                           char **data, char **primary_msg,
                           char **secondary_msg, void (*update_cb)(void))
 {
@@ -1490,7 +1491,7 @@ sync_if_capabilities_open(const char* app_name, const char *ifname, bool monitor
 
     ws_debug("sync_if_capabilities_open");
 
-    argv = init_pipe_args(app_name, &argc);
+    argv = init_pipe_args(&argc);
 
     if (!argv) {
         *primary_msg = g_strdup("We don't know where to find dumpcap.");
@@ -1516,9 +1517,9 @@ sync_if_capabilities_open(const char* app_name, const char *ifname, bool monitor
 }
 
 int
-sync_if_list_capabilities_open(const char* app_name, GList *if_queries,
-                          char **data, char **primary_msg,
-                          char **secondary_msg, void (*update_cb)(void))
+sync_if_list_capabilities_open(GList *if_queries, char **data,
+                          char **primary_msg, char **secondary_msg,
+                          void (*update_cb)(void))
 {
     int argc;
     char **argv;
@@ -1527,7 +1528,7 @@ sync_if_list_capabilities_open(const char* app_name, GList *if_queries,
 
     ws_debug("sync_if_list_capabilities_open");
 
-    argv = init_pipe_args(app_name, &argc);
+    argv = init_pipe_args(&argc);
 
     if (!argv) {
         *primary_msg = g_strdup("We don't know where to find dumpcap.");
@@ -1568,7 +1569,7 @@ sync_if_list_capabilities_open(const char* app_name, GList *if_queries,
  * serialization of the list of local interfaces and their capabilities.
  */
 int
-sync_interface_stats_open(const char* app_name, int *data_read_fd, ws_process_id *fork_child, char **data, char **msg, void (*update_cb)(void))
+sync_interface_stats_open(int *data_read_fd, ws_process_id *fork_child, char **data, char **msg, void (*update_cb)(void))
 {
     int argc;
     char **argv;
@@ -1587,7 +1588,7 @@ sync_interface_stats_open(const char* app_name, int *data_read_fd, ws_process_id
 
     ws_debug("sync_interface_stats_open");
 
-    argv = init_pipe_args(app_name, &argc);
+    argv = init_pipe_args(&argc);
 
     if (!argv) {
         *msg = g_strdup("We don't know where to find dumpcap.");
@@ -1813,10 +1814,17 @@ pipe_read_bytes(GIOChannel *pipe_io, char *bytes, size_t required, char **msg)
     size_t newly;
     size_t offset = 0;
 
-    /* This should never happen, as "required" should be no greater than 2^24. */
+    /*
+     * This should never happen, as "required" should be no greater than 2^24.
+     *
+     * XXX - 64-bit Haiku defines ssize_t as an signed long int but defines
+     * SSIZE_MAX as a signed long long int; they're the same width, but
+     * gcc warns of a type mismatch between %zd and signed long long int.
+     * We cast SSIZE_MAX to (ssize_t) to squelch the warning.
+     */
     if (required > SSIZE_MAX) {
-        ws_debug("read from pipe %p: bytes to read %zu > %zu", pipe_io, required, SSIZE_MAX);
-        *msg = ws_strdup_printf("Error reading from sync pipe: bytes to read %zu > %zu", required, SSIZE_MAX);
+        ws_debug("read from pipe %p: bytes to read %zu > %zd", pipe_io, required, (ssize_t)SSIZE_MAX);
+        *msg = ws_strdup_printf("Error reading from sync pipe: bytes to read %zu > %zd", required, (ssize_t)SSIZE_MAX);
         return -1;
     }
     while(required) {
@@ -2000,7 +2008,7 @@ pipe_read_block(GIOChannel *pipe_io, char *indicator, unsigned len, char *msg,
 /* There's stuff to read from the sync pipe, meaning the child has sent
    us a message, or the sync pipe has closed, meaning the child has
    closed it (perhaps because it exited). */
-static gboolean
+static bool
 sync_pipe_input_cb(GIOChannel *pipe_io, capture_session *cap_session)
 {
     int  ret;
@@ -2293,7 +2301,7 @@ static const char *
 sync_pipe_signame(int sig)
 {
     const char *sigmsg;
-    static char sigmsg_buf[6+1+3+1];
+    static WS_THREAD_LOCAL char sigmsg_buf[6+1+1+10+1];
 
     switch (sig) {
 

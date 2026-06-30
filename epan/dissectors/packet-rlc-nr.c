@@ -44,12 +44,14 @@ void proto_reg_handoff_rlc_nr(void);
 /* By default do call PDCP/RRC dissectors for SDU data */
 static bool global_rlc_nr_call_pdcp_for_srb = true;
 
-enum pdcp_for_drb { PDCP_drb_off, PDCP_drb_SN_12, PDCP_drb_SN_18, PDCP_drb_SN_signalled};
+enum pdcp_for_drb { PDCP_drb_off, PDCP_drb_SN_12, PDCP_drb_SN_18, PDCP_drb_SN_signalled, PDCP_drb_SN_12_with_SDAP, PDCP_drb_SN_18_with_SDAP };
 static const enum_val_t pdcp_drb_col_vals[] = {
-    {"pdcp-drb-off",           "Off",                 PDCP_drb_off},
-    {"pdcp-drb-sn-12",         "12-bit SN",           PDCP_drb_SN_12},
-    {"pdcp-drb-sn-18",         "18-bit SN",           PDCP_drb_SN_18},
-    {"pdcp-drb-sn-signalling", "Use signalled value", PDCP_drb_SN_signalled},
+    {"pdcp-drb-off",             "Off",                 PDCP_drb_off},
+    {"pdcp-drb-sn-12",           "12-bit SN",           PDCP_drb_SN_12},
+    {"pdcp-drb-sn-18",           "18-bit SN",           PDCP_drb_SN_18},
+    {"pdcp-drb-sn-signalling",   "Use signalled value", PDCP_drb_SN_signalled},
+    {"pdcp-drb-sn-12-with-sdap", "12-bit SN with SDAP", PDCP_drb_SN_12_with_SDAP},
+    {"pdcp-drb-sn-18-with-sdap", "18-bit SN with SDAP", PDCP_drb_SN_18_with_SDAP},
     {NULL, NULL, -1}
 };
 /* Separate config for UL/DL */
@@ -79,10 +81,10 @@ static wmem_tree_t *reassembly_start_table_stored;
 
 /**************************************************/
 /* Initialize the protocol and registered fields. */
-int proto_rlc_nr;
+static int proto_rlc_nr;
 
-extern int proto_mac_nr;
-extern int proto_pdcp_nr;
+static int proto_mac_nr;
+static int proto_pdcp_nr;
 
 static dissector_handle_t pdcp_nr_handle;
 static dissector_handle_t nr_rrc_bcch_bch;
@@ -455,6 +457,15 @@ static void show_PDU_in_tree(packet_info *pinfo, proto_tree *tree, tvbuff_t *tvb
                         case PDCP_drb_SN_18:
                             p_pdcp_nr_info->seqnum_length = 18;
                             break;
+                        case PDCP_drb_SN_12_with_SDAP:
+                            p_pdcp_nr_info->seqnum_length = 12;
+                            p_pdcp_nr_info->sdap_header = PDCP_NR_UL_SDAP_HEADER_PRESENT;
+                            break;
+                        case PDCP_drb_SN_18_with_SDAP:
+                            p_pdcp_nr_info->seqnum_length = 18;
+                            p_pdcp_nr_info->sdap_header = PDCP_NR_UL_SDAP_HEADER_PRESENT;
+                            break;
+
                         case PDCP_drb_SN_signalled:
                             /* Use whatever was signalled (i.e. in RRC) */
                             id = (rlc_info->bearerId << 16) | rlc_info->ueid;
@@ -1917,6 +1928,9 @@ void proto_reg_handoff_rlc_nr(void)
     nr_rrc_ul_ccch = find_dissector_add_dependency("nr-rrc.ul.ccch", proto_rlc_nr);
     nr_rrc_ul_ccch1 = find_dissector_add_dependency("nr-rrc.ul.ccch1", proto_rlc_nr);
     nr_rrc_dl_ccch = find_dissector_add_dependency("nr-rrc.dl.ccch", proto_rlc_nr);
+
+    proto_mac_nr = proto_get_id_by_filter_name("mac-nr");
+    proto_pdcp_nr = proto_get_id_by_filter_name("pdcp-nr");
 }
 
 /*

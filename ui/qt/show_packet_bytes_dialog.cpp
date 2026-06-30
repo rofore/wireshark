@@ -12,6 +12,7 @@
 
 #include "main_window.h"
 #include "main_application.h"
+#include <ui/qt/utils/font_manager.h>
 #include "ui/qt/widgets/wireshark_file_dialog.h"
 #include "ui/recent.h"
 
@@ -692,7 +693,6 @@ void ShowPacketBytesDialog::updatePacketBytes(void)
     static const char hexchars[16] = {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
 
     ui->tePacketBytes->clear();
-    ui->tePacketBytes->setCurrentFont(mainApp->monospaceFont());
 
     switch (recent.gui_show_bytes_show) {
 
@@ -923,6 +923,15 @@ DIAG_ON(stringop-overread)
         ui->tePacketBytes->setPlainText(field_bytes_.toHex());
         break;
     }
+}
+
+ShowPacketBytesTextEdit::ShowPacketBytesTextEdit(QWidget *parent) :
+    QTextEdit(parent),
+    show_selected_enabled_(true),
+    menus_enabled_(true)
+{
+    /* Should this pass true to use the current zoom level? */
+    setFont(FontManager::monospaceFont());
 }
 
 void ShowPacketBytesTextEdit::contextMenuEvent(QContextMenuEvent *event)

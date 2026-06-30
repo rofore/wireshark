@@ -766,7 +766,7 @@ diplay_timestamp_field(proto_tree *tree, tvbuff_t *tvb, int offset, int hf_field
 static int
 dissect_sick_cola_read(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, bool binary _U_)
 {
-	int offset = 0;
+	unsigned offset = 0;
 	const uint8_t* read_name;
 
 	proto_tree_add_item_ret_string(tree, hf_sick_cola_read_name, tvb, offset, -1, ENC_NA | ENC_ASCII, pinfo->pool, &read_name);
@@ -1285,7 +1285,7 @@ dissect_sick_cola_event(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, boo
 }
 
 static int
-dissect_binary_scan_data(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, int offset)
+dissect_binary_scan_data(proto_tree *tree, packet_info *pinfo _U_, tvbuff_t *tvb, int offset)
 {
 	proto_tree *device_tree, *status_info_tree, *frequency_tree, *output_channel16_tree, *output_channel8_tree,
 				*data_tree, *channel_tree, *position_tree, *time_tree, *event_tree;
@@ -1313,10 +1313,10 @@ dissect_binary_scan_data(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, in
 	offset += 2;
 	proto_tree_add_item(status_info_tree, hf_sick_cola_scan_data_do_status, tvb, offset, 2, ENC_BIG_ENDIAN);
 	offset += 2;
-	uint16_t layer_angle;
-	if (ws_hexstrtou16((char*)tvb_get_string_enc(pinfo->pool, tvb, offset, 4, ENC_ASCII), NULL, &layer_angle))
+	int16_t layer_angle;
+	if (tvb_get_string_int16(tvb, offset, 4, ENC_STR_HEX, &layer_angle, NULL))
 	{
-		proto_tree_add_int(status_info_tree, hf_sick_cola_scan_data_layer_angle, tvb, offset, 2, (int16_t)layer_angle);
+		proto_tree_add_int(status_info_tree, hf_sick_cola_scan_data_layer_angle, tvb, offset, 2, layer_angle);
 	}
 	else
 	{
@@ -1980,7 +1980,7 @@ dissect_sick_cola_answer_sra(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb
 static int
 dissect_sick_cola_answer_swa(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, bool binary _U_)
 {
-	int offset = 0;
+	unsigned offset = 0;
 	const uint8_t* answer_name;
 
 	proto_tree_add_item_ret_string(tree, hf_sick_cola_answer_name, tvb, offset, -1, ENC_NA | ENC_ASCII, pinfo->pool, &answer_name);
@@ -2222,7 +2222,7 @@ dissect_sick_cola_answer_ssn(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb
 static int
 dissect_sick_cola_answer_sfa(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb, bool binary)
 {
-	int offset = 0;
+	unsigned offset = 0;
 
 	if (binary)
 	{

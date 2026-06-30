@@ -28,6 +28,7 @@
 #include <ui/qt/utils/color_utils.h>
 #include <ui/qt/capture_file.h>
 #include <ui/qt/widgets/clickable_label.h>
+#include <ui/recent.h>
 
 #include <QAction>
 #include <QActionGroup>
@@ -116,6 +117,11 @@ MainStatusBar::MainStatusBar(QWidget *parent) :
             "  margin: 0px;"
             "}";
 
+    QString label_ss =
+            "QLabel {"
+            "  margin-left: 0.5em;"
+            "}";
+
     expert_button_ = new QToolButton(this);
     expert_button_->setIconSize(QSize(icon_size, icon_size));
     expert_button_->setStyleSheet(button_ss);
@@ -151,8 +157,10 @@ MainStatusBar::MainStatusBar(QWidget *parent) :
     info_progress_hb->addWidget(&progress_frame_);
     info_progress_hb->addStretch(10);
 
+    // LabelStack does setStyleSheet for QLabel but ClickableLabel does not
     packet_status_.setAccessibleName(tr("Packet statistics"));
     packet_status_.setAccessibleDescription(tr("Shows the number of captured, displayed, and selected packets."));
+    profile_status_.setStyleSheet(label_ss);
     profile_status_.setAccessibleName(tr("Configuration profile"));
     profile_status_.setAccessibleDescription(tr("Displays the current configuration profile and allows switching between profiles."));
 
@@ -176,8 +184,8 @@ MainStatusBar::MainStatusBar(QWidget *parent) :
     progress_frame_.enableTaskbarUpdates(true);
 #endif
 
-    connect(mainApp, &MainApplication::appInitialized, splitter, &QSplitter::show);
-    connect(mainApp, &MainApplication::appInitialized, this, &MainStatusBar::appInitialized);
+    mainApp->whenInitialized(splitter, [splitter]() { splitter->show(); });
+    mainApp->whenInitialized(this, [this]() { appInitialized(); });
     connect(&info_status_, &LabelStack::toggleTemporaryFlash, this, &MainStatusBar::toggleBackground);
     connect(mainApp, &MainApplication::profileNameChanged, this, &MainStatusBar::setProfileName);
     connect(&profile_status_, &ClickableLabel::clickedAt, this, &MainStatusBar::showProfileMenu);
@@ -198,6 +206,9 @@ void MainStatusBar::showExpert() {
 void MainStatusBar::captureFileClosing() {
     expert_button_->hide();
     progress_frame_.captureFileClosing();
+    find_in_packet_prefix_.clear();
+    find_in_packet_message_.clear();
+    field_status_base_.clear();
     popGenericStatus(STATUS_CTX_FIELD);
 }
 
@@ -280,12 +291,42 @@ void MainStatusBar::setStatusbarForCaptureFile()
     }
 }
 
+void MainStatusBar::setFindInPacketStatus(const QString &prefix, const QString &message)
+{
+    find_in_packet_prefix_ = prefix;
+    find_in_packet_message_ = message;
+    refreshFieldStatus();
+}
+
+void MainStatusBar::refreshFieldStatus()
+{
+    QString display;
+    if (!find_in_packet_prefix_.isEmpty()) {
+        display = find_in_packet_prefix_;
+        if (!find_in_packet_message_.isEmpty()) {
+            display += QLatin1Char(' ') + find_in_packet_message_;
+        }
+    } else if (!find_in_packet_message_.isEmpty()) {
+        display = find_in_packet_message_;
+    }
+
+    if (!field_status_base_.isEmpty() && find_in_packet_message_.isEmpty()) {
+        if (display.isEmpty()) {
+            display = field_status_base_;
+        } else {
+            display += QLatin1Char(' ') + field_status_base_;
+        }
+    }
+    pushGenericStatus(STATUS_CTX_FIELD, display);
+}
+
 void MainStatusBar::selectedFieldChanged(FieldInformation * finfo)
 {
     QString item_info;
 
     if (! finfo) {
-        pushGenericStatus(STATUS_CTX_FIELD, item_info);
+        field_status_base_.clear();
+        refreshFieldStatus();
         return;
     }
 
@@ -316,7 +357,8 @@ void MainStatusBar::selectedFieldChanged(FieldInformation * finfo)
         }
     }
 
-    pushGenericStatus(STATUS_CTX_FIELD, item_info);
+    field_status_base_ = item_info;
+    refreshFieldStatus();
 }
 
 void MainStatusBar::highlightedFieldChanged(FieldInformation * finfo)
@@ -410,6 +452,11 @@ void MainStatusBar::showCaptureStatistics()
                                        .arg(UTF8_MIDDLE_DOT)
                                        .arg(cap_file_->displayed_count)
                                        .arg((100.0*cap_file_->displayed_count)/cs_count_, 0, 'f', 1));
+            }
+            if (recent.aggregation_view) {
+                packets_str.append(tr(" %1 Aggregated: %2")
+                    .arg(UTF8_MIDDLE_DOT)
+                    .arg(cap_file_->aggregation_count));
             }
             if (rows.count() > 1) {
                 packets_str.append(tr(" %1 Selected: %2 (%3%)")
@@ -510,7 +557,11 @@ void MainStatusBar::updateCaptureFixedStatistics(capture_session *cap_session)
 
 void MainStatusBar::showProfileMenu(const QPoint &global_pos, Qt::MouseButton button)
 {
+    //Use the model object to pull the profile information
     ProfileModel model;
+    ProfileSortModel sortModel;
+    sortModel.setSourceModel(&model);
+    sortModel.sort(0, Qt::DescendingOrder);
 
     QMenu * ctx_menu_;
     QMenu * profile_menu;
@@ -526,28 +577,35 @@ void MainStatusBar::showProfileMenu(const QPoint &global_pos, Qt::MouseButton bu
     QActionGroup * global = new QActionGroup(profile_menu);
     QActionGroup * user = new QActionGroup(profile_menu);
 
-    for (int cnt = 0; cnt < model.rowCount(); cnt++)
+    const ProfileItem* currentProfile = model.getCurrentProfile();
+
+    //Use the raw profile information from the model
+    //(for performance and simpler looking code)
+    for (int i = 0; i < sortModel.rowCount(); ++i)
     {
-        QModelIndex idx = model.index(cnt, ProfileModel::COL_NAME);
-        if (! idx.isValid())
-            continue;
-
-
         QAction * pa = Q_NULLPTR;
-        QString name = idx.data().toString();
+
+        //Go through the proxy model to get the profile information in the right order
+        QModelIndex proxyIndex = sortModel.index(i, 0);
+        QModelIndex sourceIndex = sortModel.mapToSource(proxyIndex);
+        const ProfileItem* profile = model.getProfile(sourceIndex.row());
+        if (profile == Q_NULLPTR)
+            continue;   //Pacify the static analyzer, but this should never happen.
+
+        QString name = profile->getName();
 
         // An ampersand in the menu item's text sets Alt+F as a shortcut for this menu.
         // Use "&&" to get a real ampersand in the menu bar.
         name.replace('&', "&&");
 
-        if (idx.data(ProfileModel::DATA_IS_DEFAULT).toBool())
+        if (profile->isDefault())
         {
             pa = profile_menu->addAction(name);
         }
-        else if (idx.data(ProfileModel::DATA_IS_GLOBAL).toBool())
+        else if (profile->isGlobal())
         {
             /* Check if this profile does not exist as user */
-            if (cnt == model.findByName(name))
+            if (model.getPersonalProfile(profile->getName()) == Q_NULLPTR)
                 pa = global->addAction(name);
         }
         else
@@ -556,13 +614,22 @@ void MainStatusBar::showProfileMenu(const QPoint &global_pos, Qt::MouseButton bu
         if (! pa)
             continue;
 
+        QFont profileFont;
         pa->setCheckable(true);
-        if (idx.data(ProfileModel::DATA_IS_SELECTED).toBool())
+        if ((currentProfile != Q_NULLPTR) &&
+            (profile->getName().compare(currentProfile->getName()) == 0) &&
+            profile->isGlobal() == currentProfile->isGlobal())
+        {
+            profileFont.setBold(true);
             pa->setChecked(true);
+        }
 
-        pa->setFont(idx.data(Qt::FontRole).value<QFont>());
-        pa->setProperty("profile_name", idx.data());
-        pa->setProperty("profile_is_global", idx.data(ProfileModel::DATA_IS_GLOBAL));
+        if (profile->isGlobal())
+            profileFont.setItalic(true);
+
+        pa->setFont(profileFont);
+        pa->setProperty("profile_name", profile->getName());
+        pa->setProperty("profile_is_global", profile->isGlobal());
 
         connect(pa, &QAction::triggered, this, &MainStatusBar::switchToProfile);
     }
@@ -577,8 +644,7 @@ void MainStatusBar::showProfileMenu(const QPoint &global_pos, Qt::MouseButton bu
 
         bool enable_edit = false;
 
-        QModelIndex idx = model.activeProfile();
-        if (! idx.data(ProfileModel::DATA_IS_DEFAULT).toBool() && ! idx.data(ProfileModel::DATA_IS_GLOBAL).toBool())
+        if ((currentProfile != Q_NULLPTR) && !currentProfile->isDefault() && !currentProfile->isGlobal())
             enable_edit = true;
 
         profile_menu->setTitle(tr("Switch to"));

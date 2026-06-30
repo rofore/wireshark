@@ -1861,7 +1861,7 @@ epl_address_equal(const void *a, const void *b)
  * if we have dangling pointers. Courtesy of Peter Wu.
  */
 
-unsigned current_convo_generation; /* FIXME remove */
+static unsigned current_convo_generation; /* FIXME remove */
 static wmem_allocator_t *pdo_mapping_scope;
 static struct object_mapping *
 get_object_mappings(wmem_array_t *arr, unsigned *len)
@@ -2470,7 +2470,7 @@ cleanup_dissector(void)
 }
 
 /* preference whether or not display the SoC flags in info column */
-bool show_soc_flags;
+static bool show_soc_flags;
 
 /* Define the tap for epl */
 /*static int epl_tap = -1;*/
@@ -5228,14 +5228,20 @@ static struct profile *profile_load(wmem_allocator_t *allocator, const char *pat
 	{
 		profile = profile_new(allocator);
 		if (!epl_eds_load(profile, path))
+		{
 			profile_del(profile);
+			profile = NULL;
+		}
 	}
 
 	else if (g_str_has_suffix(path, ".xdd") || g_str_has_suffix(path, ".xdc"))
 	{
 		profile = profile_new(allocator);
 		if (!epl_xdd_load(profile, path))
+		{
 			profile_del(profile);
+			profile = NULL;
+		}
 	}
 
 	if (!profile)

@@ -34,6 +34,7 @@
 #include <epan/strutil.h>
 #include <ftypes/ftypes.h>
 
+
 #define PDML_VERSION "0"
 #define PSML_VERSION "0"
 
@@ -62,6 +63,10 @@ typedef struct {
     bool            print_text;
     proto_node_children_grouper_func node_children_grouper;
     json_dumper    *dumper;
+    tvbuff_t       *cached_src_tvb;  /* last-hit data source tvb */
+    struct data_source *cached_src;  /* last-hit data source */
+    uint32_t        cached_src_idx;  /* last-hit data source index */
+    GHashTable     *grouping_table; /* reusable hash table for key grouping */
 } write_json_data;
 
 typedef struct {
@@ -90,7 +95,9 @@ static void proto_tree_print_node(proto_node *node, void *data);
 static void proto_tree_write_node_pdml(proto_node *node, void *data);
 static void proto_tree_write_node_ek(proto_node *node, write_json_data *data);
 static struct data_source* get_field_data_source(GSList *src_list, field_info *fi, uint32_t *idx);
+static struct data_source* get_field_data_source_cached(GSList *src_list, field_info *fi, uint32_t *idx, write_json_data *pdata);
 static const uint8_t *get_field_data(GSList *src_list, field_info *fi);
+static const uint8_t *get_field_data_cached(GSList *src_list, field_info *fi, write_json_data *pdata);
 static void pdml_write_field_hex_value(write_pdml_data *pdata, field_info *fi);
 static void json_write_field_hex_value(write_json_data *pdata, field_info *fi);
 static bool print_hex_data_buffer(print_stream_t *stream, const unsigned char *cp,
@@ -375,7 +382,7 @@ write_ek_proto_tree(output_fields_t* fields,
     data.dumper = &dumper;
 
     json_dumper_begin_object(&dumper);
-    json_dumper_set_member_name(&dumper, "index");
+    json_dumper_set_member_name_const(&dumper, "index");
     json_dumper_begin_object(&dumper);
     write_json_index(&dumper, edt);
     json_dumper_end_object(&dumper);
@@ -384,14 +391,14 @@ write_ek_proto_tree(output_fields_t* fields,
     json_dumper_begin_object(&dumper);
 
     /* Timestamp added for time indexing in Elasticsearch */
-    json_dumper_set_member_name(&dumper, "timestamp");
+    json_dumper_set_member_name_const(&dumper, "timestamp");
     json_dumper_value_anyf(&dumper, "\"%" PRIu64 "%03d\"", (uint64_t)edt->pi.abs_ts.secs, edt->pi.abs_ts.nsecs/1000000);
 
     if (print_summary)
         write_ek_summary(edt->pi.cinfo, &data);
 
     if (edt->tree) {
-        json_dumper_set_member_name(&dumper, "layers");
+        json_dumper_set_member_name_const(&dumper, "layers");
         json_dumper_begin_object(&dumper);
 
         if (fields == NULL || fields->fields == NULL) {
@@ -399,6 +406,11 @@ write_ek_proto_tree(output_fields_t* fields,
             data.src_list = edt->pi.data_src;
             data.filter = fields ? fields->protocolfilter : NULL;
             data.print_hex = print_hex;
+            data.cached_src_tvb = edt->pi.data_src ?
+                get_data_source_tvb((struct data_source *)edt->pi.data_src->data) : NULL;
+            data.cached_src = edt->pi.data_src ?
+                (struct data_source *)edt->pi.data_src->data : NULL;
+            data.cached_src_idx = 0;
             proto_tree_write_node_ek(edt->tree, &data);
         } else {
             /* Write out specified fields */
@@ -738,9 +750,9 @@ write_json_index(json_dumper *dumper, epan_dissect_t *edt)
     } else {
         (void) g_strlcpy(ts, "XXXX-XX-XX", sizeof(ts)); /* XXX - better way of saying "Not representable"? */
     }
-    json_dumper_set_member_name(dumper, "_index");
+    json_dumper_set_member_name_const(dumper, "_index");
     str = ws_strdup_printf("packets-%s", ts);
-    json_dumper_value_string(dumper, str);
+    json_dumper_value_string_noesc(dumper, str, strlen(str));
     g_free(str);
 }
 
@@ -758,11 +770,11 @@ write_json_proto_tree(output_fields_t* fields,
 
     json_dumper_begin_object(dumper);
     write_json_index(dumper, edt);
-    json_dumper_set_member_name(dumper, "_score");
+    json_dumper_set_member_name_const(dumper, "_score");
     json_dumper_value_string(dumper, NULL);
-    json_dumper_set_member_name(dumper, "_source");
+    json_dumper_set_member_name_const(dumper, "_source");
     json_dumper_begin_object(dumper);
-    json_dumper_set_member_name(dumper, "layers");
+    json_dumper_set_member_name_const(dumper, "layers");
 
     if (fields == NULL || fields->fields == NULL) {
         /* Write out all fields */
@@ -774,8 +786,15 @@ write_json_proto_tree(output_fields_t* fields,
             data.print_text = false;
         }
         data.node_children_grouper = node_children_grouper;
+        data.cached_src_tvb = edt->pi.data_src ?
+            get_data_source_tvb((struct data_source *)edt->pi.data_src->data) : NULL;
+        data.cached_src = edt->pi.data_src ?
+            (struct data_source *)edt->pi.data_src->data : NULL;
+        data.cached_src_idx = 0;
+        data.grouping_table = g_hash_table_new(g_direct_hash, g_direct_equal);
 
         write_json_proto_node_children(edt->tree, &data);
+        g_hash_table_destroy(data.grouping_table);
     } else {
         write_specified_fields(FORMAT_JSON, fields, edt, cinfo, NULL, dumper);
     }
@@ -906,9 +925,19 @@ write_json_proto_node(GSList *node_values_head,
     // Retrieve json key from first value.
     proto_node *first_value = (proto_node *) node_values_head->data;
     const char *json_key = proto_node_to_json_key(first_value);
-    char* json_key_suffix = ws_strdup_printf("%s%s", json_key, suffix);
-    json_dumper_set_member_name(pdata->dumper, json_key_suffix);
-    g_free(json_key_suffix);
+
+    if (suffix[0] == '\0') {
+        json_dumper_set_member_name(pdata->dumper, json_key);
+    } else {
+        size_t klen = strlen(json_key);
+        size_t slen = strlen(suffix);
+        char sbuf[256];
+        char *key = (klen + slen + 1 <= sizeof(sbuf)) ? sbuf : (char *)g_malloc(klen + slen + 1);
+        memcpy(key, json_key, klen);
+        memcpy(key + klen, suffix, slen + 1);
+        json_dumper_set_member_name(pdata->dumper, key);
+        if (key != sbuf) g_free(key);
+    }
     write_json_proto_node_value_list(node_values_head, value_writer, pdata);
 }
 
@@ -946,7 +975,7 @@ write_json_proto_node_filtered(proto_node *node, write_json_data *pdata)
     const char *json_key = proto_node_to_json_key(node);
 
     json_dumper_begin_object(pdata->dumper);
-    json_dumper_set_member_name(pdata->dumper, "filtered");
+    json_dumper_set_member_name_const(pdata->dumper, "filtered");
     json_dumper_value_string(pdata->dumper, json_key);
     json_dumper_end_object(pdata->dumper);
 }
@@ -968,15 +997,15 @@ write_json_proto_node_hex_dump(proto_node *node, write_json_data *pdata)
     /* Dump raw hex-encoded dissected information including position, length,
      * bitmask, type, and data source index. */
     /* These were added for use by json2pcap, but might be useful for others. */
-    json_dumper_value_anyf(pdata->dumper, "%" PRId32, fi->start);
-    json_dumper_value_anyf(pdata->dumper, "%" PRId32, fi->length);
-    json_dumper_value_anyf(pdata->dumper, "%" PRIu64, fi->hfinfo->bitmask);
-    json_dumper_value_anyf(pdata->dumper, "%" PRId32, (int32_t)fvalue_type_ftenum(fi->value));
+    json_dumper_value_int(pdata->dumper, fi->start);
+    json_dumper_value_int(pdata->dumper, fi->length);
+    json_dumper_value_uint(pdata->dumper, fi->hfinfo->bitmask);
+    json_dumper_value_int(pdata->dumper, (int32_t)fvalue_type_ftenum(fi->value));
 
-    if (get_field_data_source(pdata->src_list, fi, &src_idx)) {
-        json_dumper_value_anyf(pdata->dumper, "%" PRIu32, src_idx);
+    if (get_field_data_source_cached(pdata->src_list, fi, &src_idx, pdata)) {
+        json_dumper_value_uint(pdata->dumper, src_idx);
     } else {
-        json_dumper_value_anyf(pdata->dumper, "null");
+        json_dumper_value_literal(pdata->dumper, "null", 4);
     }
 
     json_dumper_end_array(pdata->dumper);
@@ -987,7 +1016,7 @@ write_json_proto_node_hex_dump(proto_node *node, write_json_data *pdata)
  * or a node with children -- this will be determined dynamically
  */
 static void
-write_json_proto_node_dynamic(proto_node *node, write_json_data *data)
+write_json_proto_node_dynamic(proto_node *node, write_json_data *data) // NOLINT(misc-no-recursion)
 {
     if (node->first_child == NULL) {
         write_json_proto_node_no_value(node, data);
@@ -1000,9 +1029,116 @@ write_json_proto_node_dynamic(proto_node *node, write_json_data *data)
  * Writes the children of a node. Calls write_json_proto_node_list internally which recursively writes children of nodes
  * to the output.
  */
+/* Write a single child node directly (no-duplicate fast path, no GSList allocation) */
 static void
-write_json_proto_node_children(proto_node *node, write_json_data *data)
+write_json_proto_node_single(proto_node *node, write_json_data *pdata) // NOLINT(misc-no-recursion)
 {
+    const char *json_key = proto_node_to_json_key(node);
+    field_info *fi = node->finfo;
+    char *value_string_repr = fvalue_to_string_repr(NULL, fi->value, FTREPR_JSON, fi->hfinfo->display);
+    bool has_children = node->first_child != NULL;
+    bool has_value = value_string_repr != NULL;
+    bool is_pseudo_text_field = fi->hfinfo->id == hf_text_only;
+    size_t klen = strlen(json_key);
+
+    pf_flags filter_flags = PF_NONE;
+    bool is_filtered = pdata->filter != NULL && !check_protocolfilter(pdata->filter, json_key, &filter_flags);
+
+    wmem_free(NULL, value_string_repr);
+
+    if (pdata->print_hex && (!pdata->print_text || fi->length > 0) && !is_pseudo_text_field) {
+        char sbuf[256];
+        char *key_raw = (klen + 5 <= sizeof(sbuf)) ? sbuf : (char *)g_malloc(klen + 5);
+        memcpy(key_raw, json_key, klen);
+        memcpy(key_raw + klen, "_raw", 5);
+        json_dumper_set_member_name_noesc(pdata->dumper, key_raw, klen + 4);
+        if (key_raw != sbuf) g_free(key_raw);
+        write_json_proto_node_hex_dump(node, pdata);
+    }
+
+    if (pdata->print_text && has_value) {
+        if (!is_pseudo_text_field)
+            json_dumper_set_member_name_noesc(pdata->dumper, json_key, klen);
+        else
+            json_dumper_set_member_name(pdata->dumper, json_key);
+        write_json_proto_node_value(node, pdata);
+    }
+
+    if (has_children) {
+        if (has_value) {
+            char sbuf[256];
+            char *key_tree = (klen + 6 <= sizeof(sbuf)) ? sbuf : (char *)g_malloc(klen + 6);
+            memcpy(key_tree, json_key, klen);
+            memcpy(key_tree + klen, "_tree", 6);
+            if (!is_pseudo_text_field)
+                json_dumper_set_member_name_noesc(pdata->dumper, key_tree, klen + 5);
+            else
+                json_dumper_set_member_name(pdata->dumper, key_tree);
+            if (key_tree != sbuf) g_free(key_tree);
+        } else {
+            if (!is_pseudo_text_field)
+                json_dumper_set_member_name_noesc(pdata->dumper, json_key, klen);
+            else
+                json_dumper_set_member_name(pdata->dumper, json_key);
+        }
+
+        if (is_filtered) {
+            write_json_proto_node_filtered(node, pdata);
+        } else {
+            wmem_map_t *_filter = NULL;
+            if ((filter_flags & PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                _filter = pdata->filter;
+                pdata->filter = NULL;
+            }
+            write_json_proto_node_dynamic(node, pdata);
+            if ((filter_flags & PF_INCLUDE_CHILDREN) == PF_INCLUDE_CHILDREN) {
+                pdata->filter = _filter;
+            }
+        }
+    }
+
+    if (!has_value && !has_children && (pdata->print_text || (pdata->print_hex && is_pseudo_text_field))) {
+        if (!is_pseudo_text_field)
+            json_dumper_set_member_name_noesc(pdata->dumper, json_key, klen);
+        else
+            json_dumper_set_member_name(pdata->dumper, json_key);
+        write_json_proto_node_no_value(node, pdata);
+    }
+}
+
+static void
+write_json_proto_node_children(proto_node *node, write_json_data *data) // NOLINT(misc-no-recursion)
+{
+    if (data->grouping_table && data->node_children_grouper == proto_node_group_children_by_json_key) {
+        /* Fast path: check if all keys are unique (common case) */
+        GHashTable *table = data->grouping_table;
+        g_hash_table_remove_all(table);
+        proto_node *current_child = node->first_child;
+        bool has_duplicates = false;
+
+        while (current_child != NULL) {
+            char *json_key = (char *) proto_node_to_json_key(current_child);
+            if (g_hash_table_contains(table, json_key)) {
+                has_duplicates = true;
+                break;
+            }
+            g_hash_table_insert(table, json_key, json_key);
+            current_child = current_child->next;
+        }
+
+        if (!has_duplicates) {
+            /* No duplicates: write children directly without GSList allocation */
+            json_dumper_begin_object(data->dumper);
+            current_child = node->first_child;
+            while (current_child != NULL) {
+                write_json_proto_node_single(current_child, data);
+                current_child = current_child->next;
+            }
+            json_dumper_end_object(data->dumper);
+            return;
+        }
+    }
+
     GSList *grouped_children_list = data->node_children_grouper(node);
     write_json_proto_node_list(grouped_children_list, data);
     g_slist_free_full(grouped_children_list, (GDestroyNotify) g_slist_free);
@@ -1043,7 +1179,7 @@ write_json_proto_node_no_value(proto_node *node, write_json_data *pdata)
             json_dumper_value_string(pdata->dumper, label_str);
         }
     } else {
-        json_dumper_value_string(pdata->dumper, "");
+        json_dumper_value_string_noesc(pdata->dumper, "", 0);
     }
 }
 
@@ -1079,7 +1215,7 @@ proto_node_group_children_by_json_key(proto_node *node)
      * hashmap.
      */
     GSList *same_key_nodes_list = NULL;
-    GHashTable *lookup_by_json_key = g_hash_table_new(g_str_hash, g_str_equal);
+    GHashTable *lookup_by_json_key = g_hash_table_new(g_direct_hash, g_direct_equal);
     proto_node *current_child = node->first_child;
 
     /**
@@ -1289,9 +1425,9 @@ ek_write_field_value(field_info *fi, write_json_data* pdata)
              * )
              */
             if (fvalue_get_uinteger64(fi->value))
-                json_dumper_value_anyf(pdata->dumper, "true");
+                json_dumper_value_literal(pdata->dumper, "true", 4);
             else
-                json_dumper_value_anyf(pdata->dumper, "false");
+                json_dumper_value_literal(pdata->dumper, "false", 5);
             break;
         default:
             dfilter_string = fvalue_to_string_repr(NULL, fi->value, FTREPR_EK, fi->hfinfo->display);
@@ -1363,8 +1499,8 @@ ek_write_attr(GSList *attr_instances, write_json_data *pdata)
 
                 /* print dummy field */
                 json_dumper_begin_object(pdata->dumper);
-                json_dumper_set_member_name(pdata->dumper, "filtered");
-                json_dumper_value_string(pdata->dumper, fi->hfinfo->abbrev);
+                json_dumper_set_member_name_const(pdata->dumper, "filtered");
+                json_dumper_value_string_noesc(pdata->dumper, fi->hfinfo->abbrev, strlen(fi->hfinfo->abbrev));
                 json_dumper_end_object(pdata->dumper);
             } else {
                 ek_write_field_value(fi, pdata);
@@ -1390,8 +1526,8 @@ ek_write_attr(GSList *attr_instances, write_json_data *pdata)
                     }
                 } else {
                     /* print dummy field */
-                    json_dumper_set_member_name(pdata->dumper, "filtered");
-                    json_dumper_value_string(pdata->dumper, fi->hfinfo->abbrev);
+                    json_dumper_set_member_name_const(pdata->dumper, "filtered");
+                    json_dumper_value_string_noesc(pdata->dumper, fi->hfinfo->abbrev, strlen(fi->hfinfo->abbrev));
                 }
             } else {
                 proto_tree_write_node_ek(pnode, pdata);
@@ -1726,6 +1862,31 @@ get_field_data_source(GSList *src_list, field_info *fi, uint32_t *idx)
     return NULL;  /* not found */
 }
 
+/* Fast variant using last-hit cache — consecutive fields often share the same data source */
+static struct data_source*
+get_field_data_source_cached(GSList *src_list, field_info *fi, uint32_t *idx, write_json_data *pdata)
+{
+    /* Fast path: check last-hit cache */
+    if (pdata->cached_src && fi->ds_tvb == pdata->cached_src_tvb) {
+        if (idx) {
+            *idx = pdata->cached_src_idx;
+        }
+        return pdata->cached_src;
+    }
+    /* Miss: do full search and update cache */
+    uint32_t found_idx = 0;
+    struct data_source *src = get_field_data_source(src_list, fi, &found_idx);
+    if (src) {
+        pdata->cached_src_tvb = fi->ds_tvb;
+        pdata->cached_src = src;
+        pdata->cached_src_idx = found_idx;
+        if (idx) {
+            *idx = found_idx;
+        }
+    }
+    return src;
+}
+
 /*
  * Find the data source for a specified field, and return a pointer
  * to the data in it. Returns NULL if the data is out of bounds.
@@ -1770,6 +1931,29 @@ get_field_data(GSList *src_list, field_info *fi)
         return tvb_get_ptr(src_tvb, fi->start, length);
     }
     return NULL;  /* not found */
+}
+
+/* Fast variant using cached first-source tvb */
+static const uint8_t *
+get_field_data_cached(GSList *src_list, field_info *fi, write_json_data *pdata)
+{
+    tvbuff_t *src_tvb;
+    int       length, tvbuff_length;
+    struct data_source *src;
+
+    src = get_field_data_source_cached(src_list, fi, NULL, pdata);
+    if (src) {
+        src_tvb = get_data_source_tvb(src);
+        tvbuff_length = tvb_captured_length_remaining(src_tvb, fi->start);
+        if (tvbuff_length < 0) {
+            return NULL;
+        }
+        length = fi->length;
+        if (length > tvbuff_length)
+            length = tvbuff_length;
+        return tvb_get_ptr(src_tvb, fi->start, length);
+    }
+    return NULL;
 }
 
 /* Print a string, escaping out certain characters that need to
@@ -1895,34 +2079,44 @@ json_write_field_hex_value(write_json_data *pdata, field_info *fi)
 
     if (!fi->ds_tvb) {
         // Should this be null instead of the empty string?
-        json_dumper_value_string(pdata->dumper, "");
+        json_dumper_value_string_noesc(pdata->dumper, "", 0);
         return;
     }
 
     if (fi->length > (unsigned)tvb_captured_length_remaining(fi->ds_tvb, fi->start)) {
-        json_dumper_value_string(pdata->dumper, "field length invalid!");
+        json_dumper_value_string_noesc(pdata->dumper, "field length invalid!", 21);
         return;
     }
 
     /* Find the data for this field. */
-    pd = get_field_data(pdata->src_list, fi);
+    pd = get_field_data_cached(pdata->src_list, fi, pdata);
 
     if (pd) {
-        unsigned i;
-        char* str = (char*)g_malloc(fi->length*2 + 1);    /* no need to zero */
+        /* Write hex directly using raw string output (no escape needed for hex). */
         static const char hex[] = "0123456789abcdef";
-        /* Print a simple hex dump */
-        for (i = 0; i < fi->length; i++) {
-            uint8_t c = pd[i];
-            str[2 * i] = hex[c >> 4];
-            str[2 * i + 1] = hex[c & 0xf];
+        unsigned len = fi->length;
+        char buf[512];
+        unsigned i = 0;
+        if (len <= (sizeof(buf) - 1) / 2) {
+            for (i = 0; i < len; i++) {
+                uint8_t c = pd[i];
+                buf[2 * i] = hex[c >> 4];
+                buf[2 * i + 1] = hex[c & 0xf];
+            }
+            json_dumper_value_string_noesc(pdata->dumper, buf, len * 2);
+        } else {
+            char *str = (char*)g_malloc(len * 2);
+            for (i = 0; i < len; i++) {
+                uint8_t c = pd[i];
+                str[2 * i] = hex[c >> 4];
+                str[2 * i + 1] = hex[c & 0xf];
+            }
+            json_dumper_value_string_noesc(pdata->dumper, str, len * 2);
+            g_free(str);
         }
-        str[2 * fi->length] = '\0';
-        json_dumper_value_string(pdata->dumper, str);
-        g_free(str);
     } else {
         // Should this be null instead of the empty string?
-        json_dumper_value_string(pdata->dumper, "");
+        json_dumper_value_string_noesc(pdata->dumper, "", 0);
     }
 }
 

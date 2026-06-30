@@ -16,6 +16,8 @@
 #endif
 
 #include "stratoshark_main_window.h"
+#include <ui/qt/manager/interface_list_manager.h>
+#include <ui/qt/widgets/capture_card_widget.h>
 
 /*
  * The generated Ui_StratosharkMainWindow::setupUi() can grow larger than our configured limit,
@@ -83,10 +85,6 @@ DIAG_ON(frame-larger-than=)
 #include "ui/qt/widgets/wireshark_file_dialog.h"
 #include <ui/qt/utils/workspace_state.h>
 
-#ifdef HAVE_SOFTWARE_UPDATE
-#include "ui/software_update.h"
-#endif
-
 #include "stratoshark_about_dialog.h"
 #include "capture_file_dialog.h"
 #include "stratoshark_capture_file_properties_dialog.h"
@@ -117,6 +115,7 @@ DIAG_ON(frame-larger-than=)
 #include "stratoshark_plot_dialog.h"
 #include <ui/qt/widgets/additional_toolbar.h>
 #include "main_application.h"
+#include <ui/qt/utils/font_manager.h>
 #include "packet_comment_dialog.h"
 #include "packet_dialog.h"
 #include "packet_list.h"
@@ -131,9 +130,11 @@ DIAG_ON(frame-larger-than=)
 #include <ui/qt/utils/stock_icon.h>
 #include "keyboard_shortcuts_dialog.h"
 #include "supported_protocols_dialog.h"
+#include "theme_debug_dialog.h"
 #include "tap_parameter_dialog.h"
 #include "time_shift_dialog.h"
 #include "uat_dialog.h"
+#include <ui/qt/interface_frame.h>
 
 #include <functional>
 #include <QClipboard>
@@ -187,10 +188,10 @@ bool StratosharkMainWindow::openCaptureFile(QString cf_path, QString read_filter
 
         // TODO detect call from "cf_read" -> "update_progress_dlg"
         // ("capture_file_.capFile()->read_lock"), possibly queue opening the
-        // file and return early to avoid the warning in testCaptureFileClose.
+        // file and return early to avoid the warning in tryClosingCaptureFile.
 
         QString before_what(tr(" before opening another file"));
-        if (!testCaptureFileClose(before_what)) {
+        if (!tryClosingCaptureFile(before_what)) {
             ret = false;
             goto finish;
         }
@@ -267,26 +268,13 @@ finish:
     return ret;
 }
 
-void StratosharkMainWindow::filterPackets(QString new_filter, bool force)
+void StratosharkMainWindow::applyFilter(QString new_filter, bool force)
 {
     cf_status_t cf_status;
 
     cf_status = cf_filter_packets(CaptureFile::globalCapFile(), new_filter.toUtf8().data(), force);
 
     if (cf_status == CF_OK) {
-        if (new_filter.length() > 0) {
-            int index = df_combo_box_->findText(new_filter);
-            if (index == -1) {
-                df_combo_box_->insertItem(0, new_filter);
-                df_combo_box_->setCurrentIndex(0);
-            } else {
-                df_combo_box_->setCurrentIndex(index);
-            }
-        } else {
-            df_combo_box_->lineEdit()->clear();
-        }
-        // Only after the display filter has been updated,
-        // disable the arrow button
         emit displayFilterSuccess(true);
     } else {
         emit displayFilterSuccess(false);
@@ -408,7 +396,7 @@ void StratosharkMainWindow::queuedFilterAction(QString action_filter, FilterActi
     QString cur_filter, new_filter;
 
     if (!df_combo_box_) return;
-    cur_filter = df_combo_box_->lineEdit()->text();
+    cur_filter = df_combo_box_->text();
 
     switch (type) {
     case FilterAction::ActionTypePlain:
@@ -453,7 +441,7 @@ void StratosharkMainWindow::queuedFilterAction(QString action_filter, FilterActi
 
     switch (action) {
     case FilterAction::ActionApply:
-        df_combo_box_->lineEdit()->setText(new_filter);
+        df_combo_box_->setText(new_filter);
         df_combo_box_->applyDisplayFilter();
         break;
     case FilterAction::ActionColorize:
@@ -466,8 +454,8 @@ void StratosharkMainWindow::queuedFilterAction(QString action_filter, FilterActi
         main_ui_->searchFrame->findFrameWithFilter(new_filter);
         break;
     case FilterAction::ActionPrepare:
-        df_combo_box_->lineEdit()->setText(new_filter);
-        df_combo_box_->lineEdit()->setFocus();
+        df_combo_box_->setText(new_filter);
+        df_combo_box_->setFocus();
         break;
     case FilterAction::ActionWebLookup:
     {
@@ -1297,11 +1285,26 @@ void StratosharkMainWindow::startInterfaceCapture(bool valid, const QString capt
     capture_filter_valid_ = valid;
     welcome_page_->setCaptureFilter(capture_filter);
     QString before_what(tr(" before starting a new capture"));
-    if (testCaptureFileClose(before_what)) {
+    if (tryClosingCaptureFile(before_what)) {
         // The interface tree will update the selected interfaces via its timer
         // so no need to do anything here.
         startCapture();
     }
+}
+
+void StratosharkMainWindow::onAppInitialized()
+{
+    // Post-initialization setup, run once the application is ready. Ordered: a
+    // few of these steps populate menus that later ones extend.
+    setFeaturesEnabled();
+    applyGlobalCommandLineOptions();
+    initViewColorizeMenu();
+    addStatsPluginsToMenu();
+    addDynamicMenus();
+    addPluginIFStructures();
+    initConversationMenus();
+    initFollowStreamMenus();
+    addDisplayFilterTranslationActions(main_ui_->menuEditCopy);
 }
 
 void StratosharkMainWindow::applyGlobalCommandLineOptions()
@@ -1380,6 +1383,20 @@ void StratosharkMainWindow::reloadLuaPlugins()
     if (mainApp->isReloadingLua())
         return;
 
+    /*
+     * Don't reload while cf_read is in progress.  cf_read calls
+     * processEvents() via its progress dialog, and our deferred-reload
+     * QTimer can fire during those calls.  Performing cf_close/cf_reload
+     * while cf_read is still on the C call stack corrupts its state
+     * (e.g. frees cf->linktypes that cf_read still references).
+     * Re-schedule the reload so it runs once cf_read has finished.
+     */
+    if (capture_file_.capFile() &&
+        capture_file_.capFile()->state == FILE_READ_IN_PROGRESS) {
+        mainApp->reloadLuaPluginsDelayed();
+        return;
+    }
+
     bool uses_lua_filehandler = false;
 
     if (capture_file_.capFile()) {
@@ -1390,7 +1407,7 @@ void StratosharkMainWindow::reloadLuaPlugins()
         if (uses_lua_filehandler && cf->unsaved_changes) {
             // Prompt to save the file before reloading, in case the FileHandler has changed
             QString before_what(tr(" before reloading Lua plugins"));
-            if (!testCaptureFileClose(before_what, Reload)) {
+            if (!tryClosingCaptureFile(before_what, Reload)) {
                 return;
             }
         }
@@ -1398,7 +1415,14 @@ void StratosharkMainWindow::reloadLuaPlugins()
 
     mainApp->setReloadingLua(true);
 
-    wslua_reload_plugins(NULL, NULL, application_configuration_environment_prefix());
+    if (!wslua_reload_plugins(NULL, NULL, application_configuration_environment_prefix())) {
+        /* Reload was deferred because Lua code is currently executing.
+         * A deferred reload will be scheduled once the Lua call stack
+         * has unwound.  Keep isReloadingLua true to block further
+         * user-initiated reloads until the deferred reload completes. */
+        return;
+    }
+
     funnel_statistics_reload_menus();
     reloadDynamicMenus();
     closePacketDialogs();
@@ -1551,7 +1575,7 @@ void StratosharkMainWindow::setFeaturesEnabled(bool enabled)
 
 void StratosharkMainWindow::on_actionNewDisplayFilterExpression_triggered()
 {
-    main_ui_->filterExpressionFrame->addExpression(df_combo_box_->lineEdit()->text());
+    main_ui_->filterExpressionFrame->addExpression(df_combo_box_->text());
 }
 
 void StratosharkMainWindow::onFilterSelected(QString filterText, bool prepare)
@@ -1587,7 +1611,7 @@ void StratosharkMainWindow::openTapParameterDialog(const QString cfg_str, const 
     if (!tp_dialog) return;
 
     connect(tp_dialog, &TapParameterDialog::filterAction, this, &StratosharkMainWindow::filterAction);
-    connect(tp_dialog, &TapParameterDialog::updateFilter, df_combo_box_->lineEdit(), &QLineEdit::setText);
+    connect(tp_dialog, &TapParameterDialog::updateFilter, df_combo_box_, &QLineEdit::setText);
     tp_dialog->show();
 }
 
@@ -1599,17 +1623,6 @@ void StratosharkMainWindow::openTapParameterDialog()
     const QString cfg_str = tpa->data().toString();
     openTapParameterDialog(cfg_str, NULL, NULL);
 }
-
-#if defined(HAVE_SOFTWARE_UPDATE) && defined(Q_OS_WIN)
-void StratosharkMainWindow::softwareUpdateRequested() {
-    // testCaptureFileClose doesn't use this string because we aren't
-    // going to launch another dialog, but maybe we'll change that.
-    QString before_what(tr(" before updating"));
-    if (!testCaptureFileClose(before_what, Update)) {
-        mainApp->rejectSoftwareUpdate();
-    }
-}
-#endif
 
 // File Menu
 
@@ -1626,7 +1639,7 @@ void StratosharkMainWindow::connectFileMenuActions()
 
     connect(main_ui_->actionFileClose, &QAction::triggered, this, [this]() {
         QString before_what(tr(" before closing the file"));
-        if (testCaptureFileClose(before_what)) {
+        if (tryClosingCaptureFile(before_what)) {
             showWelcome();
         }
     });
@@ -2162,19 +2175,16 @@ void StratosharkMainWindow::connectViewMenuActions()
     connect(main_ui_->actionViewNameResolutionTransport, &QAction::triggered, this,
             [this]() { setNameResolution(); });
 
-    connect(main_ui_->actionViewZoomIn, &QAction::triggered, this, [this]() {
-        recent.gui_zoom_level++;
-        zoomText();
+    connect(main_ui_->actionViewZoomIn, &QAction::triggered, this, []() {
+        FontManager::instance()->zoomIn();
     });
 
-    connect(main_ui_->actionViewZoomOut, &QAction::triggered, this, [this]() {
-        recent.gui_zoom_level--;
-        zoomText();
+    connect(main_ui_->actionViewZoomOut, &QAction::triggered, this, []() {
+        FontManager::instance()->zoomOut();
     });
 
-    connect(main_ui_->actionViewNormalSize, &QAction::triggered, this, [this]() {
-        recent.gui_zoom_level = 0;
-        zoomText();
+    connect(main_ui_->actionViewNormalSize, &QAction::triggered, this, []() {
+        FontManager::instance()->resetZoom();
     });
 
     connect(main_ui_->actionViewExpandSubtrees, &QAction::triggered,
@@ -2247,6 +2257,11 @@ void StratosharkMainWindow::connectViewMenuActions()
     connect(main_ui_->actionViewInternalsKeyboardShortcuts, &QAction::triggered, this, [this]() {
         KeyboardShortcutsDialog *keyboard_shortcuts_dlg = new KeyboardShortcutsDialog(this);
         keyboard_shortcuts_dlg->show();
+    });
+
+    connect(main_ui_->actionViewInternalsThemeDebug, &QAction::triggered, this, [this]() {
+        ThemeDebugDialog *theme_debug_dlg = new ThemeDebugDialog(this);
+        theme_debug_dlg->show();
     });
 
     connect(main_ui_->actionViewShowPacketInNewWindow, &QAction::triggered, this,
@@ -2409,11 +2424,6 @@ void StratosharkMainWindow::setNameResolution()
     mainApp->emitAppSignal(WiresharkApplication::NameResolutionChanged);
 }
 
-void StratosharkMainWindow::zoomText()
-{
-    mainApp->zoomTextFont(recent.gui_zoom_level);
-}
-
 void StratosharkMainWindow::showColoringRulesDialog()
 {
     ColoringRulesDialog *coloring_rules_dialog = new ColoringRulesDialog(this);
@@ -2531,7 +2541,6 @@ void StratosharkMainWindow::openPacketDialog(bool from_reference)
                 main_ui_->preferenceEditorFrame, SLOT(editPreference(pref_t*,module_t*)));
 
         connect(this, &StratosharkMainWindow::closePacketDialogs, packet_dialog, &PacketDialog::close);
-        zoomText(); // Emits mainApp->zoomMonospaceFont(QFont)
 
         packet_dialog->show();
     }
@@ -2543,7 +2552,7 @@ void StratosharkMainWindow::reloadCaptureFileAsFormatOrCapture()
 
     if (cf->unsaved_changes) {
         QString before_what(tr(" before reloading the file"));
-        if (!testCaptureFileClose(before_what, Reload))
+        if (!tryClosingCaptureFile(before_what, Reload))
             return;
     }
 
@@ -2561,7 +2570,7 @@ void StratosharkMainWindow::reloadCaptureFile()
 
     if (cf->unsaved_changes) {
         QString before_what(tr(" before reloading the file"));
-        if (!testCaptureFileClose(before_what, Reload))
+        if (!tryClosingCaptureFile(before_what, Reload))
             return;
     }
 
@@ -2696,16 +2705,16 @@ void StratosharkMainWindow::connectCaptureMenuActions()
     connect(main_ui_->actionCaptureStop, &QAction::triggered, this,
             [this]() { stopCapture(); });
 
-    connect(main_ui_->actionCaptureRestart, &QAction::triggered, this, [this]() {
 #ifdef HAVE_LIBPCAP
+    connect(main_ui_->actionCaptureRestart, &QAction::triggered, this, [this]() {
         QString before_what(tr(" before restarting the capture"));
         cap_session_.capture_opts->restart = true;
-        if (!testCaptureFileClose(before_what, Restart)) {
+        if (!tryClosingCaptureFile(before_what, Restart)) {
             return;
         }
         startCapture(QStringList());
-#endif // HAVE_LIBPCAP
     });
+#endif // HAVE_LIBPCAP
 
     connect(main_ui_->actionCaptureCaptureFilters, &QAction::triggered, this, [this]() {
         FilterDialog *capture_filter_dlg = new FilterDialog(window(), FilterDialog::CaptureFilter);
@@ -2717,7 +2726,7 @@ void StratosharkMainWindow::connectCaptureMenuActions()
 #ifdef HAVE_LIBPCAP
     connect(main_ui_->actionCaptureRefreshInterfaces, &QAction::triggered, this, [this]() {
         main_ui_->actionCaptureRefreshInterfaces->setEnabled(false);
-        mainApp->refreshLocalInterfaces();
+        interfaceListManager()->requestRefresh(true);
         main_ui_->actionCaptureRefreshInterfaces->setEnabled(true);
     });
 #endif
@@ -2733,15 +2742,15 @@ void StratosharkMainWindow::showCaptureOptionsDialog()
         connect(capture_options_dialog_, &CaptureOptionsDialog::stopCapture, this, &StratosharkMainWindow::stopCapture);
 
         connect(capture_options_dialog_, &CaptureOptionsDialog::interfacesChanged,
-                this->welcome_page_, &StratosharkWelcomePage::interfaceSelected);
+                this->welcome_page_, &WelcomePage::interfaceSelected);
         connect(capture_options_dialog_, &CaptureOptionsDialog::interfacesChanged,
                 this->welcome_page_->getInterfaceFrame(), &InterfaceFrame::updateSelectedInterfaces);
         connect(capture_options_dialog_, &CaptureOptionsDialog::interfaceListChanged,
                 this->welcome_page_->getInterfaceFrame(), &InterfaceFrame::interfaceListChanged);
         connect(capture_options_dialog_, &CaptureOptionsDialog::captureFilterTextEdited,
-                this->welcome_page_, &StratosharkWelcomePage::setCaptureFilterText);
+                this->welcome_page_, &WelcomePage::setCaptureFilterText);
         // Propagate selection changes from main UI to dialog.
-        connect(this->welcome_page_, &StratosharkWelcomePage::interfacesChanged,
+        connect(this->welcome_page_->captureCard(), &CaptureCardWidget::interfacesChanged,
                 capture_options_dialog_, &CaptureOptionsDialog::interfaceSelected);
 
         connect(capture_options_dialog_, &CaptureOptionsDialog::setFilterValid,
@@ -2795,7 +2804,7 @@ void StratosharkMainWindow::startCaptureTriggered()
 
     /* XXX - will closing this remove a temporary file? */
     QString before_what(tr(" before starting a new capture"));
-    if (testCaptureFileClose(before_what)) {
+    if (tryClosingCaptureFile(before_what)) {
         startCapture();
     } else {
         // simply clicking the button sets it to 'checked' even though we've
@@ -2827,7 +2836,7 @@ void StratosharkMainWindow::connectAnalyzeMenuActions()
         DisplayFilterExpressionDialog *dfe_dialog = new DisplayFilterExpressionDialog(this);
 
         connect(dfe_dialog, &DisplayFilterExpressionDialog::insertDisplayFilter,
-                qobject_cast<SyntaxLineEdit *>(df_combo_box_->lineEdit()), &SyntaxLineEdit::insertFilter);
+                df_combo_box_, &FilterEdit::insertFilter);
 
         dfe_dialog->show();
     });
@@ -2936,7 +2945,7 @@ void StratosharkMainWindow::applyConversationFilter()
 
     if (conv_action->isFilterValid(pinfo)) {
 
-        df_combo_box_->lineEdit()->setText(conv_filter);
+        df_combo_box_->setText(conv_filter);
         df_combo_box_->applyDisplayFilter();
     }
 }
@@ -2963,8 +2972,7 @@ void StratosharkMainWindow::openFollowStreamDialog(int proto_id) {
 // -z expert
 void StratosharkMainWindow::statCommandExpertInfo(const char *, void *)
 {
-    const DisplayFilterEdit *df_edit = dynamic_cast<DisplayFilterEdit *>(df_combo_box_->lineEdit());
-    ExpertInfoDialog *expert_dialog = new ExpertInfoDialog(*this, capture_file_, df_edit->text());
+    ExpertInfoDialog *expert_dialog = new ExpertInfoDialog(*this, capture_file_, df_combo_box_->text());
 
     connect(expert_dialog->getExpertInfoView(), &ExpertInfoTreeView::goToPacket,
             this, [=](int packet_num) {packet_list_->goToPacket(packet_num);});
@@ -3032,11 +3040,8 @@ void StratosharkMainWindow::statCommandIOGraph(const char *, void *)
 
 void StratosharkMainWindow::showIOGraphDialog(io_graph_item_unit_t value_units, QString yfield)
 {
-    const DisplayFilterEdit *df_edit = qobject_cast<DisplayFilterEdit *>(df_combo_box_->lineEdit());
     StratosharkIOGraphDialog* iog_dialog = nullptr;
-    QString displayFilter;
-    if (df_edit)
-        displayFilter = df_edit->text();
+    QString displayFilter = df_combo_box_->text();
 
     if (!yfield.isEmpty()) {
         QList<StratosharkIOGraphDialog*> iographdialogs = findChildren<StratosharkIOGraphDialog*>();
@@ -3106,8 +3111,7 @@ void StratosharkMainWindow::showPlotDialog(const QString& y_field, bool filtered
         /* Add mew plot with supplied parameters */
         QString d_filter = QString();
         if (filtered) {
-            const DisplayFilterEdit* df_edit = qobject_cast<DisplayFilterEdit*>(df_combo_box_->lineEdit());
-            if (df_edit) d_filter = df_edit->text();
+            d_filter = df_combo_box_->text();
         }
 
         dialog->addPlot(true, d_filter, y_field);
@@ -3168,13 +3172,6 @@ void StratosharkMainWindow::connectHelpMenuActions()
     connect(main_ui_->actionHelpSampleCaptures, &QAction::triggered, this, [=]() { mainApp->helpTopicAction(ONLINEPAGE_SAMPLE_FILES); });
     connect(main_ui_->actionHelpReleaseNotes, &QAction::triggered, this, [=]() { mainApp->helpTopicAction(LOCALPAGE_STRATOSHARK_RELEASE_NOTES); });
 }
-
-#ifdef HAVE_SOFTWARE_UPDATE
-void StratosharkMainWindow::checkForUpdates()
-{
-    software_update_check();
-}
-#endif
 
 void StratosharkMainWindow::setPreviousFocus() {
     previous_focus_ = mainApp->focusWidget();
@@ -3270,14 +3267,14 @@ void StratosharkMainWindow::extcap_options_finished(int result)
 {
     if (result == QDialog::Accepted) {
         QString before_what(tr(" before starting a new capture"));
-        if (testCaptureFileClose(before_what)) {
+        if (tryClosingCaptureFile(before_what)) {
             startCapture();
         }
     }
     this->welcome_page_->getInterfaceFrame()->interfaceListChanged();
 }
 
-void StratosharkMainWindow::showExtcapOptionsDialog(QString &device_name, bool startCaptureOnClose)
+void StratosharkMainWindow::showExtcapOptionsDialog(QString device_name, bool startCaptureOnClose)
 {
     ExtcapOptionsDialog * extcap_options_dialog = ExtcapOptionsDialog::createForDevice(device_name, startCaptureOnClose, this);
     /* The dialog returns null, if the given device name is not a valid extcap device */

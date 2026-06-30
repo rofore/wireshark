@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Install deps
@@ -42,6 +42,7 @@ jobs:
           -DENABLE_SNAPPY=OFF
           -DENABLE_SPANDSP=OFF
           -DENABLE_ZLIB=OFF
+          -DENABLE_ZLIBNG=OFF
           -DENABLE_ZSTD=OFF
           ..
         working-directory: build

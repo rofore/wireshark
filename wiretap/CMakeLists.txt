@@ -20,10 +20,6 @@ set(WIRETAP_PUBLIC_HEADERS
 	wtap_opttypes.h
 )
 
-add_definitions(
-	${LIBXML2_DEFINITIONS}
-)
-
 #
 # Files that implement reading and possibly writing one or more
 # file types.  (For cases where more than one source file is
@@ -191,7 +187,7 @@ set_target_properties(wiretap PROPERTIES
 	PREFIX "lib"
 	COMPILE_DEFINITIONS "WS_BUILD_DLL"
 	LINK_FLAGS "${WS_LINK_FLAGS}"
-	VERSION "0.0.0" SOVERSION 0
+	VERSION "0.0.2" SOVERSION 0
 	FOLDER "DLLs"
 	INSTALL_RPATH "${LIBRARY_INSTALL_RPATH}"
 )
@@ -204,7 +200,7 @@ target_link_libraries(wiretap
 		wsutil
 		${GLIB2_LIBRARIES}
 	PRIVATE
-		${LIBXML2_LIBRARIES}
+		LibXml2::LibXml2
 		${ZLIB_LIBRARIES}
 		${ZLIBNG_LIBRARIES}
 		${ZSTD_LIBRARIES}
@@ -213,7 +209,6 @@ target_link_libraries(wiretap
 
 target_include_directories(wiretap SYSTEM
 	PRIVATE
-		${LIBXML2_INCLUDE_DIRS}
 		${ZLIB_INCLUDE_DIRS}
 		${ZLIBNG_INCLUDE_DIRS}
 		${ZSTD_INCLUDE_DIRS}

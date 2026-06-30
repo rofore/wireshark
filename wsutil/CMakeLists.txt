@@ -125,6 +125,7 @@ set(WSUTIL_PUBLIC_HEADERS
 	pint.h
 	please_report_bug.h
 	plugins.h
+	plugin_exports.h
 	pow2.h
 	privileges.h
 	processes.h
@@ -149,7 +150,6 @@ set(WSUTIL_PUBLIC_HEADERS
 	glib-compat.h
 	ws_getopt.h
 	ws_mempbrk.h
-	ws_mempbrk_int.h
 	ws_padding_to.h
 	ws_pipe.h
 	ws_roundup.h
@@ -406,7 +406,6 @@ endif()
 target_link_libraries(wsutil
 	PUBLIC
 		${GLIB2_LIBRARIES}
-		${XXHASH_LIBRARIES}
 	PRIVATE
 		${GMODULE2_LIBRARIES}
 		${APPLE_CORE_FOUNDATION_LIBRARY}
@@ -417,10 +416,12 @@ target_link_libraries(wsutil
 		${ZLIB_LIBRARIES}
 		${ZLIBNG_LIBRARIES}
 		${LZ4_LIBRARIES}
+		${XXHASH_LIBRARIES}
 		$<IF:$<CONFIG:Debug>,${PCRE2_DEBUG_LIBRARIES},${PCRE2_LIBRARIES}>
 		${WIN_IPHLPAPI_LIBRARY}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 		${WIN_PSAPI_LIBRARY}
+		$<$<BOOL:${CpuInfo_FOUND}>:CpuInfo::CpuInfo>
 )
 
 target_include_directories(wsutil SYSTEM
@@ -481,8 +482,9 @@ target_link_libraries(wsutil_static
 		${LZ4_LIBRARIES}
 		$<IF:$<CONFIG:Debug>,${PCRE2_DEBUG_LIBRARIES},${PCRE2_LIBRARIES}>
 		${WIN_IPHLPAPI_LIBRARY}
-		${WIN_WS2_32_LIBRARY}
+		${SOCKET_LIBRARY}
 		${WIN_PSAPI_LIBRARY}
+		$<$<BOOL:${CpuInfo_FOUND}>:CpuInfo::CpuInfo>
 )
 
 target_include_directories(wsutil_static SYSTEM
@@ -503,15 +505,14 @@ if(NOT VCSVERSION_OVERRIDE)
 	add_dependencies(wsutil_static vcs_version)
 endif()
 
-add_executable(wmem_test EXCLUDE_FROM_ALL wmem/wmem_test.c ${WMEM_FILES})
+add_executable(wmem_test EXCLUDE_FROM_ALL wmem/wmem_test.c)
 
-target_link_libraries(wmem_test wsutil)
-target_include_directories(wmem_test SYSTEM PRIVATE ${XXHASH_INCLUDE_DIRS})
+target_link_libraries(wmem_test wsutil_static)
 
 set_target_properties(wmem_test PROPERTIES
 	FOLDER "Tests"
 	EXCLUDE_FROM_DEFAULT_BUILD True
-	COMPILE_DEFINITIONS "WS_BUILD_DLL"
+	COMPILE_DEFINITIONS "ENABLE_STATIC"
 	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
 )
 

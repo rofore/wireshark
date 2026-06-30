@@ -76,11 +76,11 @@ static bool tpncp_desegment = true;
 
 /* Database for storing information about all TPNCP events. */
 static tpncp_data_field_info **tpncp_events_info_db;
-unsigned tpncp_events_info_len;
+static unsigned tpncp_events_info_len;
 
 /* Database for storing information about all TPNCP commands. */
 static tpncp_data_field_info **tpncp_commands_info_db;
-unsigned tpncp_commands_info_len;
+static unsigned tpncp_commands_info_len;
 
 /* Global variables for bitfields representation. */
 /* TPNCP packet header fields. */
@@ -728,7 +728,7 @@ init_tpncp_data_fields_info(tpncp_data_field_info ***data_fields_info, unsigned 
             continue;
         }
         data_id = (int) g_ascii_strtoll(tmp, NULL, 10);
-        if ((name = strtok(NULL, " ")) == NULL) {
+        if ((data_id < 0) || ((name = strtok(NULL, " ")) == NULL)) {
             report_failure(
                 "ERROR! Badly formed data base entry: %s - corresponding field's registration is skipped.",
                 entry_copy);

@@ -17,11 +17,12 @@
 #include <epan/decode_as.h>
 #include <ui/language.h>
 #include <ui/preference_utils.h>
-#include <cfile.h>
+#include <epan/cfile.h>
 #include <ui/commandline.h>
 #include <ui/simple_dialog.h>
 #include <ui/recent.h>
 #include <main_window.h>
+#include <ui/qt/manager/interface_list_manager.h>
 #include <extcap.h>
 
 #include <ui/qt/utils/qt_ui_utils.h>
@@ -147,10 +148,12 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) :
     prefs_pane_to_item_[PrefsModel::typeToString(PrefsModel::Expert)] = pd_ui_->expertFrame;
     prefs_pane_to_item_[PrefsModel::typeToString(PrefsModel::FilterButtons)] = pd_ui_->filterExpressonsFrame;
     prefs_pane_to_item_[PrefsModel::typeToString(PrefsModel::RSAKeys)] = pd_ui_->rsaKeysFrame;
+    prefs_pane_to_item_[PrefsModel::typeToString(PrefsModel::Aggregation)] = pd_ui_->aggregationFrame;
     prefs_pane_to_item_[PrefsModel::typeToString(PrefsModel::Advanced)] = pd_ui_->advancedFrame;
     prefs_pane_to_item_[MODULES_NAME] = NULL;
 
     pd_ui_->filterExpressonsFrame->setUat(uat_get_table_by_name("Display expressions"));
+    pd_ui_->aggregationFrame->setUat(uat_get_table_by_name("Aggregation fields"));
     pd_ui_->expertFrame->setUat(uat_get_table_by_name("Expert Info Severity Level Configuration"));
 
     connect(pd_ui_->prefsView, &PrefModuleTreeView::goToPane, this, &PreferencesDialog::selectPane);
@@ -177,11 +180,6 @@ PreferencesDialog::~PreferencesDialog()
 void PreferencesDialog::setPane(const QString module_name)
 {
     pd_ui_->prefsView->setPane(module_name);
-}
-
-void PreferencesDialog::enableAggregationOptions(bool enable)
-{
-    pd_ui_->captureFrame->enableAggregationOptions(enable);
 }
 
 void PreferencesDialog::keyPressEvent(QKeyEvent *event)
@@ -388,7 +386,7 @@ void PreferencesDialog::apply()
     // XXX - We're also too enthusiastic about setting must_redissect.
     prefs_modules_for_all_modules(module_prefs_unstash, (void *)&redissect_flags);
 
-    extcap_register_preferences();
+    extcap_register_preferences(NULL, NULL);
 
     if (redissect_flags & PREF_EFFECT_GUI_LAYOUT) {
         // Layout type changed, reset sizes
@@ -401,8 +399,10 @@ void PreferencesDialog::apply()
     }
 
     pd_ui_->columnFrame->unstash();
+    pd_ui_->fontandcolorFrame->unstash();
     pd_ui_->welcomePageFrame->unstash();
     pd_ui_->filterExpressonsFrame->acceptChanges();
+    pd_ui_->aggregationFrame->acceptChanges();
     pd_ui_->expertFrame->acceptChanges();
 #ifdef HAVE_LIBGNUTLS
     redissect_flags |= pd_ui_->rsaKeysFrame->acceptChanges();
@@ -435,13 +435,8 @@ void PreferencesDialog::apply()
 
     /* Fill in capture options with values from the preferences */
     prefs_to_capture_opts(&global_capture_opts);
-    mainApp->emitAppSignal(MainApplication::AggregationVisiblity);
     if (redissect_flags & PREF_EFFECT_AGGREGATION) {
         mainApp->emitAppSignal(MainApplication::AggregationChanged);
-    }
-
-    if (redissect_flags & (PREF_EFFECT_GUI_COLOR)) {
-        mainApp->emitAppSignal(MainApplication::ColorsChanged);
     }
 
     if (redissect_flags & PREF_EFFECT_FIELDS) {
@@ -465,8 +460,11 @@ void PreferencesDialog::apply()
         mainApp->emitAppSignal(MainApplication::RecentPreferencesRead);
     }
 
-    if (prefs.capture_no_extcap != saved_capture_no_extcap_)
-        mainApp->refreshLocalInterfaces();
+    if (prefs.capture_no_extcap != saved_capture_no_extcap_) {
+        MainWindow *mainWindow = mainApp->mainWindow();
+        if (mainWindow && mainWindow->interfaceListManager())
+            mainWindow->interfaceListManager()->requestRefresh();
+    }
 }
 
 void PreferencesDialog::on_buttonBox_accepted()
@@ -479,6 +477,7 @@ void PreferencesDialog::on_buttonBox_rejected()
 {
     //handle frames that don't have their own OK/Cancel "buttons"
     pd_ui_->filterExpressonsFrame->rejectChanges();
+    pd_ui_->aggregationFrame->rejectChanges();
     pd_ui_->expertFrame->rejectChanges();
 #ifdef HAVE_LIBGNUTLS
     pd_ui_->rsaKeysFrame->rejectChanges();

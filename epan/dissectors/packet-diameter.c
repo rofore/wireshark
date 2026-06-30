@@ -464,7 +464,7 @@ diameterstat_packet(void *pss, packet_info *pinfo, epan_dissect_t *edt _U_, cons
 static int
 dissect_diameter_vendor_id(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, void *data _U_)
 {
-	int offset = 0;
+	unsigned offset = 0;
 
 	proto_tree_add_item(tree, hf_diameter_vendor_id, tvb, 0, 4, ENC_BIG_ENDIAN);
 
@@ -1500,8 +1500,8 @@ float64_avp(diam_ctx_t *c, diam_avp_t *a, tvbuff_t *tvb, diam_sub_dis_t *diam_su
 static const char *
 grouped_avp(diam_ctx_t *c, diam_avp_t *a, tvbuff_t *tvb, diam_sub_dis_t *diam_sub_dis_inf)
 {
-	int offset = 0;
-	int len = tvb_reported_length(tvb);
+	unsigned offset = 0;
+	unsigned len = tvb_reported_length(tvb);
 	wmem_strbuf_t *group_avp_str = NULL;
 	const char *group_avp_str_char = NULL;
 	proto_item *pi = proto_tree_add_item(c->tree, a->hf_value, tvb , 0 , -1, ENC_BIG_ENDIAN);
@@ -1861,7 +1861,7 @@ dissect_diameter_avps(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void 
 {
 	proto_item *pi;
 	proto_tree *diam_tree;
-	int offset = 0;
+	unsigned offset = 0;
 	diam_ctx_t *c = wmem_new0(pinfo->pool, diam_ctx_t);
 	diam_sub_dis_t *diam_sub_dis_inf = wmem_new0(pinfo->pool, diam_sub_dis_t);
 
@@ -2679,7 +2679,7 @@ ddictionary_print_avp(void* data, void* user_data)
 static bool
 ddictionary_process_command(xmlNodePtr command, GSList** commands)
 {
-	ddict_command_t* element = g_new(ddict_command_t, 1);
+	ddict_command_t* element = g_new0(ddict_command_t, 1);
 	element->name = xmlGetProp(command, (const xmlChar*)"name");
 	element->vendor = xmlGetProp(command, (const xmlChar*)"vendor-id");
 	xmlChar* code = xmlGetProp(command, (const xmlChar*)"code");
@@ -2716,7 +2716,7 @@ ddictionary_process_avp(xmlNodePtr avp, GSList** avps)
 			element->type = xmlGetProp(current_node, (const xmlChar*)"type-name");
 		}
 		else if (xmlStrcmp(current_node->name, (const xmlChar*)"enum") == 0) {
-			ddict_avp_enum_t* avp_enum = g_new(ddict_avp_enum_t, 1);
+			ddict_avp_enum_t* avp_enum = g_new0(ddict_avp_enum_t, 1);
 
 			avp_enum->name = xmlGetProp(current_node, (const xmlChar*)"name");
 			code = xmlGetProp(current_node, (const xmlChar*)"code");

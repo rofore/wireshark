@@ -32,39 +32,6 @@
 
 #include "ws_attributes.h"
 
-/*
- * Linux bonding devices mishandle unknown ioctls; they fail
- * with ENODEV rather than ENOTSUP, EOPNOTSUPP, or ENOTTY,
- * so pcap_can_set_rfmon() returns a "no such device" indication
- * if we try to do SIOCGIWMODE on them.
- *
- * So, on Linux, we check for bonding devices, if we can, before
- * trying pcap_can_set_rfmon(), as pcap_can_set_rfmon() will
- * end up trying SIOCGIWMODE on the device if that ioctl exists.
- */
-#if defined(__linux__)
-
-#include <sys/ioctl.h>
-
-/*
- * If we're building for a Linux version that supports bonding,
- * HAVE_BONDING will be defined.
- */
-
-#ifdef HAVE_LINUX_SOCKIOS_H
-#include <linux/sockios.h>
-#endif
-
-#ifdef HAVE_LINUX_IF_BONDING_H
-#include <linux/if_bonding.h>
-#endif
-
-#if defined(BOND_INFO_QUERY_OLD) || defined(SIOCBONDINFOQUERY)
-#define HAVE_BONDING
-#endif
-
-#endif /* defined(__linux__) */
-
 #include "capture/capture_ifinfo.h"
 #include "capture/capture-pcap-util.h"
 #include "capture/capture-pcap-util-int.h"
@@ -78,28 +45,216 @@
 #include <wsutil/please_report_bug.h>
 #include <wsutil/wslog.h>
 
-#ifndef _WIN32
-#include <netinet/in.h>
-#endif
-
 #ifdef _WIN32
 #include "capture/capture_win_ifnames.h" /* windows friendly interface names */
 #endif
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#ifdef _WIN32
+#include <iphlpapi.h>
+#include "capture/capture_win_ifnames.h" /* windows friendly interface names */
+
+static interface_type
+get_windows_iftype(const char *name)
+{
+	ULONG buflen = 15000;
+	PIP_ADAPTER_ADDRESSES addrs, curr;
+	ULONG ret;
+	interface_type type = IF_WIRED;
+
+	addrs = (PIP_ADAPTER_ADDRESSES)g_malloc(buflen);
+	ret = GetAdaptersAddresses(AF_UNSPEC,
+	    GAA_FLAG_INCLUDE_PREFIX, NULL, addrs, &buflen);
+	if (ret == ERROR_BUFFER_OVERFLOW) {
+		g_free(addrs);
+		addrs = (PIP_ADAPTER_ADDRESSES)g_malloc(buflen);
+		ret = GetAdaptersAddresses(AF_UNSPEC,
+		    GAA_FLAG_INCLUDE_PREFIX, NULL, addrs, &buflen);
+	}
+	if (ret != NO_ERROR) {
+		g_free(addrs);
+		return IF_WIRED;
+	}
+
+	/*
+	 * Npcap device names use \Device\NPF_{GUID}, so
+	 * strip that prefix and match against AdapterName
+	 * which is the {GUID} part.
+	 */
+	const char *match_name = name;
+	if (strncmp(name, "\\Device\\NPF_", 12) == 0)
+		match_name = name + 12;
+
+	for (curr = addrs; curr != NULL; curr = curr->Next) {
+		if (g_ascii_strcasecmp(curr->AdapterName,
+		    match_name) != 0)
+			continue;
+
+		switch (curr->IfType) {
+		case IF_TYPE_SOFTWARE_LOOPBACK:
+			type = IF_LOOPBACK;
+			break;
+		case IF_TYPE_TUNNEL:
+			type = IF_TUNNEL;
+			break;
+		case IF_TYPE_PPP:
+			type = IF_DIALUP;
+			break;
+		case IF_TYPE_IEEE80211:
+			type = IF_WIRELESS;
+			break;
+		case IF_TYPE_PROP_VIRTUAL:
+			type = IF_VIRTUAL;
+			break;
+		default:
+			break;
+		}
+		break;
+	}
+
+	g_free(addrs);
+	return type;
+}
+#else /* _WIN32 */
+/*
+ * Not Windows (UN*Xes, Haiku)
+ *
+ * Get stuff for various socket ioctls.
+ */
+#include <sys/ioctl.h>
+
 /*
  * Needed for the code to get a device description.
  */
 #include <errno.h>
-#include <net/if.h>
+
+#include <ifaddrs.h>
+#include <unistd.h>
+
+/*
+ * On most supported platforms <sys/ioctl.h> also defines the SIOCGIF* macros.
+ * However, on Haiku and Solaris/Illumos the macros need <sys/sockio.h>,
+ * which does not exist on some other systems.
+ */
+#if defined(__HAIKU__) || defined(sun) || defined(_sun)
 #include <sys/sockio.h>
-#include <sys/ioctl.h>
 #endif
+
+/*
+ * On Linux, <net/if.h> must be included before anything that pulls in
+ * <linux/if.h> (e.g. <linux/if_bonding.h> below); otherwise glibc's
+ * libc-compat guard cannot suppress the kernel-header definitions and
+ * we get redefinition errors for IFF_UP and friends.
+ */
+#include <net/if.h>
+
+/*
+ * Linux bonding devices mishandle unknown ioctls; they fail
+ * with ENODEV rather than ENOTSUP, EOPNOTSUPP, or ENOTTY,
+ * so pcap_can_set_rfmon() returns a "no such device" indication
+ * if we try to do SIOCGIWMODE on them.
+ *
+ * So, on Linux, we check for bonding devices, if we can, before
+ * trying pcap_can_set_rfmon(), as pcap_can_set_rfmon() will
+ * end up trying SIOCGIWMODE on the device if that ioctl exists.
+ */
+#if defined(__linux__)
+
+#ifdef HAVE_LINUX_SOCKIOS_H
+#include <linux/sockios.h>
+#endif
+
+#ifdef HAVE_LINUX_IF_BONDING_H
+#include <linux/if_bonding.h>
+#endif
+
+/*
+ * If we're building for a Linux version that supports bonding,
+ * define HAVE_BONDING.
+ */
+#if defined(BOND_INFO_QUERY_OLD) || defined(SIOCBONDINFOQUERY)
+#define HAVE_BONDING
+#endif
+
+#endif /* defined(__linux__) */
+
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#include <net/if_dl.h>
+#endif
+
+#include <netinet/in.h>
 
 /*
  * Given an interface name, find the "friendly name" and interface
  * type for the interface.
  */
+
+static int get_unix_iff_flags(const char *ifname)
+{
+	int sock;
+	struct ifreq ifr;
+	size_t len;
+
+	if (ifname == NULL)
+		return -1;
+
+	len = strlen(ifname);
+	if (len == 0 || len >= IFNAMSIZ)
+		return -1;
+
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock < 0)
+		return -1;
+
+	memset(&ifr, 0, sizeof(ifr));
+	memcpy(ifr.ifr_name, ifname, len);
+
+	if (ioctl(sock, SIOCGIFFLAGS, &ifr) < 0) {
+		close(sock);
+		return -1;
+	}
+
+	close(sock);
+	return ifr.ifr_flags;
+}
+
+/*
+ * Returns the sdl_type (IANA ifType) for the given interface name,
+ * or -1 if not found.
+ */
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+static int get_unix_sdl_type(const char *ifname)
+{
+	struct ifaddrs *ifap, *ifa;
+	int type = -1;
+
+	if (ifname == NULL)
+		return -1;
+
+	if (getifaddrs(&ifap) != 0)
+		return -1;
+
+	for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+		if (ifa->ifa_addr == NULL)
+			continue;
+		if (ifa->ifa_addr->sa_family != AF_LINK)
+			continue;
+		if (strcmp(ifa->ifa_name, ifname) != 0)
+			continue;
+
+		struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+		type = sdl->sdl_type;
+		break;
+	}
+
+	freeifaddrs(ifap);
+	return type;
+}
+#else /* defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) */
+static int get_unix_sdl_type(const char *ifname _U_)
+{
+	return -1;
+}
+#endif /* defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) */
 
 #if defined(HAVE_MACOS_FRAMEWORKS)
 
@@ -258,7 +413,7 @@ add_unix_interface_ifinfo(if_info_t *if_info, const char *name,
 			if_info->type = IF_USB;
 	}
 }
-#elif !defined(_WIN32)
+#else
 /*
  * On other UN*Xes, if there is a description, it's a friendly
  * name, and there is no vendor description.  ("Other UN*Xes"
@@ -271,6 +426,10 @@ add_unix_interface_ifinfo(if_info_t *if_info, const char *name _U_,
 	if_info->friendly_name = g_strdup(description);
 }
 #endif
+#endif /* _WIN32 */
+
+static if_info_t *
+if_info_new(const char *name, const char *description, bool loopback);
 
 if_info_t *
 if_info_get(const char *name)
@@ -510,7 +669,7 @@ if_info_copy_cb(const void* data, void *user_data _U_)
 	return if_info_copy((const if_info_t*)data);
 }
 
-if_info_t *
+static if_info_t *
 if_info_new(const char *name, const char *description, bool loopback)
 {
 	if_info_t *if_info;
@@ -543,24 +702,33 @@ if_info_new(const char *name, const char *description, bool loopback)
 	 * So we look for keywords in the vendor's interface
 	 * description.
 	 */
-	if (description && (strstr(description, "generic dialup") != NULL ||
-	    strstr(description, "PPP/SLIP") != NULL)) {
-		if_info->type = IF_DIALUP;
-	} else if (description && (strstr(description, "Wireless") != NULL ||
-	    strstr(description,"802.11") != NULL)) {
-		if_info->type = IF_WIRELESS;
-	} else if (description && (strstr(description, "AirPcap") != NULL ||
-	    strstr(name, "airpcap") != NULL)) {
-		if_info->type = IF_AIRPCAP;
-	} else if (description && strstr(description, "Bluetooth") != NULL ) {
-		if_info->type = IF_BLUETOOTH;
-	} else if (description && strstr(description, "VMware") != NULL) {
-		/*
-		 * Bridge, NAT, or host-only interface on a VMware host.
-		 *
-		 * XXX - what about guest interfaces?
-		 */
-		if_info->type = IF_VIRTUAL;
+	if_info->type = get_windows_iftype(name);
+
+	/*
+	 * Refine with description string matching for cases
+	 * where IfType is too generic (e.g. TAP adapters
+	 * reporting as IF_TYPE_ETHERNET_CSMACD).
+	 */
+	if (if_info->type == IF_WIRED) {
+		if (description && (strstr(description, "generic dialup") != NULL ||
+		    strstr(description, "PPP/SLIP") != NULL))
+			if_info->type = IF_DIALUP;
+		else if (description && (strstr(description, "Wireless") != NULL ||
+		    strstr(description, "802.11") != NULL))
+			if_info->type = IF_WIRELESS;
+		else if (description && (strstr(description, "AirPcap") != NULL ||
+		    strstr(name, "airpcap") != NULL))
+			if_info->type = IF_AIRPCAP;
+		else if (description && strstr(description, "Bluetooth") != NULL)
+			if_info->type = IF_BLUETOOTH;
+		else if (description && (strstr(description, "VMware") != NULL ||
+		    strstr(description, "VirtualBox") != NULL ||
+		    strstr(description, "Hyper-V") != NULL))
+			if_info->type = IF_VIRTUAL;
+		else if (description && (strstr(description, "WireGuard") != NULL ||
+		    strstr(description, "TAP-Windows") != NULL ||
+		    strstr(description, "Wintun") != NULL))
+			if_info->type = IF_TUNNEL;
 	}
 
 	/*
@@ -599,7 +767,7 @@ if_info_new(const char *name, const char *description, bool loopback)
 		if_info->friendly_name = g_strdup(description);
 		if_info->vendor_description = NULL;
 	}
-#else
+#else /* _WIN32 */
 	/*
 	 * On UN*X, if there is a description, it's a friendly
 	 * name, and there is no vendor description.
@@ -607,38 +775,149 @@ if_info_new(const char *name, const char *description, bool loopback)
 	 * Try the platform's way of getting a friendly name and
 	 * interface type first.
 	 *
-	 * If that fails, then, for a loopback interface, give it the
-	 * friendly name "Loopback" and, for VMware interfaces,
-	 * give them the type IF_VIRTUAL.
+	 * If that fails, then try to figure out what the interface
+	 * is and give it a friendly name and appropriate type.
 	 */
 	add_unix_interface_ifinfo(if_info, name, description);
 	if (if_info->type == IF_WIRED) {
-		/*
-		 * This is the default interface type.
-		 *
-		 * Bridge, NAT, or host-only interfaces on VMWare hosts
-		 * have the name vmnet[0-9]+. Guests might use a native
-		 * (LANCE or E1000) driver or the vmxnet driver.  Check
-		 * the name.
-		 */
-		if (g_ascii_strncasecmp(name, "vmnet", 5) == 0)
-			if_info->type = IF_VIRTUAL;
-		else if (g_ascii_strncasecmp(name, "vmxnet", 6) == 0)
-			if_info->type = IF_VIRTUAL;
-	}
-	if (if_info->friendly_name == NULL) {
-		/*
-		 * We couldn't get interface information using platform-
-		 * dependent calls.
-		 *
-		 * If this is a loopback interface, give it a
-		 * "friendly name" of "Loopback".
-		 */
-		if (loopback)
-			if_info->friendly_name = g_strdup("Loopback");
-	}
-	if_info->vendor_description = NULL;
+		int flags = get_unix_iff_flags(name);
+		int sdl_type = get_unix_sdl_type(name);
+
+		if (flags != -1 && (flags & IFF_LOOPBACK)) {
+			if_info->type = IF_LOOPBACK;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Loopback");
+		} else if (flags != -1 && (flags & IFF_POINTOPOINT)) {
+			/*
+			 * XXX - what about pppN interfaces?
+			 * They're just PPP links, not tunnels.
+			 */
+			if_info->type = IF_TUNNEL;
+			if (if_info->friendly_name == NULL) {
+#if defined(__APPLE__)
+				if (g_ascii_strncasecmp(name, "utun", 4) == 0)
+					if_info->friendly_name = g_strdup("Tunnel (System Services, VPN)");
+				else if (g_ascii_strncasecmp(name, "ipsec", 5) == 0)
+					if_info->friendly_name = g_strdup("IPsec Tunnel");
+#elif defined(__linux__)
+				if (g_ascii_strncasecmp(name, "wg", 2) == 0)
+					if_info->friendly_name = g_strdup("WireGuard Tunnel");
+				else if (g_ascii_strncasecmp(name, "gre", 3) == 0)
+					if_info->friendly_name = g_strdup("GRE Tunnel");
+				else if (g_ascii_strncasecmp(name, "sit", 3) == 0)
+					if_info->friendly_name = g_strdup("IPv6-in-IPv4 Tunnel");
+				else if (g_ascii_strncasecmp(name, "ip6tnl", 6) == 0)
+					if_info->friendly_name = g_strdup("IPv6 Tunnel");
+				else if (g_ascii_strncasecmp(name, "ip6gre", 6) == 0)
+					if_info->friendly_name = g_strdup("IPv6 GRE Tunnel");
+				else if (g_ascii_strncasecmp(name, "tun", 3) == 0)
+					if_info->friendly_name = g_strdup("TUN Tunnel (VPN)");
+				else if (g_ascii_strncasecmp(name, "tap", 3) == 0)
+					if_info->friendly_name = g_strdup("TAP Tunnel (VPN)");
 #endif
+				if (if_info->friendly_name == NULL)
+					if_info->friendly_name = g_strdup("Tunnel");
+			}
+		} else if (sdl_type == 0x37) {
+			if_info->type = IF_TUNNEL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("GIF Tunnel");
+		} else if (sdl_type == 0x39) {
+			if_info->type = IF_TUNNEL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("6to4 Tunnel");
+		} else if (g_ascii_strncasecmp(name, "vmnet", 5) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("VMware Virtual Network");
+		} else if (g_ascii_strncasecmp(name, "vmxnet", 6) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("VMware Paravirtual NIC");
+#if defined(__APPLE__)
+		} else if (g_ascii_strncasecmp(name, "awdl", 4) == 0) {
+			if_info->type = IF_WIRELESS;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Apple Wireless Direct Link");
+		} else if (g_ascii_strncasecmp(name, "llw", 3) == 0) {
+			if_info->type = IF_WIRELESS;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Low-Latency WLAN");
+		} else if (g_ascii_strncasecmp(name, "ap", 2) == 0 &&
+			   g_ascii_isdigit(name[2])) {
+			if_info->type = IF_WIRELESS;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Wi-Fi Access Point");
+		} else if (g_ascii_strncasecmp(name, "anpi", 4) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Apple Network Peer Injection");
+		} else if (g_ascii_strncasecmp(name, "bridge", 6) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Bridge");
+		} else if (g_ascii_strncasecmp(name, "vmenet", 6) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("VM Ethernet");
+#elif defined(__linux__)
+		} else if (g_ascii_strncasecmp(name, "docker", 6) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Docker Bridge");
+		} else if (g_ascii_strncasecmp(name, "veth", 4) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Virtual Ethernet");
+		} else if (strncmp(name, "br-", 3) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Bridge");
+		} else if (g_ascii_strncasecmp(name, "virbr", 5) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Libvirt Bridge");
+		} else if (g_ascii_strncasecmp(name, "lxcbr", 5) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("LXC Bridge");
+		} else if (g_ascii_strncasecmp(name, "nlmon", 5) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Netlink monitor");
+		} else if (g_ascii_strncasecmp(name, "nflog", 5) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Netfilter log");
+		} else if (g_ascii_strncasecmp(name, "nfqueue", 7) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("Netfilter queue");
+		} else if (g_ascii_strncasecmp(name, "dbus-session", 12) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("D-Bus session bus");
+		} else if (g_ascii_strncasecmp(name, "dbus-system", 11) == 0) {
+			if_info->type = IF_VIRTUAL;
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("D-Bus system bus");
+#endif
+		}
+	}
+#if defined(__linux__)
+	if (if_info->type == IF_USB) {
+		if (g_ascii_strncasecmp(name, "usbmon0", 7) == 0) {
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("USB monitor (all)");
+		} else if (g_ascii_strncasecmp(name, "usbmon", 6) == 0) {
+			if (if_info->friendly_name == NULL)
+				if_info->friendly_name = g_strdup("USB monitor");
+		}
+	}
+#endif
+
+	if_info->vendor_description = NULL;
+#endif /* _WIN32 */
 	if_info->loopback = loopback;
 	if_info->addrs = NULL;
 	if_info->caps = NULL;
@@ -695,9 +974,9 @@ if_info_ip(if_info_t *if_info, pcap_if_t *d)
 
 #ifdef HAVE_PCAP_REMOTE
 GList *
-get_interface_list_findalldevs_ex(const char *hostname, const char *port,
-			  int auth_type, const char *username,
-			  const char *passwd, int *err, char **err_str)
+get_remote_interface_list_common(const char *hostname, const char *port,
+				 int auth_type, const char *username,
+				 const char *passwd, int *err, char **err_str)
 {
 	char source[PCAP_BUF_SIZE];
 	struct pcap_rmtauth auth;
@@ -781,17 +1060,17 @@ get_interface_list_findalldevs_ex(const char *hostname, const char *port,
 
 	return il;
 }
-#endif
+#endif /* HAVE_PCAP_REMOTE */
 
 GList *
-get_interface_list_findalldevs(bool wire_interface, int *err, char **err_str)
+get_local_interface_list(int *err, char **err_str)
 {
 	GList  *il = NULL;
-	pcap_if_t *alldevs = NULL, *dev;
+	pcap_if_t *alldevs, *dev;
 	if_info_t *if_info;
 	char errbuf[PCAP_ERRBUF_SIZE];
 
-	if (wire_interface && pcap_findalldevs(&alldevs, errbuf) == -1) {
+	if (pcap_findalldevs(&alldevs, errbuf) == -1) {
 		*err = CANT_GET_INTERFACE_LIST;
 		if (err_str != NULL)
 			*err_str = cant_get_if_list_error_message(errbuf);
@@ -817,6 +1096,19 @@ get_interface_list_findalldevs(bool wire_interface, int *err, char **err_str)
 	pcap_freealldevs(alldevs);
 
 	return il;
+}
+
+GList*
+get_local_interface_list_ss(int* err, char** err_str)
+{
+	/*
+	 * This is for Stratoshark/strato, so we don't look for
+	 * intrfaces.
+	 */
+	*err = 0;
+	if (err_str != NULL)
+		*err_str = NULL;
+	return NULL;
 }
 
 static void
@@ -903,8 +1195,8 @@ get_pcap_datalink(pcap_t *pch,
 #endif
 
 	datalink = pcap_datalink(pch);
-#ifdef _AIX
 
+#ifdef _AIX
 	/*
 	 * The libpcap that comes with AIX 5.x uses RFC 1573 ifType values
 	 * rather than DLT_ values for link-layer types; the ifType values
@@ -1004,7 +1296,7 @@ get_pcap_datalink(pcap_t *pch,
 			datalink = 0;
 		}
 	}
-#endif
+#endif /* _AIX */
 
 	return datalink;
 }
@@ -1275,13 +1567,13 @@ is_linux_bonding_device(const char *ifname)
 	close(fd);
 	return false;
 }
-#else
+#else /* HAVE_BONDING */
 static bool
 is_linux_bonding_device(const char *ifname _U_)
 {
 	return false;
 }
-#endif
+#endif /* HAVE_BONDING */
 
 if_capabilities_t *
 get_if_capabilities_pcap_create(interface_options *interface_opts,
@@ -1431,8 +1723,7 @@ get_if_capabilities_pcap_create(interface_options *interface_opts,
 	pcap_close(pch);
 
 	*open_status = CAP_DEVICE_OPEN_NO_ERR;
-	if (open_status_str != NULL)
-		*open_status_str = NULL;
+	*open_status_str = NULL;
 	return caps;
 }
 

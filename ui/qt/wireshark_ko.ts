@@ -2,14 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ko">
 <context>
-    <name>Abbreviation</name>
-    <message>
-        <source></source>
-        <comment>for &quot;not applicable&quot;</comment>
-        <translation></translation>
-    </message>
-</context>
-<context>
     <name>AboutDialog</name>
     <message>
         <source>About Wireshark</source>
@@ -147,6 +139,29 @@
     <message>
         <source>Value</source>
         <translation>값</translation>
+    </message>
+</context>
+<context>
+    <name>AnnotationEditDialog</name>
+    <message>
+        <source>Color:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Comment (max %1 characters)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Comment:</source>
+        <translation type="unfinished">주석</translation>
+    </message>
+    <message>
+        <source>Select Annotation Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Annotations are session-only and will be lost when the capture is closed.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -704,6 +719,145 @@
     </message>
 </context>
 <context>
+    <name>BreakpointConditionDelegate</name>
+    <message>
+        <source>Expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua expression — pause when truthy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Evaluated each time control reaches this line; locals, upvalues, and globals are visible like Watch / Evaluate.
+Runtime errors are treated as false (silent) and surface as a warning icon on the row.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hit Count</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pause after N hits (0 disables)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gate the pause on a hit counter. The dropdown next to N picks the comparison mode: from pauses on every hit from N onwards (default); every pauses on hits N, 2N, 3N, …; once pauses on the N-th hit and deactivates the breakpoint. Use 0 to disable the gate. The counter is preserved across edits to Expression / Hit Count / Log Message; lowering the target below the current count rolls the counter back to 0 so the breakpoint can wait for the next N hits. Right-click the row to reset it explicitly. Combined with an Expression on the same row, the hit-count gate runs first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Log Message</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Log message — supports {expr} and tags such as {filename}, {basename}, {line}, {function}, {hits}, {timestamp}, {delta}…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Logpoints write a message to the Evaluate output (and Wireshark&apos;s info log) each time the line is reached. By default execution continues without pausing; tick the Pause box on this editor to also pause after emitting (useful for log-then-inspect without duplicating the breakpoint). The line is emitted verbatim — there is no automatic file:line prefix. Inside {} the text is evaluated as a Lua expression in this frame and converted to text the same way tostring() does; reserved tags below shadow any same-named Lua local / upvalue / global. Origin: {filename}, {basename}, {line}, {function}, {what}. Counters and scope: {hits}, {depth}, {thread}. Time: {timestamp}, {datetime}, {epoch}, {epoch_ms}, {elapsed}, {delta}. Use {{ and }} for literal { and }. Per-placeholder errors substitute &apos;&lt;error: ...&gt;&apos; without aborting the line.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>from</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>every</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>once</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Comparison mode for the hit count:
+from — pause on every hit from N onwards.
+every — pause on hits N, 2N, 3N…
+once — pause once on the N-th hit and deactivate the breakpoint.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pause: format and emit the log message AND pause execution.
+Off = logpoint only (matches the historical &quot;logpoints never pause&quot; convention).</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>CaptureCardWidget</name>
+    <message>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Capture live packets from your network.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Capture</source>
+        <translation type="unfinished">캡처</translation>
+    </message>
+    <message>
+        <source>Start a new capture session</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;h2&gt;Capture&lt;/h2&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>…using this filter:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Capture filter</source>
+        <translation type="unfinished">캡처 필터</translation>
+    </message>
+    <message>
+        <source>Enter a capture filter expression to limit which data is recorded during live capture.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interface type filter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Filters the capture source list by type. Shows how many sources are currently visible and how many are hidden by the active filter.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Capture sources</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lists available capture sources. Select one or more to capture from.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 / %2 interfaces</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 / %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All interfaces shown</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n interface(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n interface(s) shown, %1 hidden</source>
+        <translation type="unfinished">
+            <numerusform>%n interface shown, %1 hidden</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>CaptureCommentDialog</name>
     <message>
         <source>Edit Capture Comments</source>
@@ -1138,50 +1292,39 @@
     </message>
 </context>
 <context>
-    <name>CaptureFilterCombo</name>
-    <message>
-        <source>Capture filter selector</source>
-        <translation>캡처 필터 선택자</translation>
-    </message>
-</context>
-<context>
-    <name>CaptureFilterEdit</name>
+    <name>CaptureFilterEntry</name>
     <message>
         <source>Capture filter entry</source>
-        <translation>캡처 필터 항목</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Manage saved bookmarks.</source>
-        <translation>저장한 북마크를 관리합니다.</translation>
+        <source>Saved Capture Filters</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Apply this filter string to the display.</source>
-        <translation>디스플레이에 이 필터 문자열을 적용합니다.</translation>
+        <source>Save this filter</source>
+        <translation type="unfinished">이 필터 저장</translation>
+    </message>
+    <message>
+        <source>Remove this filter</source>
+        <translation type="unfinished">이 필터 삭제</translation>
+    </message>
+    <message>
+        <source>Manage Capture Filters</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Multiple filters selected. Override them here or leave this blank to preserve them.</source>
         <extracomment>This is a very long concept that needs to fit into a short space.</extracomment>
-        <translation>여러 필터를 선택했습니다. 여기에서 필터를 덮어쓸 수 있으며, 비워 두면 유지합니다.</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>&lt;p&gt;The interfaces you have selected have different capture filters. Typing a filter here will override them. Doing nothing will preserve them.&lt;/p&gt;</source>
-        <translation>&lt;p&gt;선택한 인터페이스에 다른 캡처 필터가 있습니다. 여기에서 필터를 덮어쓸 수 있으며, 비워 두면 필터를 유지합니다.&lt;/p&gt;</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Enter a capture filter %1</source>
-        <translation>캡처 필터 입력 %1</translation>
-    </message>
-    <message>
-        <source>Save this filter</source>
-        <translation>이 필터 저장</translation>
-    </message>
-    <message>
-        <source>Remove this filter</source>
-        <translation>이 필터 삭제</translation>
-    </message>
-    <message>
-        <source>Manage Capture Filters</source>
-        <translation>캡처 필터 관리</translation>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1192,6 +1335,25 @@
     </message>
     <message>
         <source>Unable to check capture filter (BPF extensions require a live handle)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>CaptureFilterValidator</name>
+    <message>
+        <source>No interfaces selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unable to check capture filter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unable to check capture filter (BPF extensions require a live handle)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Syntax checking unavailable</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1647,26 +1809,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The interval between new packet updates. Affects how often the GUI updates and the granularity of timers.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;새 패킷 업데이트 시간 간격입니다. GUI 업데이트 주기와 타이머 정밀도에 영향을 줍니다.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <source>Enable Aggregation View for real-time capturing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>This option can only be changed when Aggregation Mode is not active.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Aggregation fields</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Fiedls used for aggregation.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit..</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Don&apos;t load interfaces on startup</source>
@@ -2248,6 +2390,81 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>Displays the raw data of the selected event.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Packet annotations are not saved and will be lost when the capture is closed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Packet Annotations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select one or more bytes first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Annotation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No annotation found at the selection.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Annotation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start byte set: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Set start byte first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start byte (absolute): %1
+End byte (absolute): %2
+Distance (absolute, bytes): %3
+Distance (signed, bytes): %4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>selected protocol</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>selected field</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>parent protocol</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>
+Reference range (%1): start %2, length %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>
+Start byte (relative to reference): %1
+End byte (relative to reference): %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>
+Relative to reference: n/a (outside reference range)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Compute Offset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Offset markers cleared.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DecodeAsDialog</name>
@@ -2340,14 +2557,256 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
-    <name>DisplayFilterCombo</name>
+    <name>DisAudioStream</name>
     <message>
-        <source>Display filter selector</source>
-        <translation>표시 필터 선택기</translation>
+        <source>No DIS signal payload is available for playback.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select from previously used filters.</source>
-        <translation>이전에 사용한 사용한 필터에서 선택합니다.</translation>
+        <source>Unable to decode DIS audio payload for this stream.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio format is not supported by the current output device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unable to open playback buffer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>DisStreamAnalysisDialog</name>
+    <message>
+        <source>DIS Stream Analysis</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation type="unfinished">스트림</translation>
+    </message>
+    <message>
+        <source>Codec</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duration (s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Packets</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Signal Packets</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transmitter Packets</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Estimated Lost</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Jitter (mean/max ms)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delta (mean/max ms)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Capture Time (s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Amplitude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>0.000 / 0.000 s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Playback</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Packet</source>
+        <translation type="unfinished">패킷</translation>
+    </message>
+    <message>
+        <source>Time (s)</source>
+        <translation type="unfinished">시간(초)</translation>
+    </message>
+    <message>
+        <source>Delta (ms)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Jitter (ms)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lost</source>
+        <translation type="unfinished">누락</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation type="unfinished">상태</translation>
+    </message>
+    <message>
+        <source>Go To First Packet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation type="unfinished">재생</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation type="unfinished">정지</translation>
+    </message>
+    <message>
+        <source>-</source>
+        <translation type="unfinished">-</translation>
+    </message>
+    <message>
+        <source>Unknown</source>
+        <translation type="unfinished">알 수 없음</translation>
+    </message>
+    <message>
+        <source>Problem</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waveform</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Jitter Spikes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Estimated Loss</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Problem Packets</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Double click on graph to set start of playback.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start: %1 s. Double click on graph to set start of playback.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>DIS Playback</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>DisStreamDialog</name>
+    <message>
+        <source>DIS Streams</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation type="unfinished">시작</translation>
+    </message>
+    <message>
+        <source>End</source>
+        <translation type="unfinished">종료</translation>
+    </message>
+    <message>
+        <source>Src Address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Src Port</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dst Address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dst Port</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Radio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Entity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Signal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tx</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lost</source>
+        <translation type="unfinished">누락</translation>
+    </message>
+    <message>
+        <source>Max Delta (ms)</source>
+        <translation type="unfinished">최대 간격(ms)</translation>
+    </message>
+    <message>
+        <source>Mean Jitter (ms)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Max Jitter (ms)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pb</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Prepare Filter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation type="unfinished">재생</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation type="unfinished">정지</translation>
+    </message>
+    <message>
+        <source>Analyze</source>
+        <translation type="unfinished">분석</translation>
+    </message>
+    <message>
+        <source>X</source>
+        <translation type="unfinished">X</translation>
+    </message>
+    <message>
+        <source>DIS Playback</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2416,6 +2875,45 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>Filter Button Preferences…</source>
         <oldsource>Filter Button Preferences...</oldsource>
         <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>DisplayFilterEntry</name>
+    <message>
+        <source>Display filter entry</source>
+        <translation type="unfinished">표시 필터 항목</translation>
+    </message>
+    <message>
+        <source>Saved Display Filters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save this filter</source>
+        <translation type="unfinished">이 필터 저장</translation>
+    </message>
+    <message>
+        <source>Remove this filter</source>
+        <translation type="unfinished">이 필터 삭제</translation>
+    </message>
+    <message>
+        <source>Manage Display Filters</source>
+        <translation type="unfinished">표시 필터 관리</translation>
+    </message>
+    <message>
+        <source>Filter Button Preferences…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply a display filter %1 &lt;%2/&gt;</source>
+        <translation type="unfinished">표시 필터 적용 %1 &lt;%2/&gt;</translation>
+    </message>
+    <message>
+        <source>Display Filter Expression…</source>
+        <translation type="unfinished">표시 필터 표현식…</translation>
+    </message>
+    <message>
+        <source>Left align buttons</source>
+        <translation type="unfinished">왼쪽으로 버튼 정렬</translation>
     </message>
 </context>
 <context>
@@ -2511,6 +3009,13 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Click OK to insert this filter</source>
         <translation>이 필터를 추가하려면 확인을 클릭하십시오</translation>
+    </message>
+</context>
+<context>
+    <name>DisplayFilterValidator</name>
+    <message>
+        <source>&quot;%1&quot; is deprecated in favour of &quot;%2&quot;. See Help section 6.4.8 for details.</source>
+        <translation type="unfinished">&quot;%1&quot;은(는) &quot;%2&quot;(으)로 대체될 예정입니다. 도움말의 6.4.8절을 참조하십시오.</translation>
     </message>
 </context>
 <context>
@@ -2621,16 +3126,20 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>설명만</translation>
     </message>
     <message>
-        <source>Only enabled protocols</source>
-        <translation>활성화된 프로토콜만</translation>
+        <source>all</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Only disabled protocols</source>
-        <translation>비활성화된 프로토콜만</translation>
+        <source>enabled</source>
+        <translation type="unfinished">활성화됨</translation>
     </message>
     <message>
-        <source>any protocol</source>
-        <translation>모든 프로토콜</translation>
+        <source>disabled</source>
+        <translation type="unfinished">비활성화됨</translation>
+    </message>
+    <message>
+        <source>protocols</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>non-heuristic protocols</source>
@@ -2898,7 +3407,46 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>ExpertInfoModel</name>
+    <message>
+        <source>Severity: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Summary: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Summary: Packet comments listed below.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Group: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Protocol: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Count: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Packet: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Header Field: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ExpertInfoProxyModel</name>
+    <message>
+        <source>Count: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Packet</source>
         <translation>패킷</translation>
@@ -2972,6 +3520,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>내용 유형:</translation>
     </message>
     <message>
+        <source>Unique</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only display the first of identical entries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Searching for objects</source>
         <translation>객체 검색 중</translation>
     </message>
@@ -2982,6 +3538,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Only display entries containing this string</source>
         <translation>이 문자열을 포함하는 항목만 표시</translation>
+    </message>
+    <message>
+        <source>Save All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Displayed</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Preview</source>
@@ -3002,6 +3566,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Save Object As…</source>
         <translation>다른 이름으로 객체 저장...</translation>
+    </message>
+    <message>
+        <source>Save Objects In…</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Save All Objects In…</source>
@@ -3266,6 +3834,45 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>FilterExpressionEdit</name>
+    <message>
+        <source>Saved Filters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save this filter</source>
+        <translation type="unfinished">이 필터 저장</translation>
+    </message>
+    <message>
+        <source>Remove this filter</source>
+        <translation type="unfinished">이 필터 삭제</translation>
+    </message>
+    <message>
+        <source>Manage Saved Filters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Filter Button Preferences...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Manage saved filters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear the filter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply this filter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Recent filters</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>FilterExpressionFrame</name>
     <message>
         <source>Frame</source>
@@ -3349,6 +3956,13 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Filter Expression</source>
         <translation>필터 표현식</translation>
+    </message>
+</context>
+<context>
+    <name>FilterValidator</name>
+    <message>
+        <source>Invalid filter: %1</source>
+        <translation type="unfinished">잘못된 필터: %1</translation>
     </message>
 </context>
 <context>
@@ -3514,6 +4128,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Global Extcap path</source>
         <translation>전역 Extcap 경로</translation>
+    </message>
+    <message>
+        <source>Personal Themes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>User-installed theme files (*.jsonc)</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>MaxMind DB path</source>
@@ -3771,61 +4393,16 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>글꼴 선택</translation>
     </message>
     <message>
-        <source>Colors:</source>
-        <translation>색상:</translation>
+        <source>Theme</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>System Default</source>
-        <translation>시스템 기본값</translation>
+        <source>Theme Author Information</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Solid</source>
-        <translation>단색</translation>
-    </message>
-    <message>
-        <source>Sample ignored packet text</source>
-        <translation>무시된 패킷 텍스트 예제</translation>
-    </message>
-    <message>
-        <source>Sample marked packet text</source>
-        <translation>표시된 패킷 텍스트 예제</translation>
-    </message>
-    <message>
-        <source>Sample active selected item</source>
-        <translation>활성 선택된 항목 예제</translation>
-    </message>
-    <message>
-        <source>Style:</source>
-        <translation>스타일:</translation>
-    </message>
-    <message>
-        <source>Gradient</source>
-        <translation>그라디언트</translation>
-    </message>
-    <message>
-        <source>Sample inactive selected item</source>
-        <translation>비활성 선택된 항목 예제</translation>
-    </message>
-    <message>
-        <source>Sample &quot;Follow Stream&quot; client text</source>
-        <translation>&quot;스트림 따라라기&quot; 클라이언트 텍스트 예제</translation>
-    </message>
-    <message>
-        <source>Sample &quot;Follow Stream&quot; server text</source>
-        <translation>&quot;스트림 따라가기&quot; 서버 텍스트 예제</translation>
-    </message>
-    <message>
-        <source>Sample valid filter</source>
-        <translation>올바른 필터 예제</translation>
-    </message>
-    <message>
-        <source>Sample invalid filter</source>
-        <translation>잘못된 필터 예제</translation>
-    </message>
-    <message>
-        <source>Sample warning filter</source>
-        <oldsource>Sample deprecated filter</oldsource>
-        <translation>경고 필터 예제</translation>
+        <source>Theme Description</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Example GIF query packets have jumbo window sizes</source>
@@ -3837,16 +4414,28 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>겉표지보다 큰 몇 향수류</translation>
     </message>
     <message>
-        <source>Color Scheme:</source>
-        <translation>색 구성표:</translation>
+        <source>System</source>
+        <translation type="unfinished">시스템</translation>
     </message>
     <message>
-        <source>Light Mode</source>
-        <translation>밝은 모드</translation>
+        <source>Light</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Dark Mode</source>
-        <translation>어두운 모드</translation>
+        <source>Dark</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Appearance mode:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Theme:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Theme by %1</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Font</source>
@@ -3993,6 +4582,30 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Add annotation…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit annotation…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove annotation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start byte for offset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>End byte for offset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear offset markers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Show bytes as hexadecimal</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4022,6 +4635,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>…as EBCDIC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Comment: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4262,7 +4879,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Move Left 100 Pixels</source>
-        <translation type="unfinished">왼쪽으로 10픽셀 이동 {100 ?}</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Alt+Left</source>
@@ -4270,7 +4887,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Move Right 100 Pixels</source>
-        <translation type="unfinished">오른쪽으로 10픽셀 이동 {100 ?}</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Alt+Right</source>
@@ -4278,7 +4895,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Move Down 100 Pixels</source>
-        <translation type="unfinished">아래쪽으로 10픽셀 이동 {100 ?}</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Alt+Down</source>
@@ -5287,6 +5904,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>가상</translation>
     </message>
     <message>
+        <source>Tunnel Interfaces</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loopback Devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Remote interfaces</source>
         <translation>원격 인터페이스</translation>
     </message>
@@ -5334,12 +5959,35 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>Hide Interface</source>
         <translation>인터페이스 숨기기</translation>
     </message>
+    <message>
+        <source>Unknown</source>
+        <translation type="unfinished">알 수 없음</translation>
+    </message>
+    <message>
+        <source>Hide all &apos;%1&apos; interfaces</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>InterfaceSortFilterModel</name>
     <message>
         <source>No interfaces to be displayed. %1 interfaces hidden.</source>
         <translation>표시할 인터페이스가 없습니다. 인터페이스 %1개는 숨겨졌습니다.</translation>
+    </message>
+</context>
+<context>
+    <name>InterfaceStatsWorker</name>
+    <message>
+        <source>The interface statistics stream stopped unexpectedly.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unable to start the interface statistics stream.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This build has no packet capture support.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -5487,7 +6135,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>%1 %2</source>
-        <translation type="unfinished">%1 %2</translation>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -6404,23 +7052,23 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>75%</source>
-        <translation type="unfinished">75%</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>80%</source>
-        <translation type="unfinished">80%</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>85%</source>
-        <translation type="unfinished">85%</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>90%</source>
-        <translation type="unfinished">90%</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>95%</source>
-        <translation type="unfinished">95%</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Separator style:</source>
@@ -6446,50 +7094,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
 <context>
     <name>LearnCardWidget</name>
     <message>
-        <source>User Documentation</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Docs</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Read the Wireshark user documentation online.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Wiki</source>
-        <translation type="unfinished">위키</translation>
-    </message>
-    <message>
-        <source>Browse the Wireshark Wiki for how-tos and other information.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Questions and Answers</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Q&amp;A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Get answers to your Wireshark questions from the community.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mailing Lists</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Lists</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Join the Wireshark mailing lists to discuss Wireshark with other users and developers.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>&lt;h2&gt;Learn&lt;/h2&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6499,22 +7103,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Opens the Wireshark documentation website</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Discord</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Join the Wireshark Discord server to chat with other users and developers.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Donate</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Support the Wireshark project by making a donation to the Wireshark Foundation.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -6970,6 +7558,542 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>LuaDebuggerBreakpointsController</name>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln breakpoint(s)?</source>
+        <translation type="obsolete">
+            <numerusform>Are you sure you want to remove %Ln breakpoint?</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerCodeTabsController</name>
+    <message numerus="yes">
+        <source>There are unsaved changes in %Ln open file(s).</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Save Lua Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not write to %1:
+%2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save changes to %1 before closing?</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerCodeView</name>
+    <message>
+        <source>Click: add or remove breakpoint
+Drag existing breakpoint: move to nearest free visible line
+Shift+click: on an empty line, add a disabled breakpoint;
+on an existing breakpoint, toggle its active state</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerDialog</name>
+    <message>
+        <source>Open Lua Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue execution (F5)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step over (F10)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step into (F11)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step out (Shift+F11)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Run to line (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reload Lua Plugins (Ctrl+Shift+L)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Find in script (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go to line (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Location</source>
+        <translation type="unfinished">위치</translation>
+    </message>
+    <message>
+        <source>Variables</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>From: Locals</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>From: Upvalues</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>From: Globals</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>
+… (truncated)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Locals&lt;/b&gt;&lt;br/&gt;Parameters and local variables for the selected stack frame.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Upvalues&lt;/b&gt;&lt;br/&gt;Outer variables that this function actually uses from surrounding code. Anything the function does not reference does not appear here.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Globals&lt;/b&gt;&lt;br/&gt;Names from the global environment table.&lt;/p&gt;&lt;p&gt;Values that differ from the previous pause are drawn in a &lt;b&gt;bold accent color&lt;/b&gt;, and briefly flash on the pause that introduced the change.&lt;/p&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished">이름</translation>
+    </message>
+    <message>
+        <source>Value</source>
+        <translation type="unfinished">값</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation type="unfinished">유형</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stack Trace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Function</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a row to inspect locals and upvalues for that frame. Double-click a Lua frame to open its source location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Breakpoints</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Expression&lt;/b&gt;&lt;br/&gt;Pause only when this Lua expression is truthy in the current frame. Runtime errors count as false and surface a warning icon on the row.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Hit Count&lt;/b&gt;&lt;br/&gt;Gate the pause on a hit counter. The dropdown next to &lt;i&gt;N&lt;/i&gt; picks the comparison mode: &lt;code&gt;from&lt;/code&gt; pauses on every hit from &lt;i&gt;N&lt;/i&gt; onwards (default); &lt;code&gt;every&lt;/code&gt; pauses on hits &lt;i&gt;N&lt;/i&gt;, 2&amp;times;&lt;i&gt;N&lt;/i&gt;, 3&amp;times;&lt;i&gt;N&lt;/i&gt;, &amp;hellip;; &lt;code&gt;once&lt;/code&gt; pauses on the &lt;i&gt;N&lt;/i&gt;-th hit and deactivates the breakpoint. The counter is preserved across edits; right-click the row to reset it.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Log Message&lt;/b&gt;&lt;br/&gt;Write a line to the &lt;i&gt;Evaluate&lt;/i&gt; output (and Wireshark&apos;s debug log) each time the breakpoint fires &amp;mdash; after the &lt;i&gt;Hit Count&lt;/i&gt; gate and any &lt;i&gt;Expression&lt;/i&gt; allow it. By default execution continues; click the pause toggle on the editor row to also pause after emitting. Tags: &lt;code&gt;{expr}&lt;/code&gt; (any Lua value); &lt;code&gt;{filename}&lt;/code&gt;, &lt;code&gt;{basename}&lt;/code&gt;, &lt;code&gt;{line}&lt;/code&gt;, &lt;code&gt;{function}&lt;/code&gt;, &lt;code&gt;{what}&lt;/code&gt;; &lt;code&gt;{hits}&lt;/code&gt;, &lt;code&gt;{depth}&lt;/code&gt;, &lt;code&gt;{thread}&lt;/code&gt;; &lt;code&gt;{timestamp}&lt;/code&gt;, &lt;code&gt;{datetime}&lt;/code&gt;, &lt;code&gt;{epoch}&lt;/code&gt;, &lt;code&gt;{epoch_ms}&lt;/code&gt;, &lt;code&gt;{elapsed}&lt;/code&gt;, &lt;code&gt;{delta}&lt;/code&gt;; &lt;code&gt;{{&lt;/code&gt; / &lt;code&gt;}}&lt;/code&gt; for literal braces.&lt;/p&gt;&lt;p&gt;Edit the &lt;i&gt;Location&lt;/i&gt; cell (double-click, F2, or right-click &amp;rarr; Edit) to attach one of these. A white core inside the breakpoint dot &amp;mdash; in this list and in the gutter &amp;mdash; marks rows that carry extras.&lt;/p&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Active</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Line</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hits</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>ON — Break on Lua errors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OFF — Break on Lua errors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Evaluate</source>
+        <translation type="unfinished">평가</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Lua Expression Evaluation&lt;/b&gt;&lt;br&gt;&lt;br&gt;Code runs in a protected environment: runtime errors are caught and shown in the output instead of propagating.&lt;br&gt;&lt;br&gt;&lt;b&gt;What works:&lt;/b&gt;&lt;ul&gt;&lt;li&gt;Read/modify global variables (&lt;code&gt;_G.x = 42&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;Modify table contents (&lt;code&gt;my_table.field = 99&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;Call functions and inspect return values&lt;/li&gt;&lt;/ul&gt;&lt;b&gt;Limitations:&lt;/b&gt;&lt;ul&gt;&lt;li&gt;Local variables cannot be modified directly (use &lt;code&gt;debug.setlocal()&lt;/code&gt;) unless there is an associated &lt;i&gt;assign&lt;/i&gt; method (&lt;code&gt;pinfo.src_port&lt;/code&gt;)&lt;/li&gt;&lt;li&gt;Long-running expressions are automatically aborted&lt;/li&gt;&lt;li&gt;&lt;b&gt;Warning:&lt;/b&gt; Changes to globals persist and can affect ongoing dissection&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter Lua expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Output</source>
+        <translation type="unfinished">출력</translation>
+    </message>
+    <message>
+        <source>Execute the Lua code (Ctrl+Return)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished">지우기</translation>
+    </message>
+    <message>
+        <source>Clear output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auto (follow color scheme)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dark</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Light</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color theme for the code editor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Code View Theme:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove All Breakpoints</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Watch (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;Each row is either a &lt;b&gt;Variables-tree path&lt;/b&gt; or a &lt;b&gt;Lua expression&lt;/b&gt;; the panel auto-detects which based on the syntax you type.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Path watches&lt;/b&gt; &amp;mdash; resolved against the paused frame&apos;s locals, upvalues, and globals:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Section-qualified: &lt;code&gt;Locals.&lt;i&gt;name&lt;/i&gt;&lt;/code&gt;, &lt;code&gt;Upvalues.&lt;i&gt;name&lt;/i&gt;&lt;/code&gt;, &lt;code&gt;Globals.&lt;i&gt;name&lt;/i&gt;&lt;/code&gt;.&lt;/li&gt;&lt;li&gt;Section root alone: &lt;code&gt;Locals&lt;/code&gt;, &lt;code&gt;Upvalues&lt;/code&gt;, &lt;code&gt;Globals&lt;/code&gt; (&lt;code&gt;_G&lt;/code&gt; is an alias for &lt;code&gt;Globals&lt;/code&gt;).&lt;/li&gt;&lt;li&gt;Unqualified name: resolved in &lt;b&gt;Locals &amp;rarr; Upvalues &amp;rarr; Globals&lt;/b&gt; order; the row tooltip shows which section matched.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;After the first segment, chain &lt;code&gt;.field&lt;/code&gt; or bracket keys &amp;mdash; integer (&lt;code&gt;[1]&lt;/code&gt;, &lt;code&gt;[-1]&lt;/code&gt;, &lt;code&gt;[0x1F]&lt;/code&gt;), boolean (&lt;code&gt;[true]&lt;/code&gt;), or short-literal string (&lt;code&gt;[&quot;key&quot;]&lt;/code&gt;, &lt;code&gt;[&apos;k&apos;]&lt;/code&gt;). Depth is capped at 32 segments.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Expression watches&lt;/b&gt; &amp;mdash; anything that is not a plain path (operators, function/method calls, table constructors, length &lt;code&gt;#&lt;/code&gt;, comparisons, &amp;hellip;) is evaluated as Lua against the same locals/upvalues/globals. &lt;b&gt;You do not need a leading &lt;code&gt;=&lt;/code&gt; or &lt;code&gt;return&lt;/code&gt;&lt;/b&gt;; value-returning expressions auto-return their value. Examples: &lt;code&gt;#packets&lt;/code&gt;, &lt;code&gt;tbl[i + 1]&lt;/code&gt;, &lt;code&gt;obj:method()&lt;/code&gt;, &lt;code&gt;a == b&lt;/code&gt;, &lt;code&gt;{x, y}&lt;/code&gt;. Tables produced by an expression are expandable, and children re-resolve on every pause.&lt;/p&gt;&lt;p&gt;Values are only read while the debugger is &lt;b&gt;paused&lt;/b&gt;; otherwise the Value column shows a muted em dash. Values that differ from the previous pause are drawn in a &lt;b&gt;bold accent color&lt;/b&gt;, and briefly flash on the pause that introduced the change.&lt;/p&gt;&lt;p&gt;Double-click or press &lt;b&gt;F2&lt;/b&gt; to edit a row; &lt;b&gt;Delete&lt;/b&gt; removes it; drag rows to reorder. Use the &lt;b&gt;Evaluate&lt;/b&gt; panel below to run statements with side effects (assignments, blocks, loops).&lt;/p&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Watch (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove All Watches (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No breakpoints</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Breakpoint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Breakpoint (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove All Breakpoints (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Undo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Redo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation type="unfinished">복사</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Breakpoint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Breakpoint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Run to this line</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Watch: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Debugger is paused. Uncheck to disable.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Debugger is enabled. Uncheck to disable.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Debugger is disabled while a live capture is running. Stop the capture to re-enable.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Debugger is disabled. Check to enable.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disabled (live capture)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(runtime error)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Running</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua Scripts (*.lua);;All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>F5</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step Over</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>F10</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step Into</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>F11</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step Out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shift+F11</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ctrl+Shift+W</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished">저장</translation>
+    </message>
+    <message>
+        <source>Ctrl+S</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Find…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ctrl+F</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go to Line…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ctrl+G</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reload Lua Plugins</source>
+        <translation type="unfinished">Lua 플러그인 다시 로드</translation>
+    </message>
+    <message>
+        <source>Ctrl+Shift+L</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerFindFrame</name>
+    <message>
+        <source>Find:</source>
+        <translation type="unfinished">찾기:</translation>
+    </message>
+    <message>
+        <source>Find Next</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Find Previous</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerGoToLineFrame</name>
+    <message>
+        <source>Line:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go to line</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">취소</translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerPauseOverlay</name>
+    <message>
+        <source>Lua debugger paused</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use the Lua Debugger window to step, continue, or evaluate. The main window resumes when execution is released.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerWatchController</name>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln watch(es)?</source>
+        <translation type="obsolete">
+            <numerusform>Are you sure you want to remove %Ln watch?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>Watch expression is too long (maximum %Ln characters).</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>LuaDebuggerWatchRowPresenter</name>
+    <message>
+        <source>Enter a variable path (e.g. Locals.x, Globals.t.k) or a Lua expression in the Watch column to see a value here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Value shown only while the debugger is paused.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Value shown only while the debugger is paused. The debugger is currently disabled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not evaluate watch.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Expression — re-evaluated on every pause.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>MainStatusBar</name>
     <message>
         <source>Ready to load or capture</source>
@@ -7111,6 +8235,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>선택된 패킷: %1 %2 </translation>
     </message>
     <message>
+        <source> %1 Aggregated: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source> %1 Selected: %2 (%3%)</source>
         <translation> %1 선택됨: %2(%3%)</translation>
     </message>
@@ -7176,6 +8304,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
 </context>
 <context>
     <name>MainWindow</name>
+    <message>
+        <source> before updating</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please close the current file before updating.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Display filter as %1</source>
         <translation>%1(으)로 표시 필터</translation>
@@ -7901,14 +9037,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
 <context>
     <name>PacketList</name>
     <message>
-        <source>Packet list</source>
-        <translation type="unfinished">패킷 목록</translation>
-    </message>
-    <message>
-        <source>List of captured packets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Summary as Text</source>
         <translation>텍스트로 요약</translation>
     </message>
@@ -8017,6 +9145,22 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Sorting …</source>
         <translation>정렬 중 …</translation>
+    </message>
+    <message>
+        <source>Marked</source>
+        <translation type="unfinished">마크됨</translation>
+    </message>
+    <message>
+        <source>Ignored</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reference Time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Modified</source>
+        <translation type="unfinished">수정됨</translation>
     </message>
 </context>
 <context>
@@ -8287,7 +9431,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Move Left 100 Pixels</source>
-        <translation type="unfinished">왼쪽으로 10픽셀 이동 {100 ?}</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Alt+Left</source>
@@ -8295,7 +9439,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Move Right 100 Pixels</source>
-        <translation type="unfinished">오른쪽으로 10픽셀 이동 {100 ?}</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Alt+Right</source>
@@ -8303,7 +9447,7 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Move Down 100 Pixels</source>
-        <translation type="unfinished">아래쪽으로 10픽셀 이동 {100 ?}</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Alt+Down</source>
@@ -8691,8 +9835,8 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>열</translation>
     </message>
     <message>
-        <source>Font and Colors</source>
-        <translation>글꼴 및 색상</translation>
+        <source>Theme and Font</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Welcome Page</source>
@@ -8713,6 +9857,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>RSA Keys</source>
         <translation>RSA 키</translation>
+    </message>
+    <message>
+        <source>Aggregation</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -8837,10 +9985,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>새 프로필</translation>
     </message>
     <message>
-        <source>Profile Error</source>
-        <translation>프로필 오류</translation>
-    </message>
-    <message>
         <source>Exporting profiles</source>
         <translation>프로필 내보내기</translation>
     </message>
@@ -8863,22 +10007,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation type="vanished">
             <numerusform>선택한 개인 프로필 %Ln개</numerusform>
         </translation>
-    </message>
-    <message>
-        <source>An import of profiles is not allowed, while changes are pending</source>
-        <translation>변경 사항이 보류 중일 때 프로필 가져오기는 허용되지 않습니다</translation>
-    </message>
-    <message>
-        <source>An import is pending to be saved. Additional imports are not allowed</source>
-        <translation>가져온 항목 저장이 보류 중입니다. 추가 가져오기는 허용되지 않습니다</translation>
-    </message>
-    <message>
-        <source>An export of profiles is only allowed for personal profiles</source>
-        <translation>프로필 내보내기는 개인 프로필에만 허용됩니다</translation>
-    </message>
-    <message>
-        <source>An export of profiles is not allowed, while changes are pending</source>
-        <translation>변경 사항이 보류 중일 때 프로필 내보내기는 허용되지 않습니다</translation>
     </message>
     <message numerus="yes">
         <source>%Ln profile(s) exported</source>
@@ -8948,24 +10076,24 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>이것은 시스템에서 제공한 프로필입니다</translation>
     </message>
     <message>
-        <source>A profile change for this name is pending</source>
-        <translation>이 이름의 프로필 변경을 보류하고 있습니다</translation>
-    </message>
-    <message>
-        <source> (See: %1)</source>
-        <translation> (참조: %1)</translation>
-    </message>
-    <message>
-        <source>This is an invalid profile definition</source>
-        <translation>잘못된 프로필 정의입니다</translation>
-    </message>
-    <message>
         <source>A profile already exists with this name</source>
         <translation>이 이름의 프로필이 이미 있습니다</translation>
     </message>
     <message>
-        <source>A profile with this name is being deleted</source>
-        <translation>이 이름의 프로필이 삭제되고 있습니다</translation>
+        <source>Duplicate profile name (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A profile change for this name is pending (See: %1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 (originally %2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The %1 profile is being deleted</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Created from default settings</source>
@@ -8989,16 +10117,8 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>복사</translation>
     </message>
     <message>
-        <source>Exporting profiles while changes are pending is not allowed</source>
-        <translation>변경 사항이 보류 중일 때 프로필 내보내기는 허용되지 않습니다</translation>
-    </message>
-    <message>
         <source>No profiles found to export</source>
         <translation>내보낼 프로필을 찾지 못했습니다</translation>
-    </message>
-    <message>
-        <source>Can&apos;t delete profile directory</source>
-        <translation>프로필 디렉터리를 삭제할 수 없습니다</translation>
     </message>
     <message>
         <source>A profile name cannot contain the following characters: %1</source>
@@ -9011,18 +10131,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>A profile cannot start or end with a period (.)</source>
         <translation>프로필은 마침표(.)로 시작하거나 끝낼 수 없습니다</translation>
-    </message>
-    <message>
-        <source>Default</source>
-        <translation>기본값</translation>
-    </message>
-    <message>
-        <source>Global</source>
-        <translation>전역</translation>
-    </message>
-    <message>
-        <source>Personal</source>
-        <translation>개인</translation>
     </message>
     <message>
         <source>Renamed from: %1</source>
@@ -9097,14 +10205,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
 </context>
 <context>
     <name>ProtoTree</name>
-    <message>
-        <source>Packet details</source>
-        <translation>패킷 자세한 정보</translation>
-    </message>
-    <message>
-        <source>Tree view of the selected packet&apos;s fields</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Not a field or protocol</source>
         <translation>필드나 프로토콜이 아님</translation>
@@ -9200,6 +10300,29 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Colorize with Filter</source>
         <translation>필터로 색상화</translation>
+    </message>
+</context>
+<context>
+    <name>ProtoTreeModel</name>
+    <message>
+        <source>Comment</source>
+        <translation type="unfinished">주석</translation>
+    </message>
+    <message>
+        <source>Chat</source>
+        <translation type="unfinished">대화</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation type="unfinished">주의</translation>
+    </message>
+    <message>
+        <source>Warning</source>
+        <translation type="unfinished">경고</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation type="unfinished">오류</translation>
     </message>
 </context>
 <context>
@@ -9735,6 +10858,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>UE Id</translation>
     </message>
     <message>
+        <source></source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Name</source>
         <translation>이름</translation>
     </message>
@@ -9915,12 +11042,245 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <source>not found</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Global</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Personal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 = %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy Value</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy Path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy Name &amp;&amp; Value</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Watch: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reload Lua Plugins</source>
+        <translation type="unfinished">Lua 플러그인 다시 로드</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to reload all Lua plugins?
+
+This will restart all Lua scripts and may affect capture analysis.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Evaluation available when debugger is paused</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter Lua expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error: Unknown error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open Source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy Location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show in Finder</source>
+        <translation type="unfinished">Finder에 표시</translation>
+    </message>
+    <message>
+        <source>Show in Folder</source>
+        <translation type="unfinished">폴더 위치 표시</translation>
+    </message>
+    <message>
+        <source>Add Watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove All Watches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duplicate Watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished">삭제</translation>
+    </message>
+    <message>
+        <source>Clear All Watches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln watch(es)?</source>
+        <translation type="unfinished">
+            <numerusform>Are you sure you want to remove %Ln watch?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Maximum watch depth reached</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Maximum watch depth reached.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Location</source>
+        <translation type="unfinished">위치</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Hit-count summary&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;code&gt;≥N&lt;/code&gt; &amp;mdash; &lt;i&gt;from&lt;/i&gt; mode: pause from hit &lt;i&gt;N&lt;/i&gt; onwards.&lt;br/&gt;&lt;code&gt;×N&lt;/code&gt; &amp;mdash; &lt;i&gt;every&lt;/i&gt; mode: pause on hits &lt;i&gt;N&lt;/i&gt;, &lt;i&gt;2N&lt;/i&gt;, &lt;i&gt;3N&lt;/i&gt;, &amp;hellip;&lt;br/&gt;&lt;code&gt;@N&lt;/code&gt; &amp;mdash; &lt;i&gt;once&lt;/i&gt; mode: pause once on the &lt;i&gt;N&lt;/i&gt;th hit, then deactivate.&lt;/p&gt;&lt;p&gt;The cell starts with the running hit counter; if a gate is set it follows in parentheses, e.g. &lt;code&gt;3 (≥10)&lt;/code&gt;. With no hit gate the cell is just the counter.&lt;/p&gt;&lt;p&gt;Edit the &lt;i&gt;Location&lt;/i&gt; cell to set or change the gate (see the breakpoint-extras section).&lt;/p&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reset Hit Count</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reset All Hit Counts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove All Breakpoints</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear All Breakpoints</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>Are you sure you want to remove %Ln breakpoint(s)?</source>
+        <translation type="unfinished">
+            <numerusform>Are you sure you want to remove %Ln breakpoint?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Location: %1:%2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Condition: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>pauses on hits %1, 2×%1, 3×%1, …</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>pauses once on hit %1, then deactivates the breakpoint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>pauses on every hit from %1 onwards</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hit Count: %1 / %2 (%3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hits: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Log: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(logpoint — also pauses)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(logpoint — does not pause)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Condition error on last evaluation — treated as false (silent). Edit or reset the breakpoint to clear.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Condition error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File not found: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Edit...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Disable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Enable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No breakpoints
+%1: add or remove breakpoint on the current line in the editor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All breakpoints are inactive — click to activate all
+%1: add or remove on the current line in the editor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click to deactivate all breakpoints
+%1: add or remove on the current line in the editor</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>QObject::QObject::QObject</name>
     <message>
         <source>CCCH</source>
-        <translation>CCCH</translation>
+        <translation type="vanished">CCCH</translation>
     </message>
 </context>
 <context>
@@ -13480,6 +14840,312 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>TcpDedupDialog</name>
+    <message>
+        <source>TCP Duplication Table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The &quot;Detect duplication (capture-level) packets&quot; preference must be enabled in
+Preferences → Protocols → TCP to use this table.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation type="unfinished">시간</translation>
+    </message>
+    <message>
+        <source>Delta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame Number</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duplication Total</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stream:</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ThemeDebugDialog</name>
+    <message>
+        <source>Theme Debug</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name:</source>
+        <translation type="unfinished">이름:</translation>
+    </message>
+    <message>
+        <source>Internal:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Version:</source>
+        <translation type="unfinished">버전:</translation>
+    </message>
+    <message>
+        <source>Author:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Description:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mode:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dark mode:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Theme</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Geometry:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame geometry:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Screen:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>DPI / DPR:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Window state:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>These values refresh live while the dialog is open.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Main Window</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Track widget under mouse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The inspector reports any widget in this application under the cursor — including child dialogs. Widgets that belong to this debug window are skipped so the last hovered target stays pinned. Hold Alt+Shift and click any widget to pin it: this turns off tracking and locks the readout onto that widget (re-check the box above to resume). Note: on macOS, tool windows are hidden whenever another application has focus, so tracking pauses until Wireshark is frontmost again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cursor (global):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Class:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Object name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Font:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Global rect:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Parent chain:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Palette (Active group):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Role</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>ThemeManager token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Swatch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stylesheet:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(no stylesheet)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Widget Inspector</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hex</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tokens</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="unfinished">새로 고침</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(no main window)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unknown)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>maximized</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>minimized</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>fullscreen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>active</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>normal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unset)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(none)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unnamed)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ThemePreviewWidget</name>
+    <message>
+        <source>No.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation type="unfinished">시간</translation>
+    </message>
+    <message>
+        <source>Delta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Destination</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Protocol</source>
+        <translation type="unfinished">프로토콜</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation type="unfinished">길이</translation>
+    </message>
+    <message>
+        <source>Show Coloring Rules</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Image As…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Theme Preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PNG Image (*.png)</source>
+        <translation type="unfinished">PNG 그림 (*.png)</translation>
+    </message>
+    <message>
+        <source>Could not write the image to &quot;%1&quot;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Profile: Default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Packets: %1</source>
+        <translation type="unfinished">패킷: %1</translation>
+    </message>
+    <message>
+        <source>Displayed: %1 (100.0%)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>TimeShiftDialog</name>
     <message>
         <source>Shift all packets by</source>
@@ -13951,14 +15617,125 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
 </context>
 <context>
+    <name>WelcomeHeaderWidget</name>
+    <message>
+        <source>Form</source>
+        <translation type="unfinished">폼</translation>
+    </message>
+    <message>
+        <source>Application Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Application name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wireshark</source>
+        <translation type="unfinished">Wireshark</translation>
+    </message>
+    <message>
+        <source>Version information</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Version of the application currently running</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>4.7.0 (v4.7.0rc0-2438-g68ddfc1bcba4)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Variant of the application running</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Build variant of the application currently running</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Development Build</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update Available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Graphical indicator that an update is available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A new update is available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update available: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Release Notes</source>
+        <translation type="unfinished">릴리스 노트</translation>
+    </message>
+    <message>
+        <source>Opens a browser to show the release notes for the available update</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download Update</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starts the download process for the currently available update</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dismiss update notification</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dismiss the update notification and show the information about an update again on either next application start or when a new update is available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update %1 is available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A new update for version %1 is available (current version is %2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Release Notes for update %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opens a browser to show the release notes for %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download update %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starts the download process for update %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>WelcomePage</name>
     <message>
         <source>Form</source>
         <translation>폼</translation>
-    </message>
-    <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:large;&quot;&gt;Welcome to Wireshark&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:large;&quot;&gt;Wireshark에 오신 것을 환영합니다&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Open</source>
@@ -13983,34 +15760,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Capture files that have been opened previously</source>
         <translation>이전에 열었던 캡처 파일</translation>
-    </message>
-    <message>
-        <source>Capture</source>
-        <translation type="unfinished">캡처</translation>
-    </message>
-    <message>
-        <source>Start a new capture session</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Capture live packets from your network.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;여러분의 네트워크에서 패킷을 바로 캡처하십시오.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <source>&lt;h2&gt;Capture&lt;/h2&gt;</source>
-        <translation>&lt;h2&gt;캡처&lt;/h2&gt;</translation>
-    </message>
-    <message>
-        <source>…using this filter:</source>
-        <translation>…다음 필터 사용:</translation>
-    </message>
-    <message>
-        <source>Interface list</source>
-        <translation>인터페이스 목록</translation>
-    </message>
-    <message>
-        <source>List of available capture interfaces</source>
-        <translation>사용 가능한 캡처 인터페이스 목록</translation>
     </message>
     <message>
         <source>Tips and announcements</source>
@@ -14045,62 +15794,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Welcome to %1</source>
-        <translation>%1에 오신 것을 환영합니다</translation>
-    </message>
-    <message>
         <source>List of recently opened capture files. Double-click or press Enter to open.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Interface type filter</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Filters the capture source list by type. Shows how many sources are currently visible and how many are hidden by the active filter.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Capture sources</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Lists available capture sources. Select one or more to capture from.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Capture filter</source>
-        <translation type="unfinished">캡처 필터</translation>
-    </message>
-    <message>
-        <source>Enter a capture filter expression to limit which data is recorded during live capture.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>All interfaces shown</source>
-        <translation>모든 인터페이스가 표시됨</translation>
-    </message>
     <message numerus="yes">
         <source>%n interface(s) shown, %1 hidden</source>
-        <translation>
-            <numerusform>인터페이스 %n개 표시됨, %1개 숨겨짐</numerusform>
+        <translation type="obsolete">
+            <numerusform>%n interface shown, %1 hidden</numerusform>
         </translation>
-    </message>
-    <message>
-        <source>You are sniffing the glue that holds the Internet together using Wireshark </source>
-        <translation>Wireshark를 사용하여 인터넷을 고정하는 접착제의 냄새를 맡고(스니핑) 있습니다 </translation>
-    </message>
-    <message>
-        <source>You are running Wireshark </source>
-        <translation>실행 중인 Wireshark 버전: </translation>
-    </message>
-    <message>
-        <source> You receive automatic updates.</source>
-        <translation> 자동 업데이트를 받고 있습니다.</translation>
-    </message>
-    <message>
-        <source> You have disabled automatic updates.</source>
-        <translation> 자동 업데이트를 사용하지 않도록 설정했습니다.</translation>
     </message>
     <message>
         <source>Copy file path</source>
@@ -14139,6 +15840,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Tip of the Day</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auto advance slides</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -15431,6 +17136,10 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>옵션(&amp;O)…</translation>
     </message>
     <message>
+        <source>Main Window</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Allows jumping to a specific packet by its number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -15472,6 +17181,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Allows creating or editing display filter buttons.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Main View</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Main Menu</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -15641,6 +17358,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>TCP throughput</source>
         <translation>TCP 처리량</translation>
+    </message>
+    <message>
+        <source>Duplication Table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TCP capture-level duplicate packet table</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>General</source>
@@ -15947,6 +17672,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>&amp;Theme Debug</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show the active theme, main window geometry, and live widget info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>MAP Summary</source>
         <translation>MAP 요약</translation>
     </message>
@@ -15968,10 +17701,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     </message>
     <message>
         <source>Aggregation in Live Capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Aggregation View.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -16307,6 +18036,22 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
         <translation>업데이트 확인…</translation>
     </message>
     <message>
+        <source>Main View Splitter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Contains the packet list, protocol tree, and packet bytes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Extra View Splitter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Contains packet extras and bytes views.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Unable to drop files during capture.</source>
         <translation>캡처 중에는 파일을 버릴 수 없습니다.</translation>
     </message>
@@ -16326,6 +18071,14 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Unknown file type returned by export dialog.</source>
         <translation>내보내기 대화 상자에서 알 수 없는 파일 형식을 반환했습니다.</translation>
+    </message>
+    <message>
+        <source>Aggregation View — displays frames grouped by your configured aggregation fields.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Aggregation View — displays frames grouped by your configured aggregation fields. To activate, go to Preferences → Aggregation.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Unsaved packets…</source>
@@ -16376,6 +18129,22 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Show or hide the toolbar</source>
         <translation>도구 모음 표시 또는 숨기기</translation>
+    </message>
+    <message>
+        <source>DIS Streams</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show and analyze DIS radio streams</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua Debugger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Software update checking is not available on this platform.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Continue &amp;without Saving</source>
@@ -16510,10 +18279,6 @@ For example, use 1 hour to have a new file created every hour on the hour.</sour
     <message>
         <source>Please wait while Wireshark is initializing…</source>
         <translation>Wireshark를 초기화하는 동안 기다려 주십시오…</translation>
-    </message>
-    <message>
-        <source> before updating</source>
-        <translation> 업데이트 전</translation>
     </message>
     <message>
         <source> before exporting PDUs</source>

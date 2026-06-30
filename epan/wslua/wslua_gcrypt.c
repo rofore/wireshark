@@ -59,6 +59,20 @@ WSLUA_CONSTRUCTOR GcryptCipher_open(lua_State* L) {
     WSLUA_RETURN(1); /* The new GcryptCipher object. */
 }
 
+WSLUA_METAMETHOD GcryptCipher__tostring(lua_State* L) {
+    /* Returns a short label of the form `GcryptCipher: (<state>)`
+       where <state> is `open` while the cipher handle is live and
+       `closed` once it has been garbage-collected. Libgcrypt does
+       not expose algorithm/mode metadata back from a
+       `gcry_cipher_hd_t`, so the label intentionally stops at the
+       open/closed state instead of guessing. */
+    GcryptCipher gcry_cipher = toGcryptCipher(L, 1);
+    lua_pushstring(L,
+        (gcry_cipher && *gcry_cipher) ? "GcryptCipher: (open)"
+                                      : "GcryptCipher: (closed)");
+    WSLUA_RETURN(1); /* The string. */
+}
+
 /* Gets registered as metamethod automatically by WSLUA_REGISTER_CLASS/META */
 static int GcryptCipher__gc(lua_State* L) {
     GcryptCipher gcry_cipher = toGcryptCipher(L,1);
@@ -268,6 +282,9 @@ WSLUA_METHOD GcryptCipher_decrypt(lua_State* L) {
     }
     gcry_error_t err = gcry_cipher_decrypt(*gcry_cipher, pout, out_length, pin, in_length);
     if (err) {
+        if (bain != NULL) {
+            g_byte_array_free(baout, TRUE);
+        }
         lua_pushstring(L, gcry_strerror(err));
         return lua_error(L);
     }
@@ -612,6 +629,7 @@ WSLUA_METHODS GcryptCipher_methods[] = {
 };
 
 WSLUA_META GcryptCipher_meta[] = {
+    WSLUA_CLASS_MTREG(GcryptCipher,tostring),
     { NULL, NULL }
 };
 

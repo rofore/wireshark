@@ -1331,7 +1331,7 @@ dissect_rohc_pkt_type_2(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, int
         }
         offset += 1 + val_len;
 
-        /* T - commonto  both */
+        /* T - common to  both */
         proto_tree_add_bits_item(pkt_tree, hf_rohc_t, tvb, (offset<<3), 1, ENC_BIG_ENDIAN);
 
         /* M - common to both */
@@ -1491,8 +1491,7 @@ dissect_rohc_feedback_data(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, 
                 switch (opt) {
                     case 1:
                         /* CRC */
-                        proto_tree_add_item(rohc_feedback_tree, hf_rohc_crc, tvb, offset, 1, ENC_BIG_ENDIAN);
-                        oct = tvb_get_uint8(tvb, offset);
+                        proto_tree_add_item_ret_uint8(rohc_feedback_tree, hf_rohc_crc, tvb, offset, 1, ENC_BIG_ENDIAN, &oct);
                         col_append_fstr(pinfo->cinfo, COL_INFO, "CRC=%u ", oct);
                         break;
                     case 2:
@@ -1513,8 +1512,7 @@ dissect_rohc_feedback_data(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, 
                     case 5:
                         /* Clock */
                         if (rohc_cid_context->profile == ROHC_PROFILE_RTP) {
-                            proto_tree_add_item(rohc_feedback_tree, hf_rohc_opt_clock, tvb, offset, 1, ENC_BIG_ENDIAN);
-                            oct = tvb_get_uint8(tvb, offset);
+                            proto_tree_add_item_ret_uint8(rohc_feedback_tree, hf_rohc_opt_clock, tvb, offset, 1, ENC_BIG_ENDIAN, &oct);
                             col_append_fstr(pinfo->cinfo, COL_INFO, "Clock=%u ", oct);
                         } else {
                             expert_add_info(pinfo, ti, &ei_rohc_rohc_opt_clock);
@@ -1523,8 +1521,7 @@ dissect_rohc_feedback_data(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, 
                     case 6:
                         /* Jitter */
                         if (rohc_cid_context->profile == ROHC_PROFILE_RTP) {
-                            proto_tree_add_item(rohc_feedback_tree, hf_rohc_opt_jitter, tvb, offset, 1, ENC_BIG_ENDIAN);
-                            oct = tvb_get_uint8(tvb, offset);
+                            proto_tree_add_item_ret_uint8(rohc_feedback_tree, hf_rohc_opt_jitter, tvb, offset, 1, ENC_BIG_ENDIAN, &oct);
                             col_append_fstr(pinfo->cinfo, COL_INFO, "Jitter=%u ", oct);
                         } else {
                             expert_add_info(pinfo, ti, &ei_rohc_opt_jitter);
@@ -1532,8 +1529,7 @@ dissect_rohc_feedback_data(tvbuff_t *tvb, proto_tree *tree, packet_info *pinfo, 
                         break;
                     case 7:
                         /* Loss */
-                        proto_tree_add_item(rohc_feedback_tree, hf_rohc_opt_loss, tvb, offset, 1, ENC_BIG_ENDIAN);
-                        oct = tvb_get_uint8(tvb, offset);
+                        proto_tree_add_item_ret_uint8(rohc_feedback_tree, hf_rohc_opt_loss, tvb, offset, 1, ENC_BIG_ENDIAN, &oct);
                         col_append_fstr(pinfo->cinfo, COL_INFO, "Loss=%u ", oct);
                         break;
 
@@ -2297,12 +2293,10 @@ dissect_rohc_ir_rtp_udp_ip_profile_static(tvbuff_t *tvb, proto_tree *tree, packe
             udp_item = proto_tree_add_item(sub_tree, hf_rohc_static_udp, tvb, offset, -1, ENC_NA);
             static_udp_tree = proto_item_add_subtree(udp_item, ett_rohc_static_udp);
             /* Source Port */
-            source_port = tvb_get_ntohs(tvb, offset);
-            proto_tree_add_item(static_udp_tree, hf_rohc_udp_src_port, tvb, offset, 2, ENC_BIG_ENDIAN);
+            proto_tree_add_item_ret_uint16(static_udp_tree, hf_rohc_udp_src_port, tvb, offset, 2, ENC_BIG_ENDIAN, &source_port);
             offset+=2;
             /* Destination Port */
-            dest_port = tvb_get_ntohs(tvb, offset);
-            proto_tree_add_item(static_udp_tree, hf_rohc_udp_dst_port, tvb, offset, 2, ENC_BIG_ENDIAN);
+            proto_tree_add_item_ret_uint16(static_udp_tree, hf_rohc_udp_dst_port, tvb, offset, 2, ENC_BIG_ENDIAN, &dest_port);
             offset+=2;
             /* Set proper length for subtree */
             proto_item_set_len(udp_item, offset-tree_start_offset);
@@ -2325,8 +2319,7 @@ dissect_rohc_ir_rtp_udp_ip_profile_static(tvbuff_t *tvb, proto_tree *tree, packe
             static_rtp_tree = proto_item_add_subtree(rtp_item, ett_rohc_static_rtp);
 
             /* SSRC */
-            ssrc = tvb_get_ntohl(tvb, offset);
-            proto_tree_add_item(static_rtp_tree, hf_rohc_rtp_ssrc, tvb, offset, 4, ENC_BIG_ENDIAN);
+            proto_tree_add_item_ret_uint(static_rtp_tree, hf_rohc_rtp_ssrc, tvb, offset, 4, ENC_BIG_ENDIAN, &ssrc);
             offset += 4;
 
             /* Add summary to root item */
@@ -2912,19 +2905,34 @@ start_over:
 
     /* Call IP for uncompressed profile */
     if (rohc_cid_context->profile==ROHC_PROFILE_UNCOMPRESSED) {
+        /*
+         *   0   1   2   3   4   5   6   7
+         *  --- --- --- --- --- --- --- ---
+         * :         Add-CID octet         : if for small CIDs and (CID != 0)
+         * +---+---+---+---+---+---+---+---+
+         * |   first octet of IP packet    |
+         * +---+---+---+---+---+---+---+---+
+         * :                               :
+         * /    0-2 octets of CID info     / 1-2 octets if for large CIDs
+         * :                               :
+         * +---+---+---+---+---+---+---+---+
+         * |                               |
+         * /       rest of IP packet       / variable length
+         * |                               |
+         * +---+---+---+---+---+---+---+---+
+         */
         if (rohc_cid_context->large_cid_present) {
-            /* How long does packet say it is? */
+            /* How long does the CID info say it is? */
             get_self_describing_var_len_val(tvb, rohc_tree, offset+1, hf_rohc_large_cid, &val_len);
             /* How many bytes do we actually have? */
-            int len = tvb_captured_length_remaining(tvb, offset);
-            if (len >= val_len) {
-                len -= val_len;
-                uint8_t *payload_data = (uint8_t *)wmem_alloc(pinfo->pool, len);
-                tvb_memcpy(tvb, payload_data, offset, 1);
-                tvb_memcpy(tvb, &payload_data[1], offset+1+val_len, len-1);
-                next_tvb = tvb_new_child_real_data(tvb, payload_data, len, len);
-                add_new_data_source(pinfo, next_tvb, "Payload");
-            }
+            unsigned len = tvb_captured_length_remaining(tvb, offset + val_len);
+            /* Composite TVBs don't handle the case if the captured length
+             * is less than the reported length. */
+            uint8_t *payload_data = (uint8_t *)wmem_alloc(pinfo->pool, len + 1);
+            tvb_memcpy(tvb, payload_data, offset, 1);
+            tvb_memcpy(tvb, &payload_data[1], offset+1+val_len, len);
+            next_tvb = tvb_new_child_real_data(tvb, payload_data, len, 1 + tvb_reported_length_remaining(tvb, offset + val_len));
+            add_new_data_source(pinfo, next_tvb, "Payload");
         }
         else {
             next_tvb = tvb_new_subset_remaining(tvb, offset);

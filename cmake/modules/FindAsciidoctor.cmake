@@ -51,7 +51,8 @@ if(ASCIIDOCTOR_EXECUTABLE)
     set (_asciidoctor_common_args
         # AsciidoctorJ added --failure-level in version 2.5.6
         # --trace
-        --quiet
+        # Unfortunately --quiet suppresses warnings even at --failure-level WARN
+        #--quiet
         ${_ad_failure_level_args}
         --attribute build_dir=${CMAKE_BINARY_DIR}/doc
         --attribute css_dir=${CMAKE_SOURCE_DIR}/doc
@@ -61,6 +62,7 @@ if(ASCIIDOCTOR_EXECUTABLE)
         --require ${CMAKE_SOURCE_DIR}/doc/asciidoctor-macros/cveidlink-inline-macro.rb
         --require ${CMAKE_SOURCE_DIR}/doc/asciidoctor-macros/manarg-block.rb
         --require ${CMAKE_SOURCE_DIR}/doc/asciidoctor-macros/wsbuglink-inline-macro.rb
+        --require ${CMAKE_SOURCE_DIR}/doc/asciidoctor-macros/wsrepo-inline-macro.rb
         --require ${CMAKE_SOURCE_DIR}/doc/asciidoctor-macros/wssalink-inline-macro.rb
     )
 
@@ -233,8 +235,8 @@ if(ASCIIDOCTOR_EXECUTABLE)
                     ${ARGN}
             VERBATIM
             )
-            add_custom_target(${_generate_pdf} DEPENDS ${_output_pdf})
-            set_asciidoctor_target_properties(${_generate_pdf})
+            #add_custom_target(${_generate_pdf} DEPENDS ${_output_pdf})
+            #set_asciidoctor_target_properties(${_generate_pdf})
             unset(_generate_pdf)
             unset(_output_pdf)
         ENDMACRO()
@@ -285,8 +287,8 @@ if(ASCIIDOCTOR_EXECUTABLE)
                     ${ARGN}
             VERBATIM
             )
-            add_custom_target(${_generate_epub} DEPENDS ${_output_epub})
-            set_asciidoctor_target_properties(${_generate_epub})
+            #add_custom_target(${_generate_epub} DEPENDS ${_output_epub})
+            #set_asciidoctor_target_properties(${_generate_epub})
             unset(_generate_epub)
             unset(_output_epub)
         ENDMACRO()

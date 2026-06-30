@@ -51,7 +51,7 @@ why using conversations ?
     from "conversation.h" didn't work out.
 
 what is the use of AARQ/AARE data ?
-    Converstions should be maintained on the COTP layer in a standard way
+    Conversations should be maintained on the COTP layer in a standard way
     for there are usually more packets available than in the layers above.
     In the worst case my dissector is called from a DT packet which
     has destination references but no source reference.
@@ -131,14 +131,6 @@ static wmem_tree_t *atn_conversation_tree;
 static proto_tree *root_tree;
 
 /* forward declarations for functions generated from asn1 */
-static unsigned dissect_atn_ulcs_T_externalt_encoding_single_asn1_type(
-    tvbuff_t *tvb _U_,
-    uint32_t offset _U_,
-    asn1_ctx_t *actx _U_,
-    proto_tree *tree _U_,
-    int hf_index
-    _U_);
-
 static unsigned dissect_atn_ulcs_T_externalt_encoding_octet_aligned(
     tvbuff_t *tvb _U_,
     uint32_t offset _U_,
@@ -556,7 +548,7 @@ dissect_atn_ulcs(
     proto_tree *tree,
     void *data _U_)
 {
-    int offset = 0;
+    unsigned offset = 0;
     proto_item *ti = NULL;
     proto_tree *atn_ulcs_tree = NULL;
     uint8_t value_pres = 0;

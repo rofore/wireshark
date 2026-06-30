@@ -251,13 +251,6 @@ static int ett_ansi_tcap_T_paramSet;
 
 #define MAX_SSN 254
 
-/* When several Tcap components are received in a single TCAP message,
-   we have to use several buffers for the stored parameters
-   because else this data are erased during TAP dissector call */
-#define MAX_TCAP_INSTANCE 10
-int tcapsrt_global_current=0;
-struct tcapsrt_info_t tcapsrt_global_info[MAX_TCAP_INSTANCE];
-
 static dissector_table_t ber_oid_dissector_table;
 static const char * cur_oid;
 static const char * tcapext_oid;
@@ -265,7 +258,7 @@ static const char * tcapext_oid;
 static dissector_handle_t ansi_map_handle;
 static dissector_handle_t ain_handle;
 
-struct ansi_tcap_private_t ansi_tcap_private;
+static struct ansi_tcap_private_t ansi_tcap_private;
 #define MAX_TID_STR_LEN 1024
 
 static void ansi_tcap_ctx_init(struct ansi_tcap_private_t *a_tcap_ctx) {
@@ -669,7 +662,7 @@ static unsigned char swap_nibbles(unsigned char x){
     return (x & 0x0F)<<4 | (x & 0xF0)>>4;
 }
 
-static int parameter_type(proto_tree *tree, tvbuff_t *tvb, int offset_parameter_type)
+static int parameter_type(proto_tree *tree, tvbuff_t *tvb, unsigned offset_parameter_type)
 {
   proto_tree *subtree;
   proto_item *ti, *subitem;
@@ -1183,6 +1176,15 @@ find_tcap_subdissector(tvbuff_t *tvb, asn1_ctx_t *actx, proto_tree *tree){
         return false;
 }
 
+/*--- Cyclic dependencies ---*/
+
+/* ReturnResult/parameter -> ReturnResult/parameter */
+static unsigned dissect_ansi_tcap_T_returnResult_parameter(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
+
+/* ReturnError/parameter -> ReturnError/parameter */
+static unsigned dissect_ansi_tcap_T_returnError_parameter(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
+
+
 
 
 static unsigned
@@ -1667,10 +1669,13 @@ dissect_ansi_tcap_T_componentID(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsign
 
 static unsigned
 dissect_ansi_tcap_T_returnResult_parameter(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  // ReturnResult/parameter -> ReturnResult/parameter
+  increment_dissection_depth_by_n(actx->pinfo, 1);
   if(find_tcap_subdissector(tvb, actx, tree))
     offset = tvb_reported_length(tvb);
 
 
+  decrement_dissection_depth_by_n(actx->pinfo, 1);
   return offset;
 }
 
@@ -1707,10 +1712,13 @@ dissect_ansi_tcap_T_componentID_01(bool implicit_tag _U_, tvbuff_t *tvb _U_, uns
 
 static unsigned
 dissect_ansi_tcap_T_returnError_parameter(bool implicit_tag _U_, tvbuff_t *tvb _U_, unsigned offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  // ReturnError/parameter -> ReturnError/parameter
+  increment_dissection_depth_by_n(actx->pinfo, 1);
   if(find_tcap_subdissector(tvb, actx, tree))
     offset = tvb_reported_length(tvb);
 
 
+  decrement_dissection_depth_by_n(actx->pinfo, 1);
   return offset;
 }
 

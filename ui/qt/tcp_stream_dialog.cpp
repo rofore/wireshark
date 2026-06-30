@@ -250,7 +250,6 @@ TCPStreamDialog::TCPStreamDialog(QWidget *parent, const CaptureFile& cf, tcp_gra
     ctx_menu_.addAction(ui->actionStevens);
     ctx_menu_.addAction(ui->actionTcptrace);
     ctx_menu_.addAction(ui->actionWindowScaling);
-    set_action_shortcuts_visible_in_context_menu(ctx_menu_.actions());
 
     QCustomPlot *sp = ui->streamPlot;
 
@@ -741,7 +740,7 @@ void TCPStreamDialog::fillGraph(bool reset_axes, bool set_focus)
             bytes_fwd += seg->th_seglen;
             pkts_fwd++;
         }
-        double ts = seg->rel_secs + seg->rel_usecs / 1000000.0;
+        double ts = nstime_to_sec(&seg->rel_ts);
         if (ts_unset) {
             ts_offset_ = ts;
             ts_unset = false;
@@ -1007,11 +1006,7 @@ void TCPStreamDialog::moveLegend()
 {
     if (QAction *contextAction = qobject_cast<QAction*>(sender())) {
         if (contextAction->data().canConvert<Qt::Alignment::Int>()) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
             ui->streamPlot->axisRect()->insetLayout()->setInsetAlignment(0, Qt::Alignment::fromInt(contextAction->data().value<Qt::Alignment::Int>()));
-#else
-            ui->streamPlot->axisRect()->insetLayout()->setInsetAlignment(0, static_cast<Qt::Alignment>(contextAction->data().value<Qt::Alignment::Int>()));
-#endif
             ui->streamPlot->replot();
         }
     }
@@ -1042,7 +1037,7 @@ void TCPStreamDialog::fillStevens()
             continue;
         }
 
-        double ts = seg->rel_secs + seg->rel_usecs / 1000000.0;
+        double ts = nstime_to_sec(&seg->rel_ts);
         rel_time.append(ts - ts_offset_);
         seq.append(seg->th_seq - seq_offset_);
     }
@@ -1083,7 +1078,7 @@ void TCPStreamDialog::fillTcptrace()
     QVector<double> zero_win_time, zero_win;
 
     for (struct segment *seg = graph_.segments; seg != NULL; seg = seg->next) {
-        double ts = (seg->rel_secs + seg->rel_usecs / 1000000.0) - ts_offset_;
+        double ts = nstime_to_sec(&seg->rel_ts) - ts_offset_;
         if (compareHeaders(seg)) {
             double half = seg->th_seglen / 2.0;
             double center = seg->th_seq - seq_offset_ + half;
@@ -1503,7 +1498,7 @@ void TCPStreamDialog::fillThroughput()
         int& r_oldest = is_forward_seg ? oldest_seg : oldest_ack;
         uint64_t& r_sum = is_forward_seg ? seg_sum : ack_sum;
 
-        double ts = (seg->rel_secs + seg->rel_usecs / 1000000.0) - ts_offset_;
+        double ts = nstime_to_sec(&seg->rel_ts) - ts_offset_;
 
         if (is_forward_seg) {
             seglen = seg->th_seglen;
@@ -1729,7 +1724,7 @@ void TCPStreamDialog::fillRoundTripTime()
         if (compareHeaders(seg)) {
             uint32_t seqno = seg->th_seq - seq_base;
             if (seg->th_seglen && !rtt_is_retrans(unack_list, seqno)) {
-                double rt_val = seg->rel_secs + seg->rel_usecs / 1000000.0;
+                double rt_val = nstime_to_sec(&seg->rel_ts);
                 rt_val -= ts_offset_;
                 u = rtt_get_new_unack(rt_val, seqno, seg->th_seglen);
                 if (!u) {
@@ -1744,7 +1739,7 @@ void TCPStreamDialog::fillRoundTripTime()
         /* receiver traffic analysis */
         else {
             uint32_t ack_no = seg->th_ack - seq_base;
-            double rt_val = seg->rel_secs + seg->rel_usecs / 1000000.0;
+            double rt_val = nstime_to_sec(&seg->rel_ts);
             rt_val -= ts_offset_;
             struct rtt_unack *v;
 
@@ -1868,7 +1863,7 @@ void TCPStreamDialog::fillWindowScale()
 
     bool found_first_ack = false;
     for (struct segment *seg = graph_.segments; seg != NULL; seg = seg->next) {
-        double ts = seg->rel_secs + seg->rel_usecs / 1000000.0;
+        double ts = nstime_to_sec(&seg->rel_ts);
 
         // The receive window that applies to this flow comes
         //   from packets in the opposite direction
@@ -2008,21 +2003,12 @@ void TCPStreamDialog::showContextMenu(const QPoint& pos)
         menu->setAttribute(Qt::WA_DeleteOnClose);
         menu->addAction(ui->actionLegend);
         menu->addSeparator();
-#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
         menu->addAction(tr("Move to top left"), this, &TCPStreamDialog::moveLegend)->setData((Qt::AlignTop|Qt::AlignLeft).toInt());
         menu->addAction(tr("Move to top center"), this, &TCPStreamDialog::moveLegend)->setData((Qt::AlignTop|Qt::AlignHCenter).toInt());
         menu->addAction(tr("Move to top right"), this, &TCPStreamDialog::moveLegend)->setData((Qt::AlignTop|Qt::AlignRight).toInt());
         menu->addAction(tr("Move to bottom left"), this, &TCPStreamDialog::moveLegend)->setData((Qt::AlignBottom|Qt::AlignLeft).toInt());
         menu->addAction(tr("Move to bottom center"), this, &TCPStreamDialog::moveLegend)->setData((Qt::AlignBottom|Qt::AlignHCenter).toInt());
         menu->addAction(tr("Move to bottom right"), this, &TCPStreamDialog::moveLegend)->setData((Qt::AlignBottom|Qt::AlignRight).toInt());
-#else
-        menu->addAction(tr("Move to top left"), this, &TCPStreamDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignTop|Qt::AlignLeft));
-        menu->addAction(tr("Move to top center"), this, &TCPStreamDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignTop|Qt::AlignHCenter));
-        menu->addAction(tr("Move to top right"), this, &TCPStreamDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignTop|Qt::AlignRight));
-        menu->addAction(tr("Move to bottom left"), this, &TCPStreamDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignBottom|Qt::AlignLeft));
-        menu->addAction(tr("Move to bottom center"), this, &TCPStreamDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignBottom|Qt::AlignHCenter));
-        menu->addAction(tr("Move to bottom right"), this, &TCPStreamDialog::moveLegend)->setData(static_cast<Qt::Alignment::Int>(Qt::AlignBottom|Qt::AlignRight));
-#endif
         menu->popup(ui->streamPlot->mapToGlobal(pos));
     } else {
         ctx_menu_.popup(ui->streamPlot->mapToGlobal(pos));
@@ -2163,7 +2149,7 @@ void TCPStreamDialog::mouseMoved(QMouseEvent *event)
         hint += tr("%1 %2 (%3s len %4 seq %5 ack %6 win %7)")
                 .arg((!file_closed_ && cap_file_.isValid()) ? tr("Click to select packet") : tr("Packet"))
                 .arg(packet_num_)
-                .arg(QString::number(packet_seg->rel_secs + packet_seg->rel_usecs / 1000000.0, 'g', 4))
+                .arg(QString::number(nstime_to_sec(&packet_seg->rel_ts), 'g', 4))
                 .arg(packet_seg->th_seglen)
                 .arg(packet_seg->th_seq) // - seq_offset_)
                 .arg(packet_seg->th_ack)

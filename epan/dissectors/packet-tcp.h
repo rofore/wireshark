@@ -107,6 +107,9 @@ typedef struct tcpheader {
 
 	/* header for TCP option Multipath Operation */
 	struct mptcpheader *th_mptcp;
+
+	uint32_t th_dup_count;      /* capture-level duplicate count (0 = not checked) */
+	uint32_t th_dup_orig_frame; /* frame number of first occurrence in dedup group */
 } tcp_info_t;
 
 /*
@@ -183,6 +186,9 @@ struct tcp_acked {
 
 	uint32_t new_data_seq; /* For segments with old data,
 				 where new data starts */
+	uint32_t dup_count;	/* capture-level packet occurrence count; 0 = not yet checked */
+	uint32_t dup_orig_frame; /* frame number of the first occurrence of this packet */
+	wmem_array_t *dup_frame_list; /* shared list of all frame numbers in this dedup group */
 };
 
 /* One instance of this structure is created for each pdu that spans across
@@ -378,6 +384,7 @@ typedef struct _tcp_flow_t {
 	uint8_t mp_operations; /* tracking of the MPTCP operations */
 	bool is_first_ack;  /* indicates if this is the first ACK */
 	bool closing_initiator; /* tracking who is responsible of the connection end */
+	bool closing_initiator_rst; /* tracking who sent TCP RST first */
 	tcp_analyze_seq_flow_info_t* tcp_analyze_seq_info;
 
 	/* see TCP_A_* in packet-tcp.c */
@@ -395,6 +402,12 @@ typedef struct _tcp_flow_t {
 
 	/* A sorted list of pending out-of-order segments. */
 	wmem_list_t *ooo_segments;
+        /* A hash map of the same, used on subsequent passes. */
+	wmem_map_t  *ooo_segments_map;
+        /* NOTE - the same entries are place in the list and map, so this
+         * is not especially wasteful of memory, but memory could be saved
+         * (at the cost of some performance) with an implementation of a
+         * tree with a custom comparison function. */
 
 	/* Process info, currently discovered via IPFIX */
 	tcp_process_info_t* process_info;

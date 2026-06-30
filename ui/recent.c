@@ -91,10 +91,14 @@
 #define RECENT_GUI_TSD_GOODPUT_SHOW             "gui.tsd_goodput_show"
 #define RECENT_KEY_SIDEBAR_LEARN_VISIBLE        "gui.welcome_page.sidebar.learn_visible"
 #define RECENT_KEY_SIDEBAR_TIPS_VISIBLE         "gui.welcome_page.sidebar.tips_visible"
+#define RECENT_KEY_THEME_NAME                   "gui.theme_name"
+#define RECENT_KEY_COLOR_SCHEME                 "gui.color_scheme"
 #define RECENT_KEY_SIDEBAR_TIPS_EVENTS          "gui.welcome_page.sidebar.tips_events"
 #define RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP     "gui.welcome_page.sidebar.tips_sponsorship"
 #define RECENT_KEY_SIDEBAR_TIPS_TIPS            "gui.welcome_page.sidebar.tips_tips"
+#define RECENT_KEY_SIDEBAR_TIPS_AUTO_ADVANCE    "gui.welcome_page.sidebar.tips_auto_advance"
 #define RECENT_KEY_SIDEBAR_TIPS_INTERVAL        "gui.welcome_page.sidebar.tips_interval"
+#define RECENT_KEY_SIDEBAR_TIPS_SLIDES_TEST     "gui.welcome_page.sidebar.tips_slides_test"
 
 #define RECENT_GUI_GEOMETRY                   "gui.geom."
 
@@ -182,6 +186,15 @@ static const value_string search_type_values[] = {
     { SEARCH_TYPE_HEX_VALUE,      "HEX_VALUE" },
     { SEARCH_TYPE_STRING,         "STRING" },
     { SEARCH_TYPE_REGEX,          "REGEX" },
+    { 0, NULL }
+};
+
+/* Token names match the former gui.color_scheme preference values so the
+   appearance mode survives the relocation into recent_common unchanged. */
+static const value_string gui_color_scheme_values[] = {
+    { COLOR_SCHEME_DEFAULT, "system" },
+    { COLOR_SCHEME_LIGHT,   "light" },
+    { COLOR_SCHEME_DARK,    "dark" },
     { 0, NULL }
 };
 
@@ -777,7 +790,7 @@ cfilter_recent_write_all(FILE *rf)
 
 /** Reverse the order of all the capture filter lists after
  *  reading recent_common (we want the latest first).
- *  Note this is O(N), whereas appendng N items to a GList is O(N^2),
+ *  Note this is O(N), whereas appending N items to a GList is O(N^2),
  *  since it doesn't have a pointer to the end like a GQueue.
  */
 static void
@@ -908,7 +921,7 @@ write_recent(void)
             "######## Recent display filters (latest last), cannot be altered through command line ########\n"
             "\n", rf);
 
-    dfilter_recent_combo_write_all(rf);
+    dfilter_recent_write_all(rf);
 
 #ifdef HAVE_PCAP_REMOTE
     fputs("\n"
@@ -974,6 +987,46 @@ write_recent(void)
                          recent.gui_search_multiple_occurs);
     write_recent_enum(rf, "Find packet search type", RECENT_GUI_SEARCH_TYPE, search_type_values,
                       recent.gui_search_type);
+
+    write_recent_boolean(rf, "Welcome page sidebar Learn section visible",
+            RECENT_KEY_SIDEBAR_LEARN_VISIBLE,
+            recent.gui_welcome_page_sidebar_learn_visible);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips section visible",
+            RECENT_KEY_SIDEBAR_TIPS_VISIBLE,
+            recent.gui_welcome_page_sidebar_tips_visible);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips event slides",
+            RECENT_KEY_SIDEBAR_TIPS_EVENTS,
+            recent.gui_welcome_page_sidebar_tips_events);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips sponsorship slides",
+            RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP,
+            recent.gui_welcome_page_sidebar_tips_sponsorship);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips tip-of-the-day slides",
+            RECENT_KEY_SIDEBAR_TIPS_TIPS,
+            recent.gui_welcome_page_sidebar_tips_tips);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips auto advance slides",
+            RECENT_KEY_SIDEBAR_TIPS_AUTO_ADVANCE,
+            recent.gui_welcome_page_sidebar_tips_auto_advance);
+
+    fprintf(rf, "\n# Welcome page sidebar Tips slide auto-advance interval in seconds.\n");
+    fprintf(rf, RECENT_KEY_SIDEBAR_TIPS_INTERVAL ": %u\n",
+            recent.gui_welcome_page_sidebar_tips_interval);
+
+    fprintf(rf, "\n# Active theme (directory name under resources/themes).\n");
+    fprintf(rf, RECENT_KEY_THEME_NAME ": %s\n",
+            recent.gui_theme_name ? recent.gui_theme_name
+                                  : application_flavor_name_lower());
+
+    write_recent_enum(rf, "Appearance mode", RECENT_KEY_COLOR_SCHEME,
+                      gui_color_scheme_values, recent.gui_color_scheme);
+
+    write_recent_boolean(rf, "Welcome page sidebar Tips slides test",
+            RECENT_KEY_SIDEBAR_TIPS_SLIDES_TEST,
+            recent.gui_welcome_page_sidebar_tips_slides_test);
 
     window_geom_recent_write_all(rf);
 
@@ -1078,7 +1131,7 @@ write_profile_recent(void)
             RECENT_KEY_CAPTURE_AUTO_SCROLL,
             recent.capture_auto_scroll);
 
-    write_recent_boolean(rf, "use as aggragation view",
+    write_recent_boolean(rf, "use as aggregation view",
         RECENT_KEY_AGGREGATION_VIEW,
         recent.aggregation_view);
 
@@ -1259,30 +1312,6 @@ write_profile_recent(void)
             RECENT_GUI_TSD_GOODPUT_SHOW,
             recent.gui_tsgd_goodput_show);
 
-    write_recent_boolean(rf, "Welcome page sidebar Learn section visible",
-            RECENT_KEY_SIDEBAR_LEARN_VISIBLE,
-            recent.gui_welcome_page_sidebar_learn_visible);
-
-    write_recent_boolean(rf, "Welcome page sidebar Tips section visible",
-            RECENT_KEY_SIDEBAR_TIPS_VISIBLE,
-            recent.gui_welcome_page_sidebar_tips_visible);
-
-    write_recent_boolean(rf, "Welcome page sidebar Tips event slides",
-            RECENT_KEY_SIDEBAR_TIPS_EVENTS,
-            recent.gui_welcome_page_sidebar_tips_events);
-
-    write_recent_boolean(rf, "Welcome page sidebar Tips sponsorship slides",
-            RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP,
-            recent.gui_welcome_page_sidebar_tips_sponsorship);
-
-    write_recent_boolean(rf, "Welcome page sidebar Tips tip-of-the-day slides",
-            RECENT_KEY_SIDEBAR_TIPS_TIPS,
-            recent.gui_welcome_page_sidebar_tips_tips);
-
-    fprintf(rf, "\n# Welcome page sidebar Tips slide auto-advance interval in seconds.\n");
-    fprintf(rf, RECENT_KEY_SIDEBAR_TIPS_INTERVAL ": %u\n",
-            recent.gui_welcome_page_sidebar_tips_interval);
-
     fclose(rf);
 
     /* XXX - catch I/O errors (e.g. "ran out of disk space") and return
@@ -1370,6 +1399,32 @@ read_set_recent_common_pair_static(char *key, const char *value,
         recent.gui_search_type = (search_type_type)str_to_val(value, search_type_values, SEARCH_TYPE_DISPLAY_FILTER);
     } else if (strcmp(key, RECENT_GUI_CUSTOM_COLORS) == 0) {
         recent.custom_colors = prefs_get_string_list(value);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_LEARN_VISIBLE) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_learn_visible);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_VISIBLE) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_visible);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_EVENTS) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_events);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_sponsorship);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_TIPS) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_tips);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_AUTO_ADVANCE) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_auto_advance);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_INTERVAL) == 0) {
+        num = strtol(value, &p, 0);
+        if (p == value || *p != '\0')
+            return PREFS_SET_SYNTAX_ERR;
+        if (num < 1)
+            num = 8; // Default value
+        recent.gui_welcome_page_sidebar_tips_interval = (unsigned)num;
+    } else if (strcmp(key, RECENT_KEY_THEME_NAME) == 0) {
+        g_free(recent.gui_theme_name);
+        recent.gui_theme_name = (value && *value) ? g_strdup(value) : NULL;
+    } else if (strcmp(key, RECENT_KEY_COLOR_SCHEME) == 0) {
+        recent.gui_color_scheme = (int)str_to_val(value, gui_color_scheme_values, COLOR_SCHEME_DEFAULT);
+    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_SLIDES_TEST) == 0) {
+        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_slides_test);
     }
 
     return PREFS_SET_OK;
@@ -1561,23 +1616,6 @@ read_set_recent_pair_static(char *key, const char *value,
             return PREFS_SET_SYNTAX_ERR;      /* number must be positive */
         }
         recent.gui_tsgd_ma_window_size = val_as_dbl;
-    } else if (strcmp(key, RECENT_KEY_SIDEBAR_LEARN_VISIBLE) == 0) {
-        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_learn_visible);
-    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_VISIBLE) == 0) {
-        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_visible);
-    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_EVENTS) == 0) {
-        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_events);
-    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_SPONSORSHIP) == 0) {
-        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_sponsorship);
-    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_TIPS) == 0) {
-        parse_recent_boolean(value, &recent.gui_welcome_page_sidebar_tips_tips);
-    } else if (strcmp(key, RECENT_KEY_SIDEBAR_TIPS_INTERVAL) == 0) {
-        num = strtol(value, &p, 0);
-        if (p == value || *p != '\0')
-            return PREFS_SET_SYNTAX_ERR;
-        if (num < 1)
-            num = 1;
-        recent.gui_welcome_page_sidebar_tips_interval = (unsigned)num;
     } else {
         return PREFS_SET_NO_SUCH_PREF;
     }
@@ -1596,7 +1634,7 @@ read_set_recent_pair_dynamic(char *key, const char *value,
         return PREFS_SET_SYNTAX_ERR;
     }
     if (strcmp(key, RECENT_KEY_DISPLAY_FILTER) == 0) {
-        dfilter_combo_add_recent(value);
+        dfilter_recent_add(value);
     } else if (strcmp(key, RECENT_KEY_CAPTURE_FILTER) == 0) {
         recent_add_cfilter(NULL, value);
     } else if (g_str_has_prefix(key, RECENT_KEY_CAPTURE_FILTER ".")) {
@@ -1680,6 +1718,18 @@ recent_read_static(char **rf_path_return, int *rf_errno_return)
     recent.gui_profile_switch_check_count = 1000;
     recent.gui_fileopen_remembered_dir = NULL;
 
+    /* defaults for the welcome page sidebar */
+    recent.gui_welcome_page_sidebar_learn_visible = true;
+    recent.gui_welcome_page_sidebar_tips_visible = true;
+    recent.gui_welcome_page_sidebar_tips_events = true;
+    recent.gui_welcome_page_sidebar_tips_sponsorship = true;
+    recent.gui_welcome_page_sidebar_tips_tips = true;
+    recent.gui_welcome_page_sidebar_tips_auto_advance = true;
+    recent.gui_welcome_page_sidebar_tips_interval = 8;
+    recent.gui_welcome_page_sidebar_tips_slides_test = false;
+
+    recent.gui_color_scheme = COLOR_SCHEME_DEFAULT;
+
     /* Construct the pathname of the user's recent common file. */
     rf_path = get_persconffile_path(RECENT_COMMON_FILE_NAME, false, application_configuration_environment_prefix());
 
@@ -1740,14 +1790,6 @@ recent_read_profile_static(char **rf_path_return, int *rf_errno_return)
     recent.gui_tsgd_ma_window_size = 1.0;
     recent.gui_tsgd_throughput_show = true;
     recent.gui_tsgd_goodput_show = false;
-
-    /* defaults for the welcome page sidebar */
-    recent.gui_welcome_page_sidebar_learn_visible = true;
-    recent.gui_welcome_page_sidebar_tips_visible = true;
-    recent.gui_welcome_page_sidebar_tips_events = true;
-    recent.gui_welcome_page_sidebar_tips_sponsorship = true;
-    recent.gui_welcome_page_sidebar_tips_tips = true;
-    recent.gui_welcome_page_sidebar_tips_interval = 8;
 
     /* pane size of zero will autodetect */
     recent.gui_geometry_main_upper_pane   = 0;
@@ -1999,6 +2041,7 @@ recent_cleanup(void)
     g_free(recent.gui_geometry_main_master_split);
     g_free(recent.gui_geometry_main_extra_split);
     g_free(recent.gui_fileopen_remembered_dir);
+    g_free(recent.gui_theme_name);
     g_list_free_full(recent.gui_additional_toolbars, g_free);
     g_list_free_full(recent.interface_toolbars, g_free);
     prefs_clear_string_list(recent.conversation_tabs);

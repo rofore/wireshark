@@ -2200,8 +2200,20 @@ pcapng_read_packet_block(wtap *wth _U_, FILE_T fh, uint32_t block_type,
         return false;
     }
     block_read += pseudo_header_len;
-    wblock->rec->rec_header.packet_header.caplen = packet.cap_len - pseudo_header_len;
-    wblock->rec->rec_header.packet_header.len = packet.packet_len - pseudo_header_len;
+    if (ckd_sub(&wblock->rec->rec_header.packet_header.caplen, packet.cap_len, pseudo_header_len)) {
+        /* pcap_process_pseudo_header should never return a length greater
+         * than the cap_len it is given. */
+        *err = WTAP_ERR_INTERNAL;
+        *err_info = ws_strdup_printf("pcapng: pseudo_header_len (%u) > cap_len (%u)",
+                                    pseudo_header_len, packet.cap_len);
+        return false;
+    }
+    if (ckd_sub(&wblock->rec->rec_header.packet_header.len, packet.packet_len, pseudo_header_len)) {
+        /* This means that the reported length was less than the captured
+         * length. Set it to zero, and let the frame dissector fix it, which
+         * will add an expert warning. */
+        wblock->rec->rec_header.packet_header.len = 0;
+    }
 
     /* Combine the two 32-bit pieces of the timestamp into one 64-bit value */
     ts = (((uint64_t)packet.ts_high) << 32) | ((uint64_t)packet.ts_low);
@@ -2421,8 +2433,20 @@ pcapng_read_simple_packet_block(wtap *wth _U_, FILE_T fh,
     if (pseudo_header_len < 0) {
         return false;
     }
-    wblock->rec->rec_header.packet_header.caplen = simple_packet.cap_len - pseudo_header_len;
-    wblock->rec->rec_header.packet_header.len = simple_packet.packet_len - pseudo_header_len;
+    if (ckd_sub(&wblock->rec->rec_header.packet_header.caplen, simple_packet.cap_len, pseudo_header_len)) {
+        /* pcap_process_pseudo_header should never return a length greater
+         * than the cap_len it is given. */
+        *err = WTAP_ERR_INTERNAL;
+        *err_info = ws_strdup_printf("pcapng: pseudo_header_len (%u) > cap_len (%u)",
+                                    pseudo_header_len, simple_packet.cap_len);
+        return false;
+    }
+    if (ckd_sub(&wblock->rec->rec_header.packet_header.len, simple_packet.packet_len, pseudo_header_len)) {
+        /* This means that the reported length was less than the captured
+         * length. Set it to zero, and let the frame dissector fix it, which
+         * will add an expert warning. */
+        wblock->rec->rec_header.packet_header.len = 0;
+    }
 
     /* "Simple Packet Block" read capture data */
     if (!wtap_read_bytes_buffer(fh, &wblock->rec->data,
@@ -5479,8 +5503,8 @@ put_nrb_option(wtap_block_t block _U_, unsigned option_id, wtap_opttype_e option
 
         memcpy(*opt_ptrp, &optval->custom_stringval.pen, sizeof(uint32_t));
         *opt_ptrp += sizeof(uint32_t);
-        memcpy(*opt_ptrp, optval->custom_stringval.string, size);
-        *opt_ptrp += size;
+        memcpy(*opt_ptrp, optval->custom_stringval.string, stringlen);
+        *opt_ptrp += stringlen;
 
         /* put padding (if any) */
         pad = WS_PADDING_TO_4(size);

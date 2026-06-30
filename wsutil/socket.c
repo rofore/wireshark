@@ -11,10 +11,22 @@
  */
 
 #include "config.h"
+#ifdef HAVE_STRUCT_UCRED
+// defined in sys/socket.h
+#define _GNU_SOURCE // For struct ucred on Linux
+#endif
 #include "socket.h"
 
 #include <stdlib.h>
 #include <errno.h>
+
+#if defined(HAVE_GETPEEREID)
+#include <unistd.h>
+#endif
+
+#if defined(HAVE_GETPEERUCRED)
+#include <ucred.h> // For Solaris/Illumos ucred-related routines
+#endif
 
 #include <wsutil/inet_addr.h>
 
@@ -148,3 +160,68 @@ out:
     g_free(addr_src);
     return ret;
 }
+
+#ifndef _WIN32
+    // Non-Windows OSes; try to provide something that acts like
+    // BSD getpeereid(), which returns the peer's EUID and EGID.
+static int ws_getpeereid(int sock, uid_t *euid, gid_t *egid) {
+#if defined(HAVE_GETPEEREID)
+    // The BSDs and some other platforms, including Solaris 11.4 SRU 81
+    // and AIX at least as far back as 5.3
+    return getpeereid(sock, euid, egid);
+#elif defined(HAVE_GETPEERUCRED)
+    // Solaris/Illumos without getpeereid()
+    struct ucred *cred;
+    bool peer_euid_is_ours;
+
+    if (getpeerucred(sock, ucred) == -1) {
+        return -1;
+    }
+
+    *euid = ucred_geteuid(ucred);
+    *guid = ucred_getegid(ucred);
+    return 0;
+#elif defined(HAVE_STRUCT_UCRED)
+    // Linux, Haiku
+    struct ucred cred;
+    socklen_t len = sizeof(struct ucred);
+
+    if (getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &cred, &len) == -1) {
+        return -1;
+    }
+
+    *euid = cred.uid;
+    *egid = cred.gid;
+    return 0;
+#else
+    // Other platforms - just fail
+    // Suppress unused argument warnings
+    (void) sock;
+    (void) euid;
+    (void) egid;
+    errno = EOPNOTSUPP;
+    return false;
+#endif
+}
+
+bool ws_verify_peercred(socket_handle_t sock) {
+    uid_t euid;
+    gid_t egid;
+
+    if (ws_getpeereid(sock, &euid, &egid) == -1) {
+        return false;
+    }
+
+    return geteuid() == euid;
+}
+#else /* _WIN32 */
+bool ws_verify_peercred(socket_handle_t sock _U_) {
+    // Windows, now that it supports Unix domain sockets through an
+    // implementation as Named Pipes, might support a way to retrieve
+    // the user credentials of the peer too.
+    //
+    // However, we only use this right now for abstract domain sockets,
+    // which we only support under Linux (and only Linux supports).
+    return false;
+}
+#endif /* _WIN32 */

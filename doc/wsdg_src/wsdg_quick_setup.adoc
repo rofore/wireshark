@@ -80,7 +80,6 @@ The setup script is `tools/debian-setup.sh`; its options are:
 * `--install-optional` install optional software as well
 * `--install-deb-deps` install packages required to build the .deb file
 * `--install-test-deps` install packages required to run all tests
-* `--install-qt5-deps` force installation of packages required to use Qt5 (not recommended)
 * `--install-qt6-deps` force installation of packages required to use Qt6
 * `--install-all` install everything
 * `[other]` other options are passed as-is to apt
@@ -92,7 +91,6 @@ The setup script is `tools/rpm-setup.sh`; its options are:
 
 * `--install-optional` install optional software as well
 * `--install-rpm-deps` install packages required to build the .rpm file
-* `--install-qt5-deps` force installation of packages required to use Qt5 (not recommended)
 * `--install-qt6-deps` force installation of packages required to use Qt6
 * `--install-all` install everything
 * `[other]` other options are passed as-is to the packet manager
@@ -188,6 +186,11 @@ experiment.
 
 CMake builds are best done in a separate build directory, such as a
 `build` subdirectory of the top-level source directory.
+
+TIP: Wireshark ships a `CMakePresets.json` with a `ninja_ccache` preset that configures Ninja and ccache for you.
+Run `cmake --preset ninja_ccache` to use it.
+You can override the build directory or other settings by creating a `CMakeUserPresets.json` — see <<ChToolsCMake>> for details.
+
 If that directory is a subdirectory of the top-level source directory,
 to generate the build files, change to the build directory and enter the
 following command:
@@ -274,7 +277,7 @@ to run it by entering `wireshark`.
 To build the Wireshark User's Guide and the Wireshark Developer's Guide,
 build the `all_guides` target, e.g.  `make all_guides` or `ninja
 all_guides`.  Detailed information to build these guides can be found in
-the file _doc/README.documentation.adoc_ in the Wireshark sources.
+the file wsrepofile:doc/README.documentation.adoc[] in the Wireshark sources.
 
 ==== Optional: Create an installable or source code package
 
@@ -499,14 +502,14 @@ image::images/win-setup-vs18shell.png[{screenshot-attrs}]
 
 If you have not already done so globally in <<ChSetupSetEnvVariables>>, you can set the following environment variables, using paths and values suitable for your installation :
 
-[source,cmd,subs="attributes+"]
+[source,pwsh,subs="attributes+"]
 ----
-rem Let CMake determine the library download directory name under WIRESHARK_BASE_DIR.
-set WIRESHARK_BASE_DIR=C:\Development\wireshark-third-party
-rem Set the Qt installation directory
-set CMAKE_PREFIX_PATH=C:\Qt{backslash}{windows-qt6-lts-version}\msvc2022_64
-rem Append a custom string to the package version. Optional.
-set WIRESHARK_VERSION_EXTRA=-YourExtraVersionInfo
+# Let CMake determine the library download directory name under WIRESHARK_BASE_DIR.
+$env:WIRESHARK_BASE_DIR="C:\Development\wireshark-third-party"
+# Set the Qt installation directory
+$env:CMAKE_PREFIX_PATH="C:\Qt{backslash}{windows-qt6-lts-version}\msvc2022_64"
+# Append a custom string to the package version. Optional.
+$env:WIRESHARK_VERSION_EXTRA="-YourExtraVersionInfo"
 ----
 
 Setting these variables could be added to a batch file to be run after you open the Visual Studio Tools Command Prompt.
@@ -568,9 +571,18 @@ the environment variables `WIRESHARK_BASE_DIR` and `CMAKE_PREFIX_PATH`.
 
 Now it’s time to build Wireshark!
 
+[TIP]
+.Solution File Format
+====
+Microsoft Visual Studio introduced a new XML-based solution file format, SLNX,
+which became available in Visual Studio 2022 and is the default on Visual Studio
+2026. If you are using the older file format, which is the default in Visual
+Studio 2022 and earlier, replace `.slnx` with `.sln` in the instructions below.
+====
+
 . Navigate to `C:\Development\wsbuild64`
 
-. Open `Wireshark.sln`
+. Open `Wireshark.slnx`
 
 . Choose the `RelWithDebInfo` configuration
 +
@@ -591,11 +603,11 @@ You may also build Wireshark from Visual Studio command line, using :
 [source,cmd,subs="attributes+"]
 ----
 cd C:\Development\wsbuild64
-msbuild /m /p:Configuration=RelWithDebInfo Wireshark.sln
+msbuild /m /p:Configuration=RelWithDebInfo Wireshark.slnx
 ----
 
 TIP: If compilation fails for suspicious reasons after you changed some source
-files try to clean the build files by doing `Build > Clean solution` (or running `msbuild /m /p:Configuration=RelWithDebInfo Wireshark.sln /t:Clean`)
+files try to clean the build files by doing `Build > Clean solution` (or running `msbuild /m /p:Configuration=RelWithDebInfo Wireshark.slnx /t:Clean`)
 and then building the solution again.
 
 The build files produced by CMake will regenerate themselves if required by changes in the source tree.
@@ -617,7 +629,7 @@ msbuild doc\all_guides.vcxproj
 ----
 
 Detailed information to build these guides can be found in the file
-`doc\README.documentation.adoc` in the Wireshark sources.
+wsrepofile:doc/README.documentation.adoc[] in the Wireshark sources.
 
 Building the documentation requires `Xsltproc` as an additional dependency :
 

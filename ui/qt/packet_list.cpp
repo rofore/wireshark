@@ -9,8 +9,6 @@
 
 #include <ui/qt/packet_list.h>
 
-#include "config.h"
-
 #include "file.h"
 
 #include <epan/epan.h>
@@ -26,11 +24,8 @@
 #include "ui/packet_list_utils.h"
 #include "ui/preference_utils.h"
 #include "ui/recent.h"
-#include "ui/recent_utils.h"
-#include "ui/ws_ui_util.h"
 #include "ui/simple_dialog.h"
 #include <wsutil/utf8_entities.h>
-#include "ui/util.h"
 
 #include "wiretap/wtap_opttypes.h"
 #include "app/application_flavor.h"
@@ -40,6 +35,8 @@
 #include <epan/color_filters.h>
 
 #include <ui/qt/utils/color_utils.h>
+#include <ui/qt/utils/theme_manager.h>
+#include <ui/qt/utils/font_manager.h>
 #include <ui/qt/widgets/overlay_scroll_bar.h>
 #include "proto_tree.h"
 #include <ui/qt/utils/qt_ui_utils.h>
@@ -107,7 +104,33 @@ packet_list_select_row_from_data(frame_data *fdata_needle)
 {
     if (! gbl_cur_packet_list || ! gbl_cur_packet_list->model())
         return false;
-    return gbl_cur_packet_list->selectRow(fdata_needle);
+
+    PacketListModel* model = qobject_cast<PacketListModel*>(gbl_cur_packet_list->model());
+
+    if (!model)
+        return false;
+
+    model->flushVisibleRows();
+    int row = -1;
+    if (!fdata_needle)
+        row = 0;
+    else
+        row = model->visibleIndexOf(fdata_needle);
+
+    if (row >= 0) {
+        /* Calling ClearAndSelect with setCurrentIndex clears the "current"
+         * item, but doesn't clear the "selected" item. We want to clear
+         * the "selected" item as well so that selectionChanged() will be
+         * emitted in order to force an update of the packet details and
+         * packet bytes after a search.
+         */
+        gbl_cur_packet_list->selectionModel()->clearSelection();
+        gbl_cur_packet_list->selectionModel()->setCurrentIndex(model->index(row, 0), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        gbl_cur_packet_list->scrollTo(gbl_cur_packet_list->currentIndex(), PacketList::PositionAtCenter);
+        return true;
+    }
+
+    return false;
 }
 
 /*
@@ -210,8 +233,14 @@ PacketList::PacketList(QWidget *parent) :
     setRootIsDecorated(false);
     setSortingEnabled(prefs.gui_packet_list_sortable);
     setUniformRowHeights(true);
-    setAccessibleName(tr("Packet list"));
-    setAccessibleDescription(tr("List of captured packets"));
+    setFocusPolicy(Qt::StrongFocus);
+
+#ifdef Q_OS_MAC
+    setAttribute(Qt::WA_MacShowFocusRect, true);
+#endif
+
+    verticalScrollBar()->setFocusPolicy(Qt::NoFocus);
+    horizontalScrollBar()->setFocusPolicy(Qt::NoFocus);
 
     packet_list_header_ = new PacketListHeader(header()->orientation());
     connect(packet_list_header_, &PacketListHeader::resetColumnWidth, this, &PacketList::setRecentColumnWidth);
@@ -259,6 +288,12 @@ PacketList::PacketList(QWidget *parent) :
     connect(header(), &QHeaderView::sectionMoved, this, &PacketList::sectionMoved);
 
     connect(verticalScrollBar(), &QScrollBar::actionTriggered, this, &PacketList::vScrollBarActionTriggered);
+
+    // Own the font: seed it now and follow the FontManager for later changes.
+    connect(FontManager::instance(), &FontManager::monospaceFontChanged, this, &PacketList::setMonospaceFont);
+    connect(FontManager::instance(), &FontManager::applicationFontChanged, this, &PacketList::setRegularFont);
+    setMonospaceFont(FontManager::zoomedMonospaceFont());
+    setRegularFont(FontManager::zoomedFont());
 }
 
 PacketList::~PacketList()
@@ -287,16 +322,10 @@ void PacketList::colorsChanged()
     const QString c_active   = "active";
     const QString c_inactive = "!active";
 
-    QString flat_style_format =
+    const QString flat_style_format =
         "QTreeView::item:selected:%1 {"
         "  color: %2;"
         "  background-color: %3;"
-        "}";
-
-    QString gradient_style_format =
-        "QTreeView::item:selected:%1 {"
-        "  color: %2;"
-        "  background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1 stop: 0 %4, stop: 0.5 %3, stop: 1 %4);"
         "}";
 
     QString hover_style = QStringLiteral(
@@ -305,62 +334,34 @@ void PacketList::colorsChanged()
         "  color: palette(text);"
         "}").arg(ColorUtils::hoverBackground().name(QColor::HexArgb));
 
-    QString active_style   = QString();
-    QString inactive_style = QString();
+    // A selected row also matches the :selected rules below, which out-rank
+    // the plain hover rule by CSS specificity. Add an equal-specificity
+    // :selected:hover rule, emitted last, so hover wins on a selected row
+    // (matching the proto tree and the pre-ThemeManager behavior).
+    QString selected_hover_style = QStringLiteral(
+        "QTreeView::item:selected:hover {"
+        "  background-color: %1;"
+        "  color: palette(text);"
+        "}").arg(ColorUtils::hoverBackground().name(QColor::HexArgb));
 
-    if (prefs.gui_active_style == COLOR_STYLE_DEFAULT) {
-        // ACTIVE = Default
-    } else if (prefs.gui_active_style == COLOR_STYLE_FLAT) {
-        // ACTIVE = Flat
-        QColor foreground = ColorUtils::fromColorT(prefs.gui_active_fg);
-        QColor background = ColorUtils::fromColorT(prefs.gui_active_bg);
+    ThemeManager *tm = ThemeManager::instance();
+    QColor active_bg   = tm->color(ThemeManager::PacketsSelection);
+    QColor inactive_bg = tm->color(ThemeManager::PacketsInactive);
+    QColor active_fg   = tm->color(ThemeManager::PacketsSelectionText);
+    QColor inactive_fg = tm->color(ThemeManager::PacketsInactiveText);
 
-        active_style = flat_style_format.arg(
-                           c_active,
-                           foreground.name(),
-                           background.name());
-    } else if (prefs.gui_active_style == COLOR_STYLE_GRADIENT) {
-        // ACTIVE = Gradient
-        QColor foreground  = ColorUtils::fromColorT(prefs.gui_active_fg);
-        QColor background1 = ColorUtils::fromColorT(prefs.gui_active_bg);
-        QColor background2 = QColor::fromRgb(ColorUtils::alphaBlend(foreground, background1, COLOR_STYLE_ALPHA));
+    QString active_style = flat_style_format.arg(
+                               c_active,
+                               active_fg.name(),
+                               active_bg.name());
+    QString inactive_style = flat_style_format.arg(
+                                 c_inactive,
+                                 inactive_fg.name(),
+                                 inactive_bg.name());
 
-        active_style = gradient_style_format.arg(
-                           c_active,
-                           foreground.name(),
-                           background1.name(),
-                           background2.name());
-    }
-
-    // INACTIVE style sheet settings
-    if (prefs.gui_inactive_style == COLOR_STYLE_DEFAULT) {
-        // INACTIVE = Default
-    } else if (prefs.gui_inactive_style == COLOR_STYLE_FLAT) {
-        // INACTIVE = Flat
-        QColor foreground = ColorUtils::fromColorT(prefs.gui_inactive_fg);
-        QColor background = ColorUtils::fromColorT(prefs.gui_inactive_bg);
-
-        inactive_style = flat_style_format.arg(
-                             c_inactive,
-                             foreground.name(),
-                             background.name());
-    } else if (prefs.gui_inactive_style == COLOR_STYLE_GRADIENT) {
-        // INACTIVE = Gradient
-        QColor foreground  = ColorUtils::fromColorT(prefs.gui_inactive_fg);
-        QColor background1 = ColorUtils::fromColorT(prefs.gui_inactive_bg);
-        QColor background2 = QColor::fromRgb(ColorUtils::alphaBlend(foreground, background1, COLOR_STYLE_ALPHA));
-
-        inactive_style = gradient_style_format.arg(
-                             c_inactive,
-                             foreground.name(),
-                             background1.name(),
-                             background2.name());
-    }
-
-    // Set the style sheet
     set_style_sheet_ = true;
-    if(prefs.gui_packet_list_hover_style) {
-        setStyleSheet(active_style + inactive_style + hover_style);
+    if (prefs.gui_packet_list_hover_style) {
+        setStyleSheet(active_style + inactive_style + hover_style + selected_hover_style);
     } else {
         setStyleSheet(active_style + inactive_style);
     }
@@ -1010,6 +1011,28 @@ void PacketList::keyPressEvent(QKeyEvent *event)
     }
 }
 
+void PacketList::focusInEvent(QFocusEvent *event)
+{
+    QTreeView::focusInEvent(event);
+
+    if (event->reason() == Qt::TabFocusReason || event->reason() == Qt::BacktabFocusReason) {
+        if (model() && model()->rowCount() > 0 && selectionModel()) {
+            if (!selectionModel()->hasSelection()) {
+                QModelIndex first = model()->index(0, 0);
+                if (first.isValid()) {
+                    selectionModel()->setCurrentIndex(first, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                    setCurrentIndex(first);
+                }
+            }
+
+            // ALWAYS scroll to the current index if we have one
+            if (currentIndex().isValid()) {
+                scrollTo(currentIndex());
+            }
+        }
+    }
+}
+
 void PacketList::resizeEvent(QResizeEvent *event)
 {
     create_near_overlay_ = true;
@@ -1060,7 +1083,10 @@ void PacketList::setRecentColumnWidth(int col)
         int fmt = get_column_format(col);
         const char *long_str = get_column_width_string(fmt, col);
 
-        QFontMetrics fm = QFontMetrics(mainApp->monospaceFont());
+        // TODO: a column's natural width is model data, not a view concern.
+        // PacketListModel should hint it instead of the view measuring against
+        // the font here.
+        QFontMetrics fm = QFontMetrics(FontManager::monospaceFont());
         if (long_str) {
             col_width = fm.horizontalAdvance(long_str);
         } else {
@@ -1069,11 +1095,7 @@ void PacketList::setRecentColumnWidth(int col)
         // Custom delegate padding
         if (itemDelegateForColumn(col)) {
             QStyleOptionViewItem option;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
             initViewItemOption(&option);
-#else
-            option = viewOptions();
-#endif
             // This is adding "how much width hinted for an empty index, plus
             // the decoration, plus any padding between the decoration and
             // normal display?" Many styles however have a non zero hint for
@@ -1226,12 +1248,17 @@ void PacketList::applyRecentColumnWidths()
         setColumnHidden(col, false);
         setRecentColumnWidth(col);
     }
-
-    column_state_ = header()->saveState();
 }
 
 void PacketList::preferencesChanged()
 {
+    // Previously driven by the separate MainApplication::colorsChanged
+    // signal, which has been removed — every colorsChanged emit was
+    // paired with a preferencesChanged emit anyway.  Rebuilding the
+    // selection stylesheet on every pref change is cheap (single
+    // setStyleSheet call) and idempotent.
+    colorsChanged();
+
     // Intelligent scroll bar (minimap)
     if (prefs.gui_packet_list_show_minimap) {
         if (overlay_timer_id_ == 0) {
@@ -1620,14 +1647,8 @@ void PacketList::setCaptureFile(capture_file *cf)
 {
     cap_file_ = cf;
     packet_list_model_->setCaptureFile(cf);
-    if (cf) {
-        if (columns_changed_) {
-            columnsChanged();
-        } else {
-            // Restore columns widths and visibility.
-            header()->restoreState(column_state_);
-            setColumnVisibility();
-        }
+    if (cap_file_ && columns_changed_) {
+        columnsChanged();
     }
     create_near_overlay_ = true;
     changing_profile_ = false;
@@ -2454,8 +2475,15 @@ void PacketList::drawFarOverlay()
 void PacketList::rowsInserted(const QModelIndex &parent, int start, int end)
 {
     QTreeView::rowsInserted(parent, start, end);
-    if (recent.aggregation_view && currentIndex().isValid() && currentIndex().row() >= 0) {
-        selectRow(getFDataForRow(currentIndex().row()), false);
+    const QModelIndex& cIndex = currentIndex();
+    bool aggregation_mode = recent.aggregation_view && prefs.aggregation_fields_num > 0;
+    if (aggregation_mode && cIndex.isValid() && cIndex.row() >= 0) {
+        int row = cIndex.row();
+        frame_data* fdata = getFDataForRow(row);
+        if (fdata && cap_file_->current_frame->num != fdata->num) {
+            cf_select_packet(cap_file_, fdata);
+            emit framesSelected(QList<int>() << row);
+        }
     }
     if (capture_in_progress_ && tail_at_end_) {
         scrollToBottom();
@@ -2472,36 +2500,4 @@ void PacketList::resizeAllColumns(bool onlyTimeFormatted)
             resizeColumnToContents(col);
         }
     }
-}
-
-bool PacketList::selectRow(const frame_data* fdata, bool flushRows)
-{
-    PacketListModel* pktListModel = qobject_cast<PacketListModel*>(model());
-
-    if (!pktListModel)
-        return false;
-
-    if (flushRows) {
-        pktListModel->flushVisibleRows();
-    }
-    int row = -1;
-    if (!fdata)
-        row = 0;
-    else
-        row = pktListModel->visibleIndexOf(fdata);
-
-    if (row >= 0) {
-        /* Calling ClearAndSelect with setCurrentIndex clears the "current"
-         * item, but doesn't clear the "selected" item. We want to clear
-         * the "selected" item as well so that selectionChanged() will be
-         * emitted in order to force an update of the packet details and
-         * packet bytes after a search.
-         */
-        selectionModel()->clearSelection();
-        selectionModel()->setCurrentIndex(pktListModel->index(row, 0), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-        scrollTo(currentIndex(), PacketList::PositionAtCenter);
-        return true;
-    }
-
-    return false;
 }

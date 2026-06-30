@@ -28,9 +28,10 @@
 #include <models/pref_models.h>
 #include <ui/qt/utils/wireshark_mime_data.h>
 #include <ui/qt/widgets/packet_list_header.h>
+#include <ui/qt/utils/font_manager.h>
 
 PacketListHeader::PacketListHeader(Qt::Orientation orientation, QWidget *parent) :
-    QHeaderView(orientation, parent),
+    AdaptiveHeaderView(orientation, parent),
     sectionIdx(-1)
 {
     setAcceptDrops(true);
@@ -100,11 +101,7 @@ void PacketListHeader::dropEvent(QDropEvent *event)
             MainWindow * mw = mainApp->mainWindow();
             if (mw)
             {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0 ,0)
                 int idx = logicalIndexAt(event->position().toPoint());
-#else
-                int idx = logicalIndexAt(event->pos());
-#endif
                 mw->insertColumn(data["description"].toString(), data["name"].toString(), idx);
             }
 
@@ -121,18 +118,10 @@ void PacketListHeader::mousePressEvent(QMouseEvent *e)
     if (e->button() == Qt::LeftButton && sectionIdx < 0)
     {
         /* No move happening yet */
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0 ,0)
         int sectIdx = logicalIndexAt(e->position().toPoint().x() - 4, e->position().toPoint().y());
-#else
-        int sectIdx = logicalIndexAt(e->localPos().x() - 4, e->localPos().y());
-#endif
 
         QString headerName = model()->headerData(sectIdx, orientation()).toString();
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0 ,0)
         QToolTip::showText(e->globalPosition().toPoint(), QStringLiteral("Width: %1").arg(sectionSize(sectIdx)));
-#else
-        QToolTip::showText(e->globalPos(), QStringLiteral("Width: %1").arg(sectionSize(sectIdx)));
-#endif
     }
     QHeaderView::mousePressEvent(e);
 }
@@ -147,11 +136,7 @@ void PacketListHeader::mouseMoveEvent(QMouseEvent *e)
     else if (e->buttons() & Qt::LeftButton)
     {
         /* section being moved */
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0 ,0)
         int triggeredSection = logicalIndexAt(e->position().toPoint().x() - 4, e->position().toPoint().y());
-#else
-        int triggeredSection = logicalIndexAt(e->localPos().x() - 4, e->localPos().y());
-#endif
 
         if (sectionIdx < 0)
             sectionIdx = triggeredSection;
@@ -159,11 +144,7 @@ void PacketListHeader::mouseMoveEvent(QMouseEvent *e)
         {
             /* Only run for the current moving section after a change */
             QString headerName = model()->headerData(sectionIdx, orientation()).toString();
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0 ,0)
             QToolTip::showText(e->globalPosition().toPoint(), QStringLiteral("Width: %1").arg(sectionSize(sectionIdx)));
-#else
-            QToolTip::showText(e->globalPos(), QStringLiteral("Width: %1").arg(sectionSize(sectionIdx)));
-#endif
         }
     }
     QHeaderView::mouseMoveEvent(e);

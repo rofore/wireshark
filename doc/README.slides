@@ -31,12 +31,17 @@ Slide files use the following structure:
       "$schema": "slides.schema.json",
       "config": {
           "colors": {
-              "default": { "start": "#333333", "end": "#222222" },
-              "events": { "start": "#1a4a6e", "end": "#234d6e" },
-              "sponsorship": { "start": "#2d4a3e", "end": "#1e3a32" },
-              "tips": { "start": "#4a3d6e", "end": "#3a2d5e" }
+              "default": { "start": "#333333", "end": "#222222", "degrees": 145 },
+              "events": { "start": "#1a4a6e", "end": "#234d6e", "degrees": 145 },
+              "sponsorship": { "start": "#2d4a3e", "end": "#1e3a32", "degrees": 145 },
+              "tips": { "start": "#4a3d6e", "end": "#3a2d5e", "degrees": 145 },
+              "seasonal": {
+                  "start": "#781E32", "end": "#641E64", "degrees": 145,
+                  "steps": ["#781E32", "#8C5014", "#327832", "#1E5A82", "#3C2882", "#641E64"]
+              }
           },
           "types": {
+              "seasonal": { "randomized": false, "maxdisplay": 0 },
               "events": { "randomized": false, "maxdisplay": 0, "only": false },
               "sponsorship": { "randomized": false, "maxdisplay": 0 },
               "tips": { "randomized": true, "maxdisplay": 3, "only": false }
@@ -81,12 +86,21 @@ config.colors:
   color strings in #RRGGBB format. The "default" entry provides fallback
   colors for types without explicit colors.
 
-  Available keys: "default", "events", "sponsorship", "tips".
+  Available keys: "default", "events", "sponsorship", "tips", "seasonal".
+
+  Optional color fields:
+
+  degrees       Integer (0-360). Gradient angle in degrees.
+
+  steps         Array of #RRGGBB hex strings. When provided, these
+                intermediate color stops are used instead of a simple
+                start/end gradient. The colors are distributed evenly
+                across the gradient (0.0 to 1.0).
 
 config.types:
 
   Per-type display settings. Available keys: "events", "sponsorship",
-  "tips". Each entry supports:
+  "tips", "seasonal". Each entry supports:
 
   randomized    Boolean (default false). When true, slides of this type
                 are shuffled at startup before maxdisplay windowing.
@@ -116,33 +130,42 @@ All config fields are optional. Missing values use defaults.
 
 Per-slide fields:
 
-  type            Required. One of: "events", "sponsorship", "tips".
-                  Maps to BannerSlideType enum. Unknown types are skipped
-                  with a warning. Note that "sponsorship" is reserved for
-                  the predefined slides.json and cannot be used in custom
-                  slide files.
+  type            Required. One of: "events", "sponsorship", "tips",
+                  "seasonal". Maps to BannerSlideType enum. Unknown types
+                  are skipped with a warning. Note that "sponsorship" and
+                  "seasonal" are reserved for the predefined slides.json
+                  and cannot be used in custom slide files.
   title           Required. Main heading text.
-  description     Required. Primary text shown in the highlight box.
-  url             Required. Target URL opened when the slide or button
-                  is clicked.
+  description     Required(*). Primary text shown in the highlight box.
+  url             Required. Target URL opened when the button is clicked.
   tag             Optional. Short label shown as a pill/badge above the
                   title (e.g. "Conference", "Tip of the Day").
-  description_sub Optional. Secondary line in the highlight box.
+  description_sub Optional(*). Secondary line in the highlight box.
   body_text       Optional. Additional paragraph below the highlight box.
                   Only visible in non-compact mode.
   button_label    Optional. Text for the action button.
   image           Optional. Filename of a banner image, resolved at
                   runtime under :/json/banners/. If empty or missing,
                   a generic semi-transparent overlay is shown instead.
+  application     Optional. Either "wireshark" or "stratoshark". When
+                  set, the slide is only shown in the specified
+                  application. If omitted, the slide is shown in both.
   date_from       Optional. ISO 8601 date (YYYY-MM-DD). The slide is
                   hidden before this date.
   date_until      Optional. ISO 8601 date (YYYY-MM-DD). The slide is
                   hidden after this date.
+  date_month      Optional. Integer (1-12). For seasonal slides: the
+                  month when the slide should be shown.
+  date_day        Optional. Integer (1-31). For seasonal slides: the
+                  day of month when the slide should be shown.
 
-Slides missing any required field (type, title, description, url) are
+Slides missing any required field (type, title, description(*), url) are
 skipped with a warning. Omitted optional fields default to empty strings
 (or no date constraint for date_from/date_until). Slides without date
 fields are always visible.
+
+(*) Seasonal slides show no description or description_sub. The required
+description field can be assigned an empty string.
 
 Slide strings are intentionally not translatable. Content changes
 frequently and translation lag would be worse than untranslated text.
@@ -248,3 +271,19 @@ Adding a New Default Slide
 
 4. Rebuild. The CMake glob picks up new images automatically.
    No other file changes are needed.
+
+
+Slide Testing
+-------------
+
+To assist in developing slides, by showing all eligable slides, the
+banner carousel has a 'hidden' test setting. This setting can be found
+in the "recent_common" file under the name:
+"gui.welcome_page.sidebar.tips_slides_test"
+
+When changing its value to 'true' and starting Wireshark afterwards,
+the banner carousel will be loaded with all eligable slides, according
+to the selected slide types. The dots can now be used to select among
+them. Auto advance is disabled in this case, so the selected slide will
+remain until another is chosen. This allows for careful evaluation of
+the slide designs.

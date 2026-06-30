@@ -366,28 +366,13 @@ udp_build_filter_by_id(packet_info *pinfo, void *user_data _U_)
 
 static char *udp_follow_conv_filter(epan_dissect_t *edt _U_, packet_info *pinfo, unsigned *stream, unsigned *sub_stream _U_)
 {
-    conversation_t *conv;
-    struct udp_analysis *udpd;
+    uint8_t max_layer_num = proto_get_layer_num(pinfo, proto_udp);
 
-    /* XXX: Since UDP doesn't use the endpoint API, we can only look
-     * up using the current pinfo addresses and ports. We don't want
-     * to create a new conversation or new UDP stream.
-     * Eventually the endpoint API should support storing multiple
-     * endpoints and UDP should be changed to use the endpoint API.
-     */
-    conv = find_conversation_strat(pinfo, CONVERSATION_UDP, 0, false);
-    if (((pinfo->net_src.type == AT_IPv4 && pinfo->net_dst.type == AT_IPv4) ||
-        (pinfo->net_src.type == AT_IPv6 && pinfo->net_dst.type == AT_IPv6))
-        && (pinfo->ptype == PT_UDP) &&
-        conv != NULL)
-    {
-        /* UDP over IPv4/6 */
-        udpd=get_udp_conversation_data(conv, pinfo);
-        if (udpd == NULL)
-            return NULL;
-
-        *stream = udpd->stream;
-        return ws_strdup_printf("udp.stream eq %u", udpd->stream);
+    for (uint8_t curr_layer_num = max_layer_num; curr_layer_num; --curr_layer_num) {
+        *stream = GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, hf_udp_stream, curr_layer_num));
+        if (*stream) {
+            return ws_strdup_printf("udp.stream eq %u", --*stream);
+        }
     }
 
     return NULL;
@@ -577,11 +562,6 @@ decode_udp_ports(tvbuff_t *tvb, int offset, packet_info *pinfo,
             plurality(len, "", "s"));
 
     next_tvb = tvb_new_subset_length_caplen(tvb, offset, len, reported_len);
-
-    /* If the user has a "Follow UDP Stream" window loading, pass a pointer
-     * to the payload tvb through the tap system. */
-    if (have_tap_listener(udp_follow_tap))
-        tap_queue_packet(udp_follow_tap, pinfo, next_tvb);
 
     if (PINFO_FD_VISITED(pinfo)) {
         if (udp_p_info && udp_p_info->heur_dtbl_entry != NULL) {
@@ -1245,6 +1225,7 @@ dissect(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, uint32_t ip_proto)
     if (udpd) {
         item = proto_tree_add_uint(udp_tree, hf_udp_stream, tvb, offset, 0, udpd->stream);
         proto_item_set_generated(item);
+        p_add_proto_data(pinfo->pool, pinfo, hf_udp_stream, pinfo->curr_proto_layer_num, GUINT_TO_POINTER(udpd->stream + 1)); // Add 1 to distinguish stream 0 from NULL
 
         /* Copy the stream index into the header as well to make it available
         * to tap listeners.
@@ -1329,8 +1310,25 @@ dissect(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, uint32_t ip_proto)
      * We definitely don't want to do it for an error packet if there's
      * nothing left in the packet.
      */
-    if (!pinfo->flags.in_error_pkt || (tvb_captured_length_remaining(tvb, offset) > 0))
+    if (!pinfo->flags.in_error_pkt || (tvb_captured_length_remaining(tvb, offset) > 0)) {
+        /* If the user has a "Follow UDP Stream" window loading, pass a pointer
+         * to the payload tvb through the tap system. */
+        if (have_tap_listener(udp_follow_tap)) {
+            follow_stream_tap_data_t *follow_data = wmem_new0(pinfo->pool, follow_stream_tap_data_t);
+            follow_data->tvb = tvb_new_subset_length(tvb, offset, udph->uh_ulen - 8);
+            follow_data->stream_id = udph->uh_stream;
+            follow_data->substream_id = SUBSTREAM_UNUSED;
+            copy_address_shallow(&follow_data->src, &udph->ip_src);
+            copy_address_shallow(&follow_data->dst, &udph->ip_dst);
+            follow_data->ptype = PT_UDP;
+            follow_data->srcport = udph->uh_sport;
+            follow_data->destport = udph->uh_dport;
+
+            tap_queue_packet(udp_follow_tap, pinfo, follow_data);
+        }
+
         decode_udp_ports(tvb, offset, pinfo, udp_tree, udph->uh_sport, udph->uh_dport, udph->uh_ulen);
+    }
 }
 
 static int
@@ -1566,7 +1564,7 @@ proto_register_udp(void)
     register_conversation_table(proto_udp, false, udpip_conversation_packet, udpip_endpoint_packet);
     register_conversation_filter("udp", "UDP", udp_filter_valid, udp_build_filter_by_id, NULL);
     register_follow_stream(proto_udp, "udp_follow", udp_follow_conv_filter, udp_follow_index_filter, udp_follow_address_filter,
-                        udp_port_to_display, follow_tvb_tap_listener, get_udp_stream_count, NULL);
+                        udp_port_to_display, follow_stream_tap_listener, get_udp_stream_count, NULL);
 
     register_init_routine(udp_init);
 

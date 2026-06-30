@@ -20,8 +20,10 @@
 #include <app/application_flavor.h>
 #include <wsutil/filesystem.h>
 #include <wsutil/version_info.h>
+#include "wsutil/file_util.h"
 
 #include <ui/commandline.h>
+#include <ui/qt/utils/software_update.h>
 
 #include <QAction>
 #include <QClipboard>
@@ -31,11 +33,12 @@
 
 #include "funnel_statistics.h"
 #include "main_application.h"
+#include "manager/interface_list_manager.h"
 #include "packet_list.h"
 #include "utils/profile_switcher.h"
 #include "utils/qt_ui_utils.h"
 #include "utils/workspace_state.h"
-#include "widgets/display_filter_combo.h"
+#include "widgets/display_filter_entry.h"
 
 #ifdef Q_OS_MAC
 #include <ui/macosx/cocoa_bridge.h>
@@ -48,6 +51,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     main_stack_(nullptr),
     welcome_page_(nullptr),
+    master_split_(nullptr),
     cur_layout_(QVector<unsigned>()),
     packet_list_(nullptr),
     proto_tree_(nullptr),
@@ -56,6 +60,7 @@ MainWindow::MainWindow(QWidget *parent) :
     df_combo_box_(nullptr),
     main_status_bar_(nullptr),
     profile_switcher_(new ProfileSwitcher(this)),
+    interface_list_manager_(new InterfaceListManager(this)),
     use_capturing_title_(false),
     recent_captures_menu_(nullptr),
     no_recent_files_action_(nullptr)
@@ -64,11 +69,38 @@ MainWindow::MainWindow(QWidget *parent) :
 #endif
 {
     findTextCodecs();
+
+    if (SoftwareUpdate::plattformSupported()) {
+        connect(SoftwareUpdate::instance(), &SoftwareUpdate::appShutdownRequested, this, [this](ShutdownEvent* shutdownEvent) {
+            // tryClosingCaptureFile doesn't use this string because we aren't
+            // going to launch another dialog, but maybe we'll change that.
+            QString before_what(tr(" before updating"));
+            if (tryClosingCaptureFile(before_what, Update)) {
+                #ifdef _WIN32
+                    close_app_running_mutex();
+                #endif
+                shutdownEvent->accept();
+            } else {
+                shutdownEvent->reject(tr("Please close the current file before updating."));
+            }
+        }, Qt::BlockingQueuedConnection);
+    }
+
+    // Tell the interface manager when a capture is active; it propagates that to
+    // the statistics it owns (pause sampling) and defers rescans accordingly.
+    connect(mainApp, &MainApplication::captureActive, this, [this](int active) {
+        interface_list_manager_->setCaptureActive(active > 0);
+    });
 }
 
 MainWindow::~MainWindow()
 {
     clearAddedPacketMenus();
+}
+
+InterfaceListManager *MainWindow::interfaceListManager() const
+{
+    return interface_list_manager_;
 }
 
 void MainWindow::findTextCodecs() {
@@ -176,7 +208,7 @@ void MainWindow::gotoFrame(int packet_num)
 
 QString MainWindow::getFilter()
 {
-    return df_combo_box_->currentText();
+    return df_combo_box_->text();
 }
 
 MainStatusBar *MainWindow::statusBar()
@@ -187,6 +219,14 @@ MainStatusBar *MainWindow::statusBar()
 void MainWindow::setDisplayFilter(QString filter, FilterAction::Action action, FilterAction::ActionType filterType)
 {
     emit filterAction(filter, action, filterType);
+}
+
+void MainWindow::filterPackets(QString filter, bool)
+{
+    // Ignore the force parameter. We could add a new action type, and make
+    // the main DisplayFilterEntry check. (Note a filter can have the same text
+    // but compile differently if field references, macros, etc. have changed.)
+    emit filterAction(filter, FilterAction::ActionApply, FilterAction::ActionTypePlain);
 }
 
 /*

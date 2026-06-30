@@ -31,7 +31,7 @@ static dissector_handle_t ams_handle;
 static dissector_handle_t ecat_mailbox_handle;
 
 /* Define the EtherCAT mailbox proto */
-int proto_ecat_mailbox;
+static int proto_ecat_mailbox;
 
 static int ett_ecat_mailbox;
 static int ett_ecat_mailbox_eoe;
@@ -343,7 +343,7 @@ static void init_sdo_info_header(PETHERCAT_SDO_INFO_HEADER pInfo, tvbuff_t *tvb,
 static void init_voe_header(PETHERCAT_VOE_HEADER pVoE, tvbuff_t *tvb, int offset)
 {
    pVoE->VendorID = tvb_get_letohl(tvb, offset);offset+=4;
-   pVoE->VendorType = tvb_get_letohs(tvb, offset);offset+=2;
+   pVoE->VendorType = tvb_get_letohs(tvb, offset);
 }
 
 static void CANopenSdoReqFormatter(PETHERCAT_SDO_HEADER pSdo, char *szText, int nMax)

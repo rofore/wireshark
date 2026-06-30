@@ -6644,9 +6644,7 @@ elem_a2p_bearer_format(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, uint
     curr_offset = offset;
 
     proto_tree_add_item(tree, hf_ansi_a_a2p_bearer_form_num_formats, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(tree, hf_ansi_a_a2p_bearer_form_ip_addr_type, tvb, curr_offset, 1, ENC_BIG_ENDIAN);
-
-    ip_addr_type = tvb_get_uint8(tvb, curr_offset) & 0x03;
+    proto_tree_add_item_ret_uint8(tree, hf_ansi_a_a2p_bearer_form_ip_addr_type, tvb, curr_offset, 1, ENC_BIG_ENDIAN, &ip_addr_type);
 
     curr_offset++;
 
@@ -10478,7 +10476,7 @@ dissect_sip_dtap_bsmap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void
         {
             ansi_a_tvb = tvb_new_composite();
             msg_type = (uint8_t *) wmem_alloc(pinfo->pool, 1);
-            msg_type[0] = (uint8_t) strtoul((char*)tvb_get_string_enc(pinfo->pool, tvb, offset, 2, ENC_ASCII|ENC_NA), NULL, 16);
+            tvb_get_string_uint8(tvb, offset, 2, ENC_STR_HEX, &msg_type[0], NULL);
 
             if ((tvb_find_uint8_length(tvb, offset, linelen, '"', &begin)) && begin > 0)
             {

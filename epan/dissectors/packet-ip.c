@@ -276,6 +276,7 @@ static expert_field ei_ip_opt_ptr_middle_address;
 static expert_field ei_ip_subopt_too_long;
 static expert_field ei_ip_nop;
 static expert_field ei_ip_bogus_ip_length;
+static expert_field ei_ip_zero_data_length;
 static expert_field ei_ip_evil_packet;
 static expert_field ei_ip_checksum_bad;
 static expert_field ei_ip_ttl_lncb;
@@ -505,13 +506,14 @@ const value_string ip_version_vals[] = {
 
 static void ip_prompt(packet_info *pinfo, char* result)
 {
-    snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "IP protocol %u as",
-        GPOINTER_TO_UINT(p_get_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num)));
+    ws_ip4* iph = (ws_ip4*)p_get_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num);
+    snprintf(result, MAX_DECODE_AS_PROMPT_LEN, "IP protocol %u as", iph->ip_proto);
 }
 
 static void *ip_value(packet_info *pinfo)
 {
-    return p_get_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num);
+    ws_ip4* iph = (ws_ip4*)p_get_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num);
+    return GUINT_TO_POINTER(iph->ip_proto);
 }
 
 static const char* ip_conv_get_filter_type(conv_item_t* conv, conv_filter_type_e filter)
@@ -2109,6 +2111,11 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
                                tvb_reported_length(tvb));
       }
     } else {
+      if (iph->ip_len == hlen) {
+        /* IP header with no data.  Let the user know */
+        expert_add_info(pinfo, tf, &ei_ip_zero_data_length);
+      }
+
       /*
        * Now that we know that the total length of this IP datagram isn't
        * obviously bogus, adjust the length of this tvbuff to include only
@@ -2276,6 +2283,12 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
   copy_address_shallow(&pinfo->dst, &pinfo->net_dst);
   copy_address_shallow(&iph->ip_dst, &pinfo->net_dst);
 
+  /* XXX - We do not want pinfo->conv_elements, if set, to be used to find the
+   * default conversation after this, or else subdissectors will set the
+   * wrong dissector. This is a bit of a hack, it should be solved more
+   * generally. */
+  pinfo->conv_elements = NULL;
+
   /* If an IP is destined for an IP address in the Local Network Control Block
    * (e.g. 224.0.0.0/24), the packet should never be routed and the TTL would
    * be expected to be 1.  (see RFC 3171)  Flag a TTL greater than 1.
@@ -2357,7 +2370,7 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
     dissect_ip_options(tvb, offset + 20, optlen, pinfo, field_tree, tf, iph);
   }
 
-  p_add_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num, GUINT_TO_POINTER((unsigned)iph->ip_proto));
+  p_add_proto_data(pinfo->pool, pinfo, proto_ip, pinfo->curr_layer_num, iph);
   tap_queue_packet(ip_tap, pinfo, iph);
 
   /* Skip over header + options */
@@ -2369,7 +2382,7 @@ dissect_ip_v4(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* 
    */
   save_fragmented = pinfo->fragmented;
   if (ip_defragment && (iph->ip_off & (IP_MF|IP_OFFSET)) &&
-      iph->ip_len > hlen &&
+      iph->ip_len >= hlen &&
       tvb_bytes_exist(tvb, offset, iph->ip_len - hlen) &&
       ipsum == 0) {
     uint32_t frag_id;
@@ -3094,6 +3107,7 @@ proto_register_ip(void)
      { &ei_ip_subopt_too_long, { "ip.subopt_too_long", PI_PROTOCOL, PI_WARN, "Suboption would go past end of option", EXPFILL }},
      { &ei_ip_nop, { "ip.nop", PI_PROTOCOL, PI_WARN, "4 NOP in a row - a router may have removed some options", EXPFILL }},
      { &ei_ip_bogus_ip_length, { "ip.bogus_ip_length", PI_PROTOCOL, PI_ERROR, "Bogus IP length", EXPFILL }},
+     { &ei_ip_zero_data_length, { "ip.zero_data_length", PI_PROTOCOL, PI_NOTE, "Empty data packet", EXPFILL }},
      { &ei_ip_evil_packet, { "ip.evil_packet", PI_PROTOCOL, PI_WARN, "Packet has evil intent", EXPFILL }},
      { &ei_ip_checksum_bad, { "ip.checksum_bad.expert", PI_CHECKSUM, PI_ERROR, "Bad checksum", EXPFILL }},
      { &ei_ip_ttl_lncb, { "ip.ttl.lncb", PI_SEQUENCE, PI_NOTE, "Time To Live", EXPFILL }},

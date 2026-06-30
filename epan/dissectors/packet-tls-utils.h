@@ -210,7 +210,8 @@ typedef enum {
 #define SSL_HND_QUIC_TP_INITIAL_MAX_PATH_ID_DRAFT09         0x0f739bbc1b666d09 /* https://tools.ietf.org/html/draft-ietf-quic-multipath-09 */
 #define SSL_HND_QUIC_TP_INITIAL_MAX_PATH_ID_DRAFT11         0x0f739bbc1b666d11 /* https://tools.ietf.org/html/draft-ietf-quic-multipath-11 */
 #define SSL_HND_QUIC_TP_INITIAL_MAX_PATH_ID_DRAFT12         0x0f739bbc1b666d0c /* https://tools.ietf.org/html/draft-ietf-quic-multipath-12 */
-#define SSL_HND_QUIC_TP_INITIAL_MAX_PATH_ID                 0x0f739bbc1b666d0d /* https://tools.ietf.org/html/draft-ietf-quic-multipath-13 */
+#define SSL_HND_QUIC_TP_INITIAL_MAX_PATH_ID_DRAFT13         0x0f739bbc1b666d0d /* https://tools.ietf.org/html/draft-ietf-quic-multipath-13 */
+#define SSL_HND_QUIC_TP_INITIAL_MAX_PATH_ID                 0x3e /* https://tools.ietf.org/html/draft-ietf-quic-multipath-19 */
 
 /*
  * Lookup tables
@@ -465,6 +466,7 @@ typedef struct {
     TlsHsFragment *hs_fragments;    /**< Handshake records that are part of a reassembly. */
     uint32_t srcport;        /**< Used for Decode As */
     uint32_t destport;
+    uint32_t stream;       /**< Used for Follow Stream */
     int cipher;            /**< Cipher at time of Key Exchange handshake message.
                                  Session cipher can change in renegotiation. */
 } SslPacketInfo;
@@ -562,6 +564,8 @@ typedef struct _SslDecryptSession {
     StringInfo app_data_segment;
     SslSession session;
     bool       has_early_data;
+    bool       has_psk;
+    bool       has_key_share;
     StringInfo ech_transcript;
 
 } SslDecryptSession;
@@ -644,9 +648,21 @@ SslDecryptSession *ssl_get_session_by_cid(tvbuff_t *tvb, uint32_t offset);
 /** Retrieve a SslSession, creating it if it did not already exist.
  * @param conversation The SSL conversation.
  * @param tls_handle The dissector handle for SSL or DTLS.
+ * @param curr_layer_num The current protocol layer number (for nested TLS support).
  */
 extern SslDecryptSession *
-ssl_get_session(conversation_t *conversation, dissector_handle_t tls_handle);
+ssl_get_session(conversation_t *conversation, dissector_handle_t tls_handle, uint8_t curr_layer_num);
+
+/** Look up an existing SslDecryptSession for a conversation without creating one.
+ * Used by functions that query session state (cipher info, ALPN, exporters, etc.)
+ * but must not create a new session as a side effect.
+ * @param conversation The SSL conversation (may be NULL, returns NULL in that case).
+ * @param proto_ssl The protocol index for TLS/DTLS.
+ * @param curr_layer_num [D]TLS layer nesting number.
+ * @return The existing SslDecryptSession, or NULL if none is found.
+ */
+extern SslDecryptSession *
+tls_get_session(conversation_t *conversation, int proto_ssl, uint8_t curr_layer_num);
 
 /** Resets the decryption parameters for the next decoder. */
 extern void
@@ -814,6 +830,9 @@ ssl_common_cleanup(ssl_master_key_map_t *master_key_map, FILE **ssl_keylog_file,
 WS_DLL_PUBLIC ssl_master_key_map_t *
 tls_get_master_key_map(bool load_secrets);
 
+extern bool
+tls_load_psk(SslDecryptSession *tls_session, const char *tls_psk);
+
 /* Process lines from the TLS key log and populate the secrets map. */
 extern void
 tls_keylog_process_lines(const ssl_master_key_map_t *mk_map, const uint8_t *data, unsigned len);
@@ -869,7 +888,7 @@ ssl_try_set_version(SslSession *session, SslDecryptSession *ssl,
                     bool is_dtls, uint16_t version);
 
 extern void
-ssl_calculate_handshake_hash(SslDecryptSession *ssl_session, tvbuff_t *tvb, uint32_t offset, uint32_t length);
+ssl_calculate_handshake_hash(SslDecryptSession *ssl_session, tvbuff_t *tvb, uint32_t offset, uint32_t length, uint8_t msg_type, bool is_from_server);
 
 /* common header fields, subtrees and expert info for SSL and DTLS dissectors */
 typedef struct ssl_common_dissect {

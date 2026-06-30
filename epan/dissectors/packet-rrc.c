@@ -49,9 +49,9 @@
 #pragma warning(disable:4049)
 #endif
 
-extern int proto_fp;       /*Handler to FP*/
-extern int proto_umts_mac; /*Handler to MAC*/
-extern int proto_umts_rlc; /*Handler to RLC*/
+static int proto_fp;       /*Handler to FP*/
+static int proto_umts_mac; /*Handler to MAC*/
+static int proto_umts_rlc; /*Handler to RLC*/
 
 GTree * hsdsch_muxed_flows;
 GTree * rrc_ciph_info_tree;
@@ -18408,6 +18408,17 @@ static void rrc_free_value(void *value ){
             g_free(value);
 }
 
+static void
+rrc_free_ciphering_info(void *data) {
+  rrc_ciphering_info *cipher_info = (rrc_ciphering_info *)data;
+
+  if (cipher_info->start_cs)
+      g_tree_unref(cipher_info->start_cs);
+  if (cipher_info->start_ps)
+      g_tree_unref(cipher_info->start_ps);
+  g_free(cipher_info);
+}
+
 static rrc_ciphering_info*
 get_or_create_cipher_info(fp_info *fpinf, rlc_info *rlcinf) {
   rrc_ciphering_info *cipher_info = NULL;
@@ -18895,6 +18906,8 @@ dissect_rrc_U_RNTI(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_,
 
   /* Adding a "Current U-RNTI" or "New U-RNTI" as generated field */
   sub_tree = proto_item_get_subtree(actx->created_item);
+  /* XXX - proto_item_get_len is not accurate when the item was faked. Just
+     use BLEN(original_offset, offset) instead? */
   item_len = proto_item_get_len(actx->created_item);
   ti = proto_tree_add_uint(sub_tree, generated_field_hf, tvb, original_offset/8, item_len, u_rnti_value);
   proto_item_set_generated(ti);
@@ -165205,7 +165218,7 @@ rrc_init(void) {
     rrc_ciph_info_tree = g_tree_new_full(rrc_key_cmp,
                        NULL,      /* data pointer, optional */
                        NULL,
-                       rrc_free_value);
+                       rrc_free_ciphering_info);
 }
 
 static void
@@ -215834,6 +215847,10 @@ proto_reg_handoff_rrc(void)
   lte_rrc_dl_dcch_handle = find_dissector_add_dependency("lte-rrc.dl.dcch", proto_rrc);
   rrc_bcch_fach_handle = find_dissector("rrc.bcch.fach");
   gsm_rlcmac_dl_handle = find_dissector_add_dependency("gsm_rlcmac_dl", proto_rrc);
+
+  proto_fp = proto_get_id_by_filter_name("fp");
+  proto_umts_mac = proto_get_id_by_filter_name("mac");
+  proto_umts_rlc = proto_get_id_by_filter_name("rlc");
 }
 
 

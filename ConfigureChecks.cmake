@@ -24,6 +24,7 @@ check_include_file("pwd.h"                  HAVE_PWD_H)
 check_include_file("sys/select.h"           HAVE_SYS_SELECT_H)
 check_include_file("sys/socket.h"           HAVE_SYS_SOCKET_H)
 check_include_file("sys/time.h"             HAVE_SYS_TIME_H)
+check_include_file("sys/ucred.h"            HAVE_SYS_UCRED_H)
 check_include_file("sys/utsname.h"          HAVE_SYS_UTSNAME_H)
 check_include_file("sys/wait.h"             HAVE_SYS_WAIT_H)
 check_include_file("unistd.h"               HAVE_UNISTD_H)
@@ -92,6 +93,12 @@ endif()
 include(CheckFunctionExists)
 include(CheckSymbolExists)
 
+if(WIN32)
+	check_symbol_exists(AF_UNIX "winsock2.h;afunix.h" HAVE_AF_UNIX)
+elseif(HAVE_SYS_SOCKET_H)
+	check_symbol_exists(AF_UNIX "sys/socket.h" HAVE_AF_UNIX)
+	check_function_exists("getpeereid"      HAVE_GETPEEREID)
+endif()
 #
 # Platform-specific functions used in platform-specific code.
 # We check for them only on the platform on which we use them.
@@ -106,9 +113,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "HP-UX")
 	cmake_pop_check_state()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS" AND CMAKE_SYSTEM_VERSION MATCHES "5[.][0-9.]*")
 	#
-	# Solaris
+	# Solaris/Illumos
 	#
 	check_function_exists("getexecname"     HAVE_GETEXECNAME)
+	check_function_exists("getpeerucred"    HAVE_GETPEERUCRED)
 endif()
 
 check_symbol_exists("clock_gettime"  "time.h"   HAVE_CLOCK_GETTIME)
@@ -155,33 +163,15 @@ check_struct_has_member("struct tm"       tm_gmtoff      time.h       HAVE_STRUC
 include(CheckTypeSize)
 check_type_size("ssize_t"       SSIZE_T)
 
-# Unconditionally force use of 64-bit time_t on 32-bit platforms with glibc.
-check_symbol_exists(__GLIBC__	"time.h"	HAVE___GLIBC__)
-
-if(HAVE___GLIBC__ AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-	# _TIME_BITS=64 requires _FILE_OFFSET_BITS=64, which we should have
-	# already ensured is set by FindLFS, but this doesn't hurt
-	check_symbol_exists(_FILE_OFFSET_BITS	"time.h"	HAVE__FILE_OFFSET_BITS)
-	if (NOT HAVE__FILE_OFFSET_BITS)
-		list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_FILE_OFFSET_BITS=64)
-	endif()
-	check_symbol_exists(_TIME_BITS	"time.h"	HAVE__TIME_BITS)
-	if (NOT HAVE__TIME_BITS)
-		list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_TIME_BITS=64)
-	endif()
-endif()
-
-# Do we want to eventually just fail for non Y2038 compliant hosts (or all
-# less than 64-bit time_t hosts, if we don't want to consider theoretical
-# cases like unsigned 32 bit time_t?)
-# The only way to truly test this is to compile a program, especially
-# due to multiple architectures.
-#check_type_size("time_t"	TIME_T_SIZE)
-#if(TIME_T_SIZE_64 EQUAL 0)
-#	message("multiple architectures with possibly different time_t sizes.")
-#elseif(TIME_T_SIZE_64 LESS 8)
-#	message(FATAL_ERROR "time_t is less than 64-bit")
-#endif()
+# Check for types in sys/socket.h
+if(HAVE_SYS_SOCKET_H)
+	# Linux, Haiku
+	cmake_push_check_state()
+	set(CMAKE_EXTRA_INCLUDE_FILES sys/socket.h)
+	set(CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+	check_type_size("struct ucred" STRUCT_UCRED)
+	cmake_pop_check_state()
+endif(HAVE_SYS_SOCKET_H)
 
 #
 # Check if the libc vsnprintf() conforms to C99. If this fails we may

@@ -40,6 +40,9 @@
 /* Adapt build products for fuzzing (e.g. accepting incorrect checksums or prioritizing determinism). */
 #cmakedefine FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION 1
 
+/* Define to 1 if AF_UNIX (Unix domain sockets address family) is available. */
+#cmakedefine HAVE_AF_UNIX 1
+
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #cmakedefine HAVE_ARPA_INET_H 1
 
@@ -76,6 +79,12 @@
 /* Define to 1 if you have the `getexecname' function. */
 #cmakedefine HAVE_GETEXECNAME 1
 
+/* Define to 1 if you have the `getpeerucred' function. */
+#cmakedefine HAVE_GETPEERUCRED 1
+
+/* Define to 1 if you have the `getpeereid' function. */
+#cmakedefine HAVE_GETPEEREID 1
+
 /* Define to 1 if you have the `getifaddrs' function. */
 #cmakedefine HAVE_GETIFADDRS 1
 
@@ -88,7 +97,7 @@
 /* Define to 1 if you have the <grp.h> header file. */
 #cmakedefine HAVE_GRP_H 1
 
-/* Define to use heimdal kerberos */
+/* Define to use heimdal kerberos. Deprecated; use MIT instead. */
 #cmakedefine HAVE_HEIMDAL_KERBEROS 1
 
 /* Define to 1 if you have the `krb5_pac_verify' function. */
@@ -144,6 +153,9 @@
 
 /* Define to 1 if libsmi exports a version string (and that symbol is visible). */
 #cmakedefine HAVE_SMI_VERSION_STRING 1
+
+/* Define to use the cpuinfo library */
+#cmakedefine HAVE_CPUINFO 1
 
 /* Define to use xxhash library */
 #cmakedefine HAVE_XXHASH 1
@@ -309,6 +321,9 @@
 /* Define to 1 if you have the <sys/time.h> header file. */
 #cmakedefine HAVE_SYS_TIME_H 1
 
+/* Define to 1 if you have the <sys/ucred.h> header file. */
+#cmakedefine HAVE_SYS_UCRED_H 1
+
 /* Define to 1 if you have the <sys/utsname.h> header file. */
 #cmakedefine HAVE_SYS_UTSNAME_H 1
 
@@ -330,12 +345,6 @@
 /* Define to 1 if you have the <valgrind/valgrind.h> header file. */
 #cmakedefine HAVE_VALGRIND_H 1
 
-/* Define if we have QtMultimedia */
-#cmakedefine QT_MULTIMEDIA_LIB 1
-
-/* Define if we have QtDBus */
-#cmakedefine QT_DBUS_LIB 1
-
 /* Build androiddump with libpcap instead of wireshark stuff */
 #cmakedefine ANDROIDDUMP_USE_LIBPCAP 1
 
@@ -346,6 +355,9 @@
 
 /* Define to 1 if the 'ssize_t' type exists. */
 #cmakedefine HAVE_SSIZE_T 1
+
+/* Define to 1 if the 'struct ucred' type exists. */
+#cmakedefine HAVE_STRUCT_UCRED 1
 
 /* Define to 1 if we are using the msys2 environment to build. */
 #cmakedefine HAVE_MSYSTEM 1

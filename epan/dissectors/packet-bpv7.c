@@ -37,6 +37,7 @@
 #include <wsutil/crc16.h>
 #include <wsutil/array.h>
 #include <wsutil/crc32.h>
+#include <wsutil/epochs.h>
 
 void proto_register_bpv7(void);
 void proto_reg_handoff_bpv7(void);
@@ -733,7 +734,7 @@ static nstime_t dtn_to_delta(const int64_t dtntime) {
  */
 static nstime_t dtn_to_utctime(const int64_t dtntime) {
     nstime_t utctime;
-    utctime.secs = 946684800 + dtntime / 1000;
+    utctime.secs = EPOCH_DELTA_2000_01_01_00_00_00_UTC + dtntime / 1000;
     utctime.nsecs = 1000000 * (dtntime % 1000);
     return utctime;
 }
@@ -937,12 +938,12 @@ proto_item * proto_tree_add_cbor_eid(proto_tree *tree, int hfindex, int hfindex_
     const int eid_start = *offset;
 
     wscbor_chunk_t *chunk = wscbor_chunk_read(pinfo->pool, tvb, offset);
-    wscbor_require_array_size(chunk, 2, 2);
     if (!chunk) {
         proto_item_set_len(item_eid, *offset - eid_start);
         expert_add_info(pinfo, item_eid, &ei_eid_struct_invalid);
         return item_eid;
     }
+    wscbor_require_array_size(chunk, 2, 2);
 
     chunk = wscbor_chunk_read(pinfo->pool, tvb, offset);
     const uint64_t *scheme = wscbor_require_uint64(alloc_eid, chunk);
@@ -2510,7 +2511,6 @@ void proto_register_bpv7(void) {
     payload_dissectors_dtn_wkssp = register_dissector_table("bpv7.payload.dtn_wkssp", "BPv7 DTN-scheme well-known SSP", proto_bp, FT_STRING, STRING_CASE_SENSITIVE);
 
     payload_dissectors_dtn_serv = register_dissector_table("bpv7.payload.dtn_serv", "BPv7 DTN-scheme service", proto_bp, FT_STRING, STRING_CASE_SENSITIVE);
-    dissector_table_allow_decode_as(payload_dissectors_dtn_serv);
 
     static build_valid_func dtn_serv_da_build_value[1] = {dtn_serv_value};
     static decode_as_value_t dtn_serv_da_values[1] = {
@@ -2525,7 +2525,6 @@ void proto_register_bpv7(void) {
     register_decode_as(&dtn_serv_da);
 
     payload_dissectors_ipn_serv = register_dissector_table("bpv7.payload.ipn_serv", "BPv7 IPN-scheme service", proto_bp, FT_UINT32, BASE_DEC);
-    dissector_table_allow_decode_as(payload_dissectors_ipn_serv);
 
     static build_valid_func ipn_serv_da_build_value[1] = {ipn_serv_value};
     static decode_as_value_t ipn_serv_da_values[1] = {

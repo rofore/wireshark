@@ -182,11 +182,14 @@ static int dissect_rtps_virtual_transport(
     proto_item *rtpsvt_ti_version;
     proto_tree *rtpsvt_tree_version;
     proto_item *rtpsvt_ti_content_kind;
-    struct rtpsvt_data transport_data;
+    /* XXX - What if some of the parameters are missing, such as the
+     * direction? Should RTPS-PROC, which tries to use those parameter
+     * values, not be called? */
+    struct rtpsvt_data transport_data = {0};
     uint16_t version;
     uint8_t content_type;
     const char *content_type_label;
-    int offset = 0;
+    unsigned offset = 0;
     int output = 0;
 
     /* Add transport tree, used for the fields of our proto_rtpsvt */

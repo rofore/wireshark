@@ -29,7 +29,7 @@
 
 #include <tap.h>
 #include <epan/export_object.h>
-#include <ui/tap-credentials.h>
+#include <epan/credentials.h>
 
 #include "packet-tls.h"
 #include "packet-tls-utils.h"
@@ -182,10 +182,10 @@ typedef struct _ftp_eo_t {
    table's row number, so we can append data from later FTP packets
    to the entries.
  */
-GHashTable *command_packet_to_eo_row;
+static GHashTable *command_packet_to_eo_row;
 
 /* Track which row number in the export object table we're up to */
-uint32_t eo_row_count;
+static uint32_t eo_row_count;
 
 /**
  * This is the callback passed to register_export_object()
@@ -1037,7 +1037,6 @@ dissect_ftp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
     proto_item     *ti, *hidden_item;
     unsigned        offset            = 0;
     uint32_t        code;
-    char            code_str[4];
     bool            is_port_request   = false;
     bool            is_eprt_request   = false;
     bool            is_pasv_response  = false;
@@ -1214,8 +1213,7 @@ dissect_ftp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
              * One-line reply, or first or last line
              * of a multi-line reply.
              */
-            tvb_get_raw_bytes_as_string(tvb, 0, code_str, sizeof code_str);
-            code_valid = ws_strtou32(code_str, NULL, &code);
+            code_valid = tvb_get_string_uint(tvb, 0, 3, ENC_STR_DEC, &code, NULL);
 
             pi = proto_tree_add_uint(reqresp_tree,
                     hf_ftp_response_code, tvb, 0, 3, code);

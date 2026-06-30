@@ -2046,17 +2046,14 @@ dissect_wccp2_alternate_mask_value_set_element(tvbuff_t *tvb, int offset, int le
   proto_item *tl, *header;
   proto_tree *element_tree, *value_tree;
   unsigned number_of_elements;
-  int new_length, total_length;
+  int new_length;
   unsigned i;
 
   element_tree = proto_tree_add_subtree_format(info_tree, tvb, offset, 0,
                                ett_alternate_mask_value_set_element, &header,
                                "Alternate Mask/Value Set Element(%d)", el_index);
 
-  total_length = 0;
-
   new_length=dissect_wccp2_mask_element(tvb,offset,length,pinfo,element_tree);
-  total_length += length - new_length;
   CHECK_LENGTH_ADVANCE_OFFSET(new_length);
 
   if (length < 4)
@@ -2065,16 +2062,14 @@ dissect_wccp2_alternate_mask_value_set_element(tvbuff_t *tvb, int offset, int le
   number_of_elements  = tvb_get_ntohl(tvb, offset);
   tl = proto_tree_add_uint(element_tree, hf_alt_assignment_mask_value_set_element_num_wc_value_elements, tvb, offset, 4, number_of_elements);
   value_tree = proto_item_add_subtree(tl, ett_alternate_mv_set_element_list);
-  total_length += 4;
   EAT(4);
 
   /* XXX Add a bounds check for number_of_elements? */
   for (i=0; i < number_of_elements; i++) {
     new_length=dissect_wccp2_web_cache_value_element(tvb, offset, length, pinfo, value_tree, addr_table);
-    total_length += length - new_length;
     CHECK_LENGTH_ADVANCE_OFFSET(new_length);
   }
-  proto_item_set_len(header, total_length);
+  proto_item_set_end(header, tvb, offset);
 
   return length;
 }
@@ -2536,8 +2531,7 @@ dissect_wccp2_info(tvbuff_t *tvb, int offset,
 
     proto_tree_add_item(info_tree, hf_item_type, tvb, offset, 2, ENC_BIG_ENDIAN);
 
-    item_length = tvb_get_ntohs(tvb, offset+2);
-    proto_tree_add_item(info_tree, hf_item_length, tvb, offset+2, 2, ENC_BIG_ENDIAN);
+    proto_tree_add_item_ret_uint16(info_tree, hf_item_length, tvb, offset+2, 2, ENC_BIG_ENDIAN, &item_length);
 
     offset += 4;
 
@@ -2676,7 +2670,7 @@ dissect_wccp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_
   proto_item *wccp_tree_item;
   uint32_t wccp_message_type;
   uint16_t length;
-  int wccp2_length;
+  unsigned wccp2_length;
   proto_item *length_item;
   uint32_t cache_count;
   uint32_t ipaddr;
@@ -2787,10 +2781,10 @@ dissect_wccp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_
       /* Is the length plus the length of the data preceding it longer than
          the length of our packet? */
       wccp2_length = tvb_reported_length_remaining(tvb, offset);
-      if (length > (unsigned)wccp2_length) {
+      if (length > wccp2_length) {
         expert_add_info_format(pinfo, length_item, &ei_wccp_length_bad,
                                "The length as specified by the length field is bigger than the length of the packet");
-        length = wccp2_length - offset;
+        length = wccp2_length;
       } else {
         /* Truncate the packet to the specified length. */
         tvb_set_reported_length(tvb, offset + length);

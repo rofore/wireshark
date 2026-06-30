@@ -738,7 +738,9 @@ static bool netlog_parse_entirety(wtap *wth, FILE_T fh, int *err, char **err_inf
     }
 
     int num_tokens = json_parse_len((const char*)filebuf, bytes_read, NULL, 0);
-    if (num_tokens < 0) {
+    if (num_tokens <= 0) {
+        /* 0 tokens needed is a degenerate cases, e.g., nothing but whitespace
+         * until the first NUL. Reject that too. */
         g_free(filebuf);
         return false;
     }
@@ -773,6 +775,13 @@ static bool netlog_parse_entirety(wtap *wth, FILE_T fh, int *err, char **err_inf
        We can now begin parsing the events to extract the data!
     */
     jsmntok_t* json_events = json_get_array((const char*)filebuf, root_json_token, "events");
+
+    if (json_events == NULL) {
+        ws_debug("NetLog file lacks 'events' array");
+        g_free(json_tokens);
+        g_free(filebuf);
+        return false;
+    }
 
     if (!parse_json_events((char*)filebuf, netlog_event_constants, json_events, json_packets_ht)){
         g_free(json_tokens);

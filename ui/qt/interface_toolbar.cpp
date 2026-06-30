@@ -29,11 +29,13 @@ DIAG_ON(restrict)
 #include <ui/qt/widgets/interface_toolbar_lineedit.h>
 #include "simple_dialog.h"
 #include "main_application.h"
+#include <ui/qt/main_window.h>
+#include <ui/qt/manager/interface_list_manager.h>
 #include <ui_interface_toolbar.h>
 
 #include "ui/capture_opts.h"
 #include "ui/capture_globals.h"
-#include "sync_pipe.h"
+#include <capture/sync_pipe.h>
 #include "wsutil/file_util.h"
 
 #ifdef _WIN32
@@ -98,7 +100,21 @@ InterfaceToolbar::InterfaceToolbar(QWidget *parent, const iface_toolbar *toolbar
         ui->horizontalSpacer->changeSize(0,0, QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
 
+    // Refresh on app-init and on every interface-list change from the window's
+    // InterfaceListManager. The toolbar may be built before that manager exists,
+    // so defer the manager connection to appInitialized when needed.
+    connect(mainApp, &MainApplication::appInitialized, this, &InterfaceToolbar::interfaceListChanged);
+    mainApp->whenInitialized(this, [this]() { connectInterfaceListManager(); });
+
     updateWidgets();
+}
+
+void InterfaceToolbar::connectInterfaceListManager()
+{
+    MainWindow *mainWindow = mainApp->mainWindow();
+    if (mainWindow && mainWindow->interfaceListManager())
+        connect(mainWindow->interfaceListManager(), &InterfaceListManager::interfaceListChanged,
+                this, &InterfaceToolbar::interfaceListChanged, Qt::UniqueConnection);
 }
 
 InterfaceToolbar::~InterfaceToolbar()
@@ -278,11 +294,7 @@ QWidget *InterfaceToolbar::createSelector(iface_toolbar_control *control)
         default_list_[control->num].append(interface_value);
     }
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     connect(combobox, &QComboBox::currentIndexChanged, this, &InterfaceToolbar::onComboBoxChanged);
-#else
-    connect(combobox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &InterfaceToolbar::onComboBoxChanged);
-#endif
 
     ui->leftLayout->addWidget(label);
     ui->leftLayout->addWidget(combobox);

@@ -43,12 +43,14 @@
  * RFC 3825: Dynamic Host Configuration Protocol Option for Coordinate-based Location Configuration Information
  * RFC 3925: Vendor-Identifying Vendor Options for Dynamic Host Configuration Protocol version 4 (DHCPv4)
  * RFC 3942: Reclassifying DHCPv4 Options
+ * RFC 4014: Remote Authentication Dial-In User Service (RADIUS) Attributes Suboption for the Dynamic Host Configuration Protocol (DHCP) Relay Agent Information Option
  * RFC 4174: The IPv4 Dynamic Host Configuration Protocol (DHCP) Option for the Internet Storage Name Service
  * RFC 4243: Vendor-Specific Information Suboption for the Dynamic Host Configuration Protocol (DHCP) Relay Agent Option
  * RFC 4361: Node-specific Client Identifiers for Dynamic Host Configuration Protocol Version Four (DHCPv4)
  * RFC 4388: Dynamic Host Configuration Protocol (DHCP) Leasequery
  * RFC 4578: Dynamic Host Configuration Protocol (DHCP) Options for PXE
  * RFC 4776: Dynamic Host Configuration Protocol (DHCPv4 and DHCPv6) Option for Civic Addresses Configuration Information
+ * RFC 5010: The Dynamic Host Configuration Protocol Version 4 (DHCPv4) Relay Agent Flags Suboption
  * RFC 5192: DHCP Options for Protocol for Carrying Authentication for Network Access (PANA) Authentication Agent
  * RFC 5223: Discovering Location-to-Service Translation (LoST) Servers Using the Dynamic Host Configuration Protocol (DHCP)
  * RFC 5417: CAPWAP Access Controller DHCP Option
@@ -132,6 +134,7 @@
 #include <epan/packet.h>
 #include "packet-arp.h"
 #include "packet-dns.h"				/* for get_dns_name() */
+#include "packet-radius.h"
 #include <epan/addr_resolv.h>
 #include <epan/prefs.h>
 #include <epan/tap.h>
@@ -485,6 +488,8 @@ static int hf_dhcp_option82_vi_cl_mso_defined_text;		/* 82:9:4491:6 */
 static int hf_dhcp_option82_vi_cl_secure_file_transfer_uri;	/* 82:9:4491:7 */
 									/* 82:9 suboptions end */
 static int hf_dhcp_option82_flags;					/* 82:10 */
+static int hf_dhcp_option82_flags_unicast;			/* 82:10 */
+static int hf_dhcp_option82_flags_reserved;			/* 82:10 */
 static int hf_dhcp_option82_server_id_override;			/* 82:11 */
 static int hf_dhcp_option82_relay_agent_id;			/* 82:12 */
 static int hf_dhcp_option82_option_ani_att;			/* 82:13 */
@@ -704,6 +709,7 @@ static int ett_dhcp_option63_suboption;
 static int ett_dhcp_option77_instance;
 static int ett_dhcp_option82_suboption;
 static int ett_dhcp_option82_suboption9;
+static int ett_dhcp_option82_suboption10;
 static int ett_dhcp_option124_vendor_class_data_item;
 static int ett_dhcp_option125_suboption;
 static int ett_dhcp_option125_tr111_suboption;
@@ -1163,6 +1169,11 @@ struct opt_info {
 static const true_false_string flag_set_broadcast = {
 	"Broadcast",
 	"Unicast"
+};
+
+static const true_false_string flag_set_unicast = {
+	"Unicast",
+	"Broadcast"
 };
 
 #define BOOTP_MAX_NO_CHAR 64
@@ -3683,10 +3694,10 @@ dhcp_dhcp_decode_agent_info(packet_info *pinfo, proto_item *v_ti, proto_tree *v_
 		{4, {"DOCSIS Device Class", val_u_long, &hf_dhcp_option82_docsis_device_class}}, /* [RFC3256] */
 		{5, {"Link selection", ipv4, &hf_dhcp_option82_link_selection}}, /* [RFC3527] */
 		{6, {"Subscriber ID", string, &hf_dhcp_option82_subscriber_id}},  /* [RFC3993] */ /***** CHECK STRING TYPE */
-		{7, {"RADIUS Attributes", bytes, &hf_dhcp_option82_radius_attributes}}, /* [RFC4014] */
+		{7, {"RADIUS Attributes", special, &hf_dhcp_option82_radius_attributes}}, /* [RFC4014] */
 		{8, {"Authentication", bytes, &hf_dhcp_option82_authentication}}, /* [RFC4030] */
 		{9, {"Vendor-Specific Information", special, &hf_dhcp_option82_vi}}, /* [RFC 4243] */
-		{10, {"Flags", val_u_byte, &hf_dhcp_option82_flags}}, /* [RFC5010] */
+		{10, {"Flags", special, &hf_dhcp_option82_flags}}, /* [RFC5010] */
 		{11, {"Server ID Override", ipv4, &hf_dhcp_option82_server_id_override}}, /* [RFC 5107] */
 		{12, {"Relay Agent Identifier", bytes, &hf_dhcp_option82_relay_agent_id}}, /* [RFC 6925] */
 		{13, {"Access Technology Type", bytes, &hf_dhcp_option82_option_ani_att}}, /* [RFC7839] */
@@ -3738,6 +3749,9 @@ dhcp_dhcp_decode_agent_info(packet_info *pinfo, proto_item *v_ti, proto_tree *v_
 		if (o82_opt[idx].info.ftype == special) {
 			switch(subopt)
 			{
+			case 7:
+				dissect_attribute_value_pairs(o82_v_tree, pinfo, tvb, suboptoff, subopt_len, NULL);
+				break;
 			case 9:
 				while (suboptoff < subopt_end) {
 					vti = proto_tree_add_item_ret_uint(o82_v_tree, hf_dhcp_option82_vi_enterprise, tvb, suboptoff, 4, ENC_BIG_ENDIAN, &enterprise);
@@ -3816,6 +3830,18 @@ dhcp_dhcp_decode_agent_info(packet_info *pinfo, proto_item *v_ti, proto_tree *v_
 					}
 				}
 				break;
+			case 10: /* Relay Agent Flags Suboption */
+				{
+					static int * const dhcp_option82_flags[] = {
+						&hf_dhcp_option82_flags_unicast,
+						&hf_dhcp_option82_flags_reserved,
+						NULL
+					};
+
+					proto_tree_add_bitmask_with_flags(o82_v_tree, tvb, suboptoff, hf_dhcp_option82_flags,
+						ett_dhcp_option82_suboption10, dhcp_option82_flags, ENC_BIG_ENDIAN, BMT_NO_INT);
+				}
+				break;
 			case 13: /* Access Technology Type */
 				if (subopt_len != 2) {
 					expert_add_info_format(pinfo, vti, &ei_dhcp_bad_length, "length isn't 2");
@@ -3824,7 +3850,6 @@ dhcp_dhcp_decode_agent_info(packet_info *pinfo, proto_item *v_ti, proto_tree *v_
 				proto_tree_add_item(o82_v_tree, hf_dhcp_option82_option_ani_att_res, tvb, suboptoff, 1, ENC_NA);
 				proto_tree_add_item(o82_v_tree, hf_dhcp_option82_option_ani_att_att, tvb, suboptoff+1, 1, ENC_NA);
 				break;
-			break;
 			case 151:
 				if (subopt_len == 1) {
 					proto_tree_add_item(o82_v_tree, hf_dhcp_option82_vrf_name_global, tvb, suboptoff, 1, ENC_NA);
@@ -5704,10 +5729,9 @@ dissect_vendor_tr111_suboption(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
 				   proto_tree_add_item(o125_v_tree, hf_dhcp_option125_value, tvb, offset, subopt_len, ENC_NA);
 			}
 			else if (o125_tr111_opt[subopt].ftype == oui) {
-				/* Get hex string.  Expecting 6 characters. */
-				const char    *oui_string =  (char *)tvb_get_string_enc(pinfo->pool, tvb, offset, subopt_len, ENC_ASCII);
-				/* Convert to OUI number.  Only 3 bytes so no data lost in downcast. */
-				uint32_t oui_number = (uint32_t)strtol(oui_string, NULL, 16);
+				/* Get hex OUI number.  Expecting 6 characters. */
+				uint32_t oui_number;
+				tvb_get_string_uint(tvb, offset, subopt_len, ENC_STR_HEX, &oui_number, NULL);
 				/* Add item using oui_vals */
 				proto_tree_add_uint(o125_v_tree, *o125_tr111_opt[subopt].phf, tvb, offset, subopt_len, oui_number);
 			} else if (o125_tr111_opt[subopt].phf == NULL)
@@ -5998,7 +6022,6 @@ dissect_packetcable_mta_cap(proto_tree *v_tree, packet_info *pinfo, tvbuff_t *tv
 	unsigned	off	  = PKT_MDC_TLV_OFF + voff;
 	unsigned	subopt_off, max_len;
 	unsigned	tlv_len, i, mib_val;
-	uint8_t	       flow_val_str[5];
 	const char    *asc_val;
 	proto_item    *ti, *mib_ti;
 	proto_tree    *subtree, *subtree2;
@@ -6093,10 +6116,8 @@ dissect_packetcable_mta_cap(proto_tree *v_tree, packet_info *pinfo, tvbuff_t *tv
 					break;
 
 				case PKT_MDC_PROV_FLOWS:
-					tvb_memcpy(tvb, flow_val_str, off + 4, 4);
-					flow_val_str[4] = '\0';
 					/* We are only reading 4 digits which should fit in 32 bits */
-					flow_val = (uint32_t)strtoul((char*)flow_val_str, NULL, 16);
+					tvb_get_string_uint(tvb, off + 4, 4, ENC_STR_HEX, &flow_val, NULL);
 					proto_item_append_text(ti,
 							       "0x%04x", flow_val);
 					break;
@@ -6493,29 +6514,22 @@ static void get_opt125_tlv(wmem_allocator_t *scope, tvbuff_t *tvb, unsigned off,
 static void get_opt60_tlv(wmem_allocator_t *scope, tvbuff_t *tvb, unsigned off, uint8_t *tlvtype, uint8_t *tlvlen, uint8_t **value)
 {
 	unsigned	i;
-	uint8_t *val_asc;
 
-	val_asc = (uint8_t *)wmem_alloc0(scope, 4);
 	/* Type */
-	tvb_memcpy(tvb, val_asc, off, 2);
-	*tlvtype = (uint8_t)strtoul((char*)val_asc, NULL, 16);
+	tvb_get_string_uint8(tvb, off, 2, ENC_STR_HEX, tlvtype, NULL);
 	/* Length */
-	tvb_memcpy(tvb, val_asc, off + 2, 2);
-	*tlvlen = (uint8_t)strtoul((char*)val_asc, NULL, 16);
+	tvb_get_string_uint8(tvb, off + 2, 2, ENC_STR_HEX, tlvlen, NULL);
 	/* Value */
 	*value = (uint8_t *)wmem_alloc0(scope, *tlvlen);
 	for (i=0; i<*tlvlen; i++)
 	{
-		memset(val_asc, 0, 4);
-		tvb_memcpy(tvb, val_asc, off + ((i*2) + 4), 2);
-		(*value)[i] = (uint8_t)strtoul((char*)val_asc, NULL, 16);
+		tvb_get_string_uint8(tvb, off + ((i*2) + 4), 2, ENC_STR_HEX, &((*value)[i]), NULL);
 	}
 }
 
 static void
 dissect_docsis_cm_cap(packet_info *pinfo, proto_tree *v_tree, tvbuff_t *tvb, int voff, int len, bool opt125)
 {
-	uint8_t	   *asc_val;
 	proto_item *ti;
 	proto_tree *subtree;
 	uint8_t	    tlv_type;
@@ -6524,8 +6538,6 @@ dissect_docsis_cm_cap(packet_info *pinfo, proto_tree *v_tree, tvbuff_t *tvb, int
 	uint16_t	    val_uint16 = 0;
 	uint8_t	   *val_other  = NULL;
 	unsigned	    off	       = voff;
-
-	asc_val = (uint8_t*)wmem_alloc0(pinfo->pool, 4);
 
 	if (opt125)
 	{
@@ -6543,8 +6555,7 @@ dissect_docsis_cm_cap(packet_info *pinfo, proto_tree *v_tree, tvbuff_t *tvb, int
 		   I am converting the Option 60 values from ASCII to
 		   uint8s to allow the same parser to work for both */
 		off += DOCSIS_CM_CAP_TLV_OFF;
-		tvb_memcpy (tvb, asc_val, off, 2);
-		tlv_len = (uint8_t)strtoul((char*)asc_val, NULL, 16);
+		tvb_get_string_uint8(tvb, off, 2, ENC_STR_HEX, &tlv_len, NULL);
 		proto_tree_add_uint(v_tree, hf_dhcp_docsis_cm_cap_len, tvb, off+2, 2, tlv_len);
 	}
 
@@ -9563,6 +9574,16 @@ proto_register_dhcp(void)
 		    FT_UINT8, BASE_HEX, NULL, 0x0,
 		    "Option 82:10 Flags", HFILL }},
 
+		{ &hf_dhcp_option82_flags_unicast,
+		  { "Unicast flag", "dhcp.option.agent_information_option.flags.unicast",
+		    FT_BOOLEAN, 8, TFS(&flag_set_unicast), 0x80,
+		    "Option 82:10 Unicast flag", HFILL }},
+
+		{ &hf_dhcp_option82_flags_reserved,
+		  { "Reserved flags", "dhcp.option.agent_information_option.flags.reserved",
+		    FT_UINT8, BASE_HEX, NULL, 0x7F,
+		    "Option 82:10 Reserved flags", HFILL }},
+
 		{ &hf_dhcp_option82_server_id_override,
 		  { "Server ID Override", "dhcp.option.agent_information_option.server_id_override",
 		    FT_IPv4, BASE_NONE, NULL, 0x00,
@@ -10650,6 +10671,7 @@ proto_register_dhcp(void)
 		&ett_dhcp_option77_instance,
 		&ett_dhcp_option82_suboption,
 		&ett_dhcp_option82_suboption9,
+		&ett_dhcp_option82_suboption10,
 		&ett_dhcp_option124_vendor_class_data_item,
 		&ett_dhcp_option125_suboption,
 		&ett_dhcp_option125_tr111_suboption,

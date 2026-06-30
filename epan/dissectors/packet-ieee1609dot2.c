@@ -37,8 +37,8 @@ void proto_register_ieee1609dot2(void);
 void proto_reg_handoff_ieee1609dot2(void);
 
 /* Initialize the protocol and registered fields */
-int proto_ieee1609dot2;
-dissector_handle_t proto_ieee1609dot2_handle;
+static int proto_ieee1609dot2;
+static dissector_handle_t proto_ieee1609dot2_handle;
 
 /* WSMP PSID range to be passed to IEEE 1609.2 dissector */
 static range_t *global_wsmp_psid_range;
@@ -426,6 +426,18 @@ ieee1609dot2_set_next_default_psid(packet_info *pinfo, uint32_t psid)
 }
 
 /*--- Cyclic dependencies ---*/
+
+/* AppExtension/content -> AppExtension/content */
+static unsigned dissect_ieee1609dot2_T_content(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
+
+/* CertIssueExtension/permissions/specific -> CertIssueExtension/permissions/specific */
+static unsigned dissect_ieee1609dot2_T_specific(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
+
+/* CertRequestExtension/permissions/content -> CertRequestExtension/permissions/content */
+static unsigned dissect_ieee1609dot2_T_content_01(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
+
+/* ContributedExtensionBlock/extns/_item -> ContributedExtensionBlock/extns/_item */
+static unsigned dissect_ieee1609dot2_T_extns_item(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
 
 /* Ieee1609Dot2Data -> Ieee1609Dot2Content -> SignedData -> ToBeSignedData -> SignedDataPayload -> Ieee1609Dot2Data */
 static unsigned dissect_ieee1609dot2_Ieee1609Dot2Data(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
@@ -1316,6 +1328,7 @@ const val64_string ieee1609dot2_Psid_vals[] = {
   { psid_den_basic_services, "psid-den-basic-services" },
   { psid_misbehavior_reporting_for_common_applications, "psid-misbehavior-reporting-for-common-applications" },
   { psid_vulnerable_road_users_safety_applications, "psid-vulnerable-road-users-safety-applications" },
+  { psid_avm_service, "psid-avm-service" },
   { psid_testings, "psid-testings" },
   { psid_differential_gps_corrections_uncompressed, "psid-differential-gps-corrections-uncompressed" },
   { psid_differential_gps_corrections_compressed, "psid-differential-gps-corrections-compressed" },
@@ -1337,7 +1350,11 @@ const val64_string ieee1609dot2_Psid_vals[] = {
   { psid_maneuver_coordination_service, "psid-maneuver-coordination-service" },
   { psid_certificate_revocation_list_application, "psid-certificate-revocation-list-application" },
   { psid_traffic_light_control_status_service, "psid-traffic-light-control-status-service" },
+  { psid_vru_awareness_basic_service, "psid-vru-awareness-basic-service" },
   { psid_collective_perception_service, "psid-collective-perception-service" },
+  { psid_imz_basic_service, "psid-imz-basic-service" },
+  { psid_mr_service, "psid-mr-service" },
+  { psid_poi_service, "psid-poi-service" },
   { psid_vehicle_initiated_distress_notivication, "psid-vehicle-initiated-distress-notivication" },
   { psid_fast_service_advertisement_protocol, "psid-fast-service-advertisement-protocol" },
   { psid_its_station_internal_management_communications_protocol, "psid-its-station-internal-management-communications-protocol" },
@@ -2337,8 +2354,11 @@ dissect_ieee1609dot2_T_flags(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t 
 
 static unsigned
 dissect_ieee1609dot2_T_content(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  // AppExtension/content -> AppExtension/content
+  increment_dissection_depth_by_n(actx->pinfo, 1);
   offset = dissect_oer_open_type(tvb, offset, actx, tree, hf_index, NULL);
 
+  decrement_dissection_depth_by_n(actx->pinfo, 1);
   return offset;
 }
 
@@ -2375,8 +2395,11 @@ dissect_ieee1609dot2_SequenceOfAppExtensions(tvbuff_t *tvb _U_, uint32_t offset 
 
 static unsigned
 dissect_ieee1609dot2_T_specific(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  // CertIssueExtension/permissions/specific -> CertIssueExtension/permissions/specific
+  increment_dissection_depth_by_n(actx->pinfo, 1);
   offset = dissect_oer_open_type(tvb, offset, actx, tree, hf_index, NULL);
 
+  decrement_dissection_depth_by_n(actx->pinfo, 1);
   return offset;
 }
 
@@ -2435,8 +2458,11 @@ dissect_ieee1609dot2_SequenceOfCertIssueExtensions(tvbuff_t *tvb _U_, uint32_t o
 
 static unsigned
 dissect_ieee1609dot2_T_content_01(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  // CertRequestExtension/permissions/content -> CertRequestExtension/permissions/content
+  increment_dissection_depth_by_n(actx->pinfo, 1);
   offset = dissect_oer_open_type(tvb, offset, actx, tree, hf_index, NULL);
 
+  decrement_dissection_depth_by_n(actx->pinfo, 1);
   return offset;
 }
 
@@ -2584,8 +2610,11 @@ dissect_ieee1609dot2_HeaderInfoContributorId(tvbuff_t *tvb _U_, uint32_t offset 
 
 static unsigned
 dissect_ieee1609dot2_T_extns_item(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
+  // ContributedExtensionBlock/extns/_item -> ContributedExtensionBlock/extns/_item
+  increment_dissection_depth_by_n(actx->pinfo, 1);
   offset = dissect_oer_open_type(tvb, offset, actx, tree, hf_index, NULL);
 
+  decrement_dissection_depth_by_n(actx->pinfo, 1);
   return offset;
 }
 
@@ -3056,14 +3085,12 @@ static const oer_sequence_t Ieee1609Dot2Data_sequence[] = {
 static unsigned
 dissect_ieee1609dot2_Ieee1609Dot2Data(tvbuff_t *tvb _U_, uint32_t offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   // Ieee1609Dot2Data -> Ieee1609Dot2Content -> SignedData -> ToBeSignedData -> SignedDataPayload -> Ieee1609Dot2Data
-  actx->pinfo->dissection_depth += 5;
-  increment_dissection_depth(actx->pinfo);
+  increment_dissection_depth_by_n(actx->pinfo, 5);
   actx->private_data = (void*)wmem_new0(actx->pinfo->pool, ieee1609_private_data_t);
   offset = dissect_oer_sequence(tvb, offset, actx, tree, hf_index,
                                    ett_ieee1609dot2_Ieee1609Dot2Data, Ieee1609Dot2Data_sequence);
 
-  actx->pinfo->dissection_depth -= 5;
-  decrement_dissection_depth(actx->pinfo);
+  decrement_dissection_depth_by_n(actx->pinfo, 5);
   return offset;
 }
 

@@ -24,6 +24,7 @@
 #include <epan/asn1.h>
 #include <epan/dissectors/packet-windows-common.h>
 #include <epan/dissectors/packet-x509af.h>
+#include "opcua.h"
 #include "opcua_simpletypes.h"
 #include "opcua_hfindeces.h"
 #include "opcua_statuscode.h"
@@ -174,8 +175,6 @@ int hf_opcua_resultMask_typedefinition;
 
 static expert_field ei_array_length;
 static expert_field ei_nesting_depth;
-
-extern int proto_opcua;
 
 /** NodeId encoding mask table */
 static const value_string g_nodeidmasks[] = {
@@ -347,7 +346,7 @@ static const value_string g_ResultMask[] = {
 /* trees */
 static int ett_opcua_diagnosticinfo;
 static int ett_opcua_diagnosticinfo_encodingmask;
-static int ett_opcua_nodeid;
+int ett_opcua_nodeid;
 static int ett_opcua_expandednodeid;
 static int ett_opcua_expandednodeid_encodingmask;
 static int ett_opcua_localizedtext;
@@ -357,7 +356,7 @@ static int ett_opcua_datavalue;
 static int ett_opcua_datavalue_encodingmask;
 static int ett_opcua_variant;
 static int ett_opcua_variant_arraydims;
-static int ett_opcua_extensionobject;
+int ett_opcua_extensionobject;
 static int ett_opcua_extensionobject_encodingmask;
 static int ett_opcua_statuscode;
 static int ett_opcua_statuscode_info;
@@ -476,7 +475,7 @@ void registerSimpleTypes(int proto)
         {&hf_opcua_datavalue_mask_servertimestampflag,  {"has server timestamp",               "opcua.datavalue.has_server_timestamp",             FT_BOOLEAN,         8,                      NULL,                      DATAVALUE_ENCODINGBYTE_SERVERTIMESTAMP,                 NULL, HFILL}},
         {&hf_opcua_datavalue_mask_sourcepicoseconds,    {"has source picoseconds",             "opcua.datavalue.has_source_picoseconds",           FT_BOOLEAN,         8,                      NULL,                      DATAVALUE_ENCODINGBYTE_SOURCEPICOSECONDS,               NULL, HFILL}},
         {&hf_opcua_datavalue_mask_serverpicoseconds,    {"has server picoseconds",             "opcua.datavalue.has_server_picoseconds",           FT_BOOLEAN,         8,                      NULL,                      DATAVALUE_ENCODINGBYTE_SERVERPICOSECONDS,               NULL, HFILL}},
-        {&hf_opcua_variant_encodingmask,                {"Variant Type",                       "opcua.variant.has_value",                          FT_UINT8,           BASE_HEX,               VALS(g_VariantTypes),      0x0,                                                    NULL, HFILL}},
+        {&hf_opcua_variant_encodingmask,                {"Variant Type",                       "opcua.variant.VariantType",                        FT_UINT8,           BASE_HEX,               VALS(g_VariantTypes),      0x0,                                                    NULL, HFILL}},
         {&hf_opcua_SourceTimestamp,                     {"SourceTimestamp",                    "opcua.datavalue.SourceTimestamp",                  FT_ABSOLUTE_TIME,   ABSOLUTE_TIME_LOCAL,    NULL,                      0x0,                                                    NULL, HFILL}},
         {&hf_opcua_SourcePicoseconds,                   {"SourcePicoseconds",                  "opcua.datavalue.SourcePicoseconds",                FT_UINT16,          BASE_DEC,               NULL,                      0x0,                                                    NULL, HFILL}},
         {&hf_opcua_ServerTimestamp,                     {"ServerTimestamp",                    "opcua.datavalue.ServerTimestamp",                  FT_ABSOLUTE_TIME,   ABSOLUTE_TIME_LOCAL,    NULL,                      0x0,                                                    NULL, HFILL}},

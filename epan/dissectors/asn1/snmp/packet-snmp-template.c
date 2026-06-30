@@ -184,9 +184,7 @@ static bool snmp_desegment = true;
 
 /* Global variables */
 
-uint32_t MsgSecurityModel;
-tvbuff_t *oid_tvb=NULL;
-tvbuff_t *value_tvb=NULL;
+static uint32_t MsgSecurityModel;
 
 static dissector_handle_t snmp_handle;
 static dissector_handle_t snmp_tcp_handle;
@@ -356,7 +354,7 @@ static const value_string snmp_procedure_names[] = {
 #define SERR_EOM    2
 
 
-dissector_table_t value_sub_dissectors_table;
+static dissector_table_t value_sub_dissectors_table;
 
 /*
  * Data structure attached to a conversation, request/response information
@@ -2277,7 +2275,7 @@ dissect_snmp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_
 static int
 dissect_snmp_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
-	int offset = 0;
+	unsigned offset = 0;
 	unsigned message_len;
 
 	while (tvb_reported_length_remaining(tvb, offset) > 0) {

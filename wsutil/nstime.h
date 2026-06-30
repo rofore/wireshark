@@ -53,6 +53,22 @@ typedef struct {
 #define TIME_T_MAX ((time_t) (~ (time_t) 0 - TIME_T_MIN))
 #endif
 
+/*
+ * Macros for conversion between time units.
+ *
+ * These are #defined so that we can clearly see that we have the right number
+ * of zeros, rather than as a guard against the numbers changing. ;)
+ */
+#define WS_MSECS_PER_SEC	(1000)
+#define WS_USECS_PER_SEC	(1000*1000)
+#define WS_NSECS_PER_SEC	(1000*1000*1000)
+
+#define WS_NSECS_PER_MSEC	(WS_NSECS_PER_SEC/WS_MSECS_PER_SEC)
+#define WS_NSECS_PER_USEC	(WS_NSECS_PER_SEC/WS_USECS_PER_SEC)
+
+#define WS_NSECS_PER_100NSEC	(100)
+#define WS_100NSECS_PER_SEC	(WS_NSECS_PER_SEC/WS_NSECS_PER_100NSEC)
+
 /* Macros that expand to nstime_t initializers */
 
 /* Initialize to zero */
@@ -61,14 +77,23 @@ typedef struct {
 /* Initialize to unset */
 #define NSTIME_INIT_UNSET {0, INT_MAX}
 
-/* Initialize to a specified number of seconds and nanoseconds */
-#define NSTIME_INIT_SECS_NSECS(secs, nsecs)	{(secs) + ((nsecs) / 1000000000), (nsecs) % 1000000000}
+/*
+ * Initialize to a specified number of seconds and nanoseconds.
+ * This does not assume that the number of nanoseconds is < 1 second.
+ */
+#define NSTIME_INIT_SECS_NSECS(secs, nsecs)	{(secs) + ((nsecs) / WS_NSECS_PER_SEC), (nsecs) % WS_NSECS_PER_SEC}
 
-/* Initialize to a specified number of seconds and microseconds */
-#define NSTIME_INIT_SECS_USECS(secs, usecs)	{(secs) + ((usecs) / 1000000), ((usecs) % 1000000) * 1000}
+/*
+ * Initialize to a specified number of seconds and microseconds.
+ * This does not assume that the number of microseconds is < 1 second.
+ */
+#define NSTIME_INIT_SECS_USECS(secs, usecs)	{(secs) + ((usecs) / WS_USECS_PER_SEC), ((usecs) % WS_USECS_PER_SEC) * WS_NSECS_PER_USEC}
 
-/* Initialize to a specified number of seconds and milliseconds */
-#define NSTIME_INIT_SECS_MSECS(secs, msecs)	{(secs) + ((msecs) / 1000), ((msecs) % 1000) * 1000000}
+/*
+ * Initialize to a specified number of seconds and milliseconds.
+ * This does not assume that the number of milliseconds is < 1 second.
+ */
+#define NSTIME_INIT_SECS_MSECS(secs, msecs)	{(secs) + ((msecs) / WS_MSECS_PER_SEC), ((msecs) % WS_MSECS_PER_SEC) * WS_NSECS_PER_MSEC}
 
 /* Initialize to a specified number of seconds */
 #define NSTIME_INIT_SECS(secs)			{secs, 0}
@@ -225,7 +250,10 @@ WS_DLL_PUBLIC unsigned nstime_hash(const nstime_t *nstime);
  * @param nstime Pointer to the time value.
  * @return Time in milliseconds.
  */
-WS_DLL_PUBLIC double nstime_to_msec(const nstime_t *nstime);
+static inline double nstime_to_msec(const nstime_t *nstime)
+{
+    return ((double)nstime->secs*WS_MSECS_PER_SEC + (double)nstime->nsecs/WS_NSECS_PER_MSEC);
+}
 
 /**
  * @brief Converts a time value to seconds.
@@ -235,7 +263,10 @@ WS_DLL_PUBLIC double nstime_to_msec(const nstime_t *nstime);
  * @param nstime Pointer to the time value.
  * @return Time in seconds.
  */
-WS_DLL_PUBLIC double nstime_to_sec(const nstime_t *nstime);
+static inline double nstime_to_sec(const nstime_t *nstime)
+{
+    return ((double)nstime->secs + (double)nstime->nsecs/WS_NSECS_PER_SEC);
+}
 
 /**
  * @brief Converts a Windows FILETIME to nstime.
@@ -272,17 +303,24 @@ WS_DLL_PUBLIC bool filetime_ns_to_nstime(nstime_t *nstime, uint64_t nsfiletime);
  */
 WS_DLL_PUBLIC bool filetime_1sec_to_nstime(nstime_t *nstime, uint64_t filetime);
 
+/**
+ * @brief Selects the ISO 8601 datetime string format used for parsing or formatting timestamps.
+ */
 typedef enum {
-    ISO8601_DATETIME,       /** e.g. 2014-07-04T12:34:56.789+00:00 */
-    ISO8601_DATETIME_BASIC, /** ISO8601 Basic format, i.e. no - : separators */
-    ISO8601_DATETIME_AUTO,  /** Autodetect the presence of separators */
+    ISO8601_DATETIME,       /**< Extended format with separators, e.g. 2014-07-04T12:34:56.789+00:00 */
+    ISO8601_DATETIME_BASIC, /**< Basic format without date or time separators, e.g. 20140704T123456.789+0000 */
+    ISO8601_DATETIME_AUTO,  /**< Autodetect whether the input uses extended (with separators) or basic (without) format */
 } iso8601_fmt_e;
 
 /**
  * @brief Parses an ISO 8601 formatted datetime string into an nstime_t.
  *
  * Converts a string in ISO 8601 format (e.g., "2025-10-22T23:10:00.123Z") into an nstime_t structure.
- * On failure, returns NULL and sets the nstime to "unset".
+ * On failure, returns NULL and sets the nstime to "unset". If the string is
+ * successfully parsed, but the conversion fails (e.g., systems with
+ * 32-bit time_t, or Microsoft Windows with dates past the year 3000),
+ * the pointer will point to the first character after the parsed input,
+ * and the nstime will be unset.
  *
  * @param nstime Pointer to the destination nstime_t structure.
  * @param ptr Pointer to the ISO 8601 string to parse.

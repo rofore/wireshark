@@ -173,7 +173,6 @@ SequenceDialog::SequenceDialog(QWidget &parent, CaptureFile &cf, SequenceInfo *i
     ctx_menu_.addAction(action);
     action->setVisible(false);
     action->setEnabled(false);
-    set_action_shortcuts_visible_in_context_menu(ctx_menu_.actions());
 
     sp->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(sp, &QCustomPlot::customContextMenuRequested, this, &SequenceDialog::showContextMenu);
@@ -182,11 +181,7 @@ SequenceDialog::SequenceDialog(QWidget &parent, CaptureFile &cf, SequenceInfo *i
     ui->addressComboBox->addItem(tr("Network"), QVariant(false));
     ui->addressComboBox->setCurrentIndex(ui->addressComboBox->findData(QVariant(true)));
 
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    connect(ui->addressComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SequenceDialog::addressChanged);
-#else
     connect(ui->addressComboBox, &QComboBox::currentIndexChanged, this, &SequenceDialog::addressChanged);
-#endif
 
     sequence_items_t item_data;
 

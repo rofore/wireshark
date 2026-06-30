@@ -83,10 +83,10 @@ bool operator==(rtpstream_id_t const& a, rtpstream_id_t const& b);
 class RtpStreamTreeWidgetItem : public QTreeWidgetItem
 {
 public:
-    RtpStreamTreeWidgetItem(QTreeWidget *tree, rtpstream_info_t *stream_info) :
+    RtpStreamTreeWidgetItem(QTreeWidget *tree, rtpstream_info_t *stream_info, bool tod) :
         QTreeWidgetItem(tree, rtp_stream_type_),
         stream_info_(stream_info),
-        tod_(0)
+        tod_(tod)
     {
         drawData();
     }
@@ -335,7 +335,6 @@ RtpStreamDialog::RtpStreamDialog(QWidget &parent, CaptureFile &cf) :
     ctx_menu_.addAction(ui->actionCopyAsCsv);
     ctx_menu_.addAction(ui->actionCopyAsYaml);
     ctx_menu_.addAction(ui->actionAnalyze);
-    set_action_shortcuts_visible_in_context_menu(ctx_menu_.actions());
 
     ui->streamTreeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->streamTreeWidget->header()->setSortIndicator(0, Qt::AscendingOrder);
@@ -589,7 +588,7 @@ void RtpStreamDialog::updateStreams()
     // Add any missing items
     while (cur_stream && cur_stream->data && to_insert_count) {
         rtpstream_info_t *stream_info = gxx_list_data(rtpstream_info_t*, cur_stream);
-        RtpStreamTreeWidgetItem *rsti = new RtpStreamTreeWidgetItem(ui->streamTreeWidget, stream_info);
+        RtpStreamTreeWidgetItem *rsti = new RtpStreamTreeWidgetItem(ui->streamTreeWidget, stream_info, ui->todCheckBox->isChecked());
         cur_stream = gxx_list_next(cur_stream);
         to_insert_count--;
 

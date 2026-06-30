@@ -64,6 +64,8 @@ static int hf_exported_pdu_exported_pdu;
 static int hf_exported_pdu_dis_table_val;
 static int hf_exported_pdu_col_proto_str;
 static int hf_exported_pdu_col_info_str;
+static int hf_exported_pdu_3gpp_ue_id_type;
+static int hf_exported_pdu_3gpp_ue_id_value;
 static int hf_exported_pdu_3gpp_id_type;
 static int hf_exported_pdu_3gpp_lac;
 static int hf_exported_pdu_3gpp_ci;
@@ -126,6 +128,7 @@ static const value_string exported_pdu_tag_vals[] = {
    { EXP_PDU_TAG_USER_DATA_PDU,         "User Data PDU" },
    { EXP_PDU_TAG_3GPP_ID,               "3GPP Identity" },
    { EXP_PDU_TAG_LINK_DIRECTION,        "Link direction" },
+   { EXP_PDU_TAG_3GPP_UE_ID,             "3GPP UE ID" },
 
    { 0,        NULL   }
 };
@@ -276,9 +279,10 @@ dissect_exported_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
     proto_item *exported_pdu_ti, *ti, *item;
     proto_tree *exported_pdu_tree, *tag_tree;
     tvbuff_t * payload_tvb = NULL;
-    int offset = 0;
+    unsigned offset = 0;
     uint32_t tag;
-    int tag_len, p2p_dir, link_dir;
+    uint16_t tag_len;
+    int p2p_dir, link_dir;
     int next_proto_type = -1;
     const char *proto_name = NULL;
     const char *dissector_table = NULL;
@@ -302,8 +306,7 @@ dissect_exported_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
         ti = proto_tree_add_item_ret_uint(exported_pdu_tree, hf_exported_pdu_tag, tvb, offset, 2, ENC_BIG_ENDIAN, &tag);
         offset+=2;
         tag_tree = proto_item_add_subtree(ti, ett_exported_pdu_tag);
-        proto_tree_add_item(tag_tree, hf_exported_pdu_tag_len, tvb, offset, 2, ENC_BIG_ENDIAN);
-        tag_len = tvb_get_ntohs(tvb, offset);
+        proto_tree_add_item_ret_uint16(tag_tree, hf_exported_pdu_tag_len, tvb, offset, 2, ENC_BIG_ENDIAN, &tag_len);
         proto_item_set_len(ti, 4 + tag_len);
         offset+=2;
 
@@ -450,6 +453,16 @@ dissect_exported_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                 proto_tree_add_item_ret_int(tag_tree, hf_exported_pdu_link_dir, tvb, offset, 4, ENC_BIG_ENDIAN, &link_dir);
                 pinfo->link_dir = link_dir;
                 break;
+            case EXP_PDU_TAG_3GPP_UE_ID:
+            {
+                const uint8_t *id_type, *id_value;
+                int type_sz = (int)tvb_strsize(tvb, offset);
+                proto_tree_add_item_ret_string(tag_tree, hf_exported_pdu_3gpp_ue_id_type, tvb, offset, type_sz, ENC_UTF_8 | ENC_NA, pinfo->pool, &id_type);
+                proto_tree_add_item_ret_string(tag_tree, hf_exported_pdu_3gpp_ue_id_value, tvb, offset + type_sz, tag_len - type_sz, ENC_UTF_8 | ENC_NA, pinfo->pool, &id_value);
+                if (strcmp((const char*)id_type, "IMSI") == 0)
+                    add_assoc_imsi_item(tvb, tag_tree, (const char*)id_value);
+                break;
+            }
             case EXP_PDU_TAG_END_OF_OPT:
                 break;
             default:
@@ -671,6 +684,16 @@ proto_register_exported_pdu(void)
         },
         { &hf_exported_pdu_col_info_str,
             { "Column information string", "exported_pdu.col_info_str",
+               FT_STRINGZPAD, BASE_NONE, NULL, 0,
+              NULL, HFILL }
+        },
+        { &hf_exported_pdu_3gpp_ue_id_type,
+            { "3GPP UE ID Type", "exported_pdu.3gpp_ue_id_type",
+               FT_STRINGZPAD, BASE_NONE, NULL, 0,
+              NULL, HFILL }
+        },
+        { &hf_exported_pdu_3gpp_ue_id_value,
+            { "3GPP UE ID Value", "exported_pdu.3gpp_ue_id_value",
                FT_STRINGZPAD, BASE_NONE, NULL, 0,
               NULL, HFILL }
         },

@@ -5058,7 +5058,7 @@ dissect_usb_hid_control_class_intf(tvbuff_t *tvb, packet_info *pinfo,
 {
     usb_trans_info_t *usb_trans_info;
     bool is_request;
-    int offset = 0;
+    unsigned offset = 0;
     usb_setup_dissector dissector = NULL;
     const usb_setup_dissector_table_t *tmp;
 
@@ -5252,6 +5252,7 @@ dissect_hid_variable(tvbuff_t* tvb, packet_info _U_* pinfo, proto_tree* tree, hi
 
     /* vendor data (0xff00 - 0xffff) */
     if ((USAGE_PAGE(usage) & 0xff00) == 0xff00) {
+        /* TODO: should this field be e.g FT_UINT64 ? */
         proto_tree_add_bits_item(tree, hf_usbhid_vendor_data, tvb, bit_offset, field->report_size, ENC_LITTLE_ENDIAN);
         return;
     }

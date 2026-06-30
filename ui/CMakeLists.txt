@@ -21,7 +21,6 @@ set(NONGENERATED_UI_SRC
 	file_dialog.c
 	firewall_rules.c
 	iface_toolbar.c
-	iface_lists.c
 	init.c
 	io_graph_item.c
 	language.c
@@ -37,7 +36,6 @@ set(NONGENERATED_UI_SRC
 	rtp_stream.c
 	rtp_stream_id.c
 	service_response_time.c
-	software_update.c
 	tap_export_pdu.c
 	tap-iax2-analysis.c
 	tap-rtp-analysis.c
@@ -46,6 +44,7 @@ set(NONGENERATED_UI_SRC
 	tap-rlc-graph.c
 	tap-tcp-stream.c
 	tap-aggregation.c
+	tap-dis-common.c
 	text_import.c
 	text_import_regex.c
 	time_shift.c
@@ -60,6 +59,7 @@ file(GLOB EXTRA_UI_HEADERS
 	rtp_stream.h
 	rtp_stream_id.h
 	tap-iax2-analysis.h
+	tap-dis-common.h
 	tap-rtp-analysis.h
 	tap-aggregation.h
 )

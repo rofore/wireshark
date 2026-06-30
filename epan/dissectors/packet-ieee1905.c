@@ -38,11 +38,6 @@
 static dissector_handle_t ieee1905_handle;
 static dissector_handle_t eapol_handle;
 
-extern value_string_ext ieee80211_reason_code_ext;
-extern value_string_ext ieee80211_status_code_ext;
-extern value_string_ext ff_pa_action_codes_ext;
-extern const value_string wfa_subtype_vals[];
-
 void proto_reg_handoff_ieee1905(void);
 void proto_register_ieee1905(void);
 
@@ -2589,8 +2584,10 @@ dissect_ipv6_type(tvbuff_t *tvb, packet_info *pinfo _U_,
                             tvb, offset, 1, ENC_NA);
         offset++;
 
-        if (addr_count == 0)
+        if (addr_count == 0) {
+            entry_index++;
             continue;
+        }
 
         addr_list = proto_tree_add_subtree(ipv6_tree, tvb, offset,
                                         addr_count * 9,

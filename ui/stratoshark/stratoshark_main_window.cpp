@@ -9,6 +9,7 @@
 
 #include "main_application.h"
 #include "stratoshark_main_window.h"
+#include <ui/qt/widgets/capture_card_widget.h>
 
 /*
  * The generated Ui_StratosharkMainWindow::setupUi() can grow larger than our configured limit,
@@ -70,6 +71,7 @@ DIAG_ON(frame-larger-than=)
 #include <ui/qt/utils/stock_icon.h>
 #include <ui/qt/utils/variant_pointer.h>
 #include <ui/qt/utils/workspace_state.h>
+#include <ui/qt/utils/software_update.h>
 
 #include <QAction>
 #include <QActionGroup>
@@ -83,6 +85,10 @@ DIAG_ON(frame-larger-than=)
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QUrl>
+
+#ifdef HAVE_LUA
+#include "lua_debugger.h"
+#endif
 
 // If we ever add support for multiple windows this will need to be replaced.
 static StratosharkMainWindow *gbl_cur_main_window_;
@@ -320,7 +326,10 @@ StratosharkMainWindow::StratosharkMainWindow(QWidget *parent) :
     freeze_focus_(NULL),
     was_maximized_(false),
     capture_stopping_(false),
-    capture_filter_valid_(false)
+    // An empty capture filter is valid (capture everything), and the filter box
+    // starts empty, so default to true. The widget reports false only once an
+    // invalid filter is actually typed.
+    capture_filter_valid_(true)
 #ifdef HAVE_LIBPCAP
     , capture_options_dialog_(NULL)
     , info_data_()
@@ -342,13 +351,24 @@ StratosharkMainWindow::StratosharkMainWindow(QWidget *parent) :
     // The fewer children we have at this point the better.
     main_ui_->setupUi(this);
 
+    main_ui_->mainStack->setFocusPolicy(Qt::NoFocus);
+    main_ui_->centralWidget->setFocusPolicy(Qt::NoFocus);
+
+#ifdef HAVE_LUA
+    QAction *luaDebuggerAction = new QAction(tr("Lua Debugger"), this);
+    connect(luaDebuggerAction, &QAction::triggered, this,
+            &StratosharkMainWindow::openLuaDebuggerDialog);
+    main_ui_->menuTools->addAction(luaDebuggerAction);
+
+    // Separate the Lua plugins coming after the Lua debugger
+    main_ui_->menuTools->addSeparator();
+#endif
+
     // Initialize base class menu pointers for recent captures handling
     recent_captures_menu_ = main_ui_->menuOpenRecentCaptureFile;
     no_recent_files_action_ = main_ui_->actionDummyNoFilesFound;
 
-#ifdef HAVE_SOFTWARE_UPDATE
-    update_action_ = new QAction(tr("Check for Updates…"), main_ui_->menuHelp);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(SoftwareUpdate::plattformSupported());
 
     menu_groups_ = QList<register_stat_group_t>()
             << REGISTER_LOG_ANALYZE_GROUP_UNSORTED
@@ -374,44 +394,29 @@ StratosharkMainWindow::StratosharkMainWindow(QWidget *parent) :
     //To prevent users use features before initialization complete
     //Otherwise unexpected problems may occur
     setFeaturesEnabled(false);
-    connect(mainApp, &MainApplication::appInitialized, this, [this]() { setFeaturesEnabled(); });
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::applyGlobalCommandLineOptions);
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::zoomText);
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::initViewColorizeMenu);
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::addStatsPluginsToMenu);
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::addDynamicMenus);
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::addPluginIFStructures);
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::initConversationMenus);
-    connect(mainApp, &MainApplication::appInitialized, this, &StratosharkMainWindow::initFollowStreamMenus);
-    connect(mainApp, &MainApplication::appInitialized, this,
-            [=]() { addDisplayFilterTranslationActions(main_ui_->menuEditCopy); });
+    mainApp->whenInitialized(this, [this]() { onAppInitialized(); });
 
     connect(mainApp, &MainApplication::profileChanging, this, &StratosharkMainWindow::saveWindowGeometry);
     connect(mainApp, &MainApplication::preferencesChanged, this, &StratosharkMainWindow::layoutPanes);
     connect(mainApp, &MainApplication::preferencesChanged, this, &StratosharkMainWindow::layoutToolbars);
     connect(mainApp, &MainApplication::preferencesChanged, this, &StratosharkMainWindow::updatePreferenceActions);
-    connect(mainApp, &MainApplication::preferencesChanged, this, &StratosharkMainWindow::zoomText);
     connect(mainApp, &MainApplication::preferencesChanged, this, &StratosharkMainWindow::updateTitlebar);
 
     connect(WorkspaceState::instance(), &WorkspaceState::recentCaptureFilesChanged, this, &StratosharkMainWindow::updateRecentCaptures);
     connect(WorkspaceState::instance(), &WorkspaceState::recentFileStatusChanged, this, &StratosharkMainWindow::updateRecentCaptures);
     connect(mainApp, &MainApplication::preferencesChanged, this, &StratosharkMainWindow::updateRecentCaptures);
     updateRecentCaptures();
+    df_combo_box_ = new DisplayFilterEntry(this);
 
-#if defined(HAVE_SOFTWARE_UPDATE) && defined(Q_OS_WIN)
-    connect(mainApp, &MainApplication::softwareUpdateRequested, this, &StratosharkMainWindow::softwareUpdateRequested,
-        Qt::BlockingQueuedConnection);
-#endif
-
-    df_combo_box_ = new DisplayFilterCombo(this);
+    connect(df_combo_box_, &DisplayFilterEntry::filterPackets, this, &StratosharkMainWindow::applyFilter);
 
     funnel_statistics_ = new FunnelStatistics(this, capture_file_);
-    connect(df_combo_box_, &QComboBox::editTextChanged, funnel_statistics_, &FunnelStatistics::displayFilterTextChanged);
+    connect(df_combo_box_, &QLineEdit::textChanged, funnel_statistics_, &FunnelStatistics::displayFilterTextChanged);
     connect(funnel_statistics_, &FunnelStatistics::setDisplayFilter, this, &StratosharkMainWindow::setDisplayFilter);
     connect(funnel_statistics_, &FunnelStatistics::openCaptureFile, this,
             [=](QString cf_path, QString filter) { openCaptureFile(cf_path, filter); });
 
-    connect(df_combo_box_, &QComboBox::editTextChanged, this, &StratosharkMainWindow::updateDisplayFilterTranslationActions);
+    connect(df_combo_box_, &QLineEdit::textChanged, this, &StratosharkMainWindow::updateDisplayFilterTranslationActions);
 
     file_set_dialog_ = new FileSetDialog(this);
     connect(file_set_dialog_, &FileSetDialog::fileSetOpenCaptureFile, this, [=](QString cf_path) { openCaptureFile(cf_path); });
@@ -474,32 +479,32 @@ StratosharkMainWindow::StratosharkMainWindow(QWidget *parent) :
     connect(main_ui_->goToGo, &QPushButton::pressed, this, &StratosharkMainWindow::goToGoClicked);
     connect(main_ui_->goToCancel, &QPushButton::pressed, this, &StratosharkMainWindow::goToCancelClicked);
 
-// A billion-1 is equivalent to the inputMask 900000000 previously used
-// Avoid QValidator::Intermediate values by using a top value of all 9's
-#define MAX_GOTO_LINE 999999999
+    // A billion-1 is equivalent to the inputMask 900000000 previously used
+    // Avoid QValidator::Intermediate values by using a top value of all 9's
+    #define MAX_GOTO_LINE 999999999
 
-QIntValidator *goToLineQiv = new QIntValidator(0,MAX_GOTO_LINE,this);
-main_ui_->goToLineEdit->setValidator(goToLineQiv);
+    QIntValidator *goToLineQiv = new QIntValidator(0,MAX_GOTO_LINE,this);
+    main_ui_->goToLineEdit->setValidator(goToLineQiv);
 
-#ifdef HAVE_SOFTWARE_UPDATE
-    QAction *update_sep = main_ui_->menuHelp->insertSeparator(main_ui_->actionHelpAbout);
-    main_ui_->menuHelp->insertAction(update_sep, update_action_);
-    connect(update_action_, &QAction::triggered, this, &StratosharkMainWindow::checkForUpdates);
-#endif
-    master_split_.setObjectName("splitterMaster");
-    master_split_.setAccessibleName(tr("Main View Splitter"));
-    master_split_.setAccessibleDescription(tr("Contains the log list, protocol tree, and packet bytes."));
+   if (SoftwareUpdate::plattformSupported()) {
+        connect(main_ui_->actionHelpCheckUpdates, &QAction::triggered,  this, []() {
+            SoftwareUpdate::instance()->performUIUpdate();
+        });
+   } else {
+        main_ui_->actionHelpCheckUpdates->setToolTip(tr("Software update checking is not available on this platform."));
+    }
+
+    master_split_ = main_ui_->splitterMaster;
     extra_split_.setObjectName("splitterExtra");
     extra_split_.setAccessibleName(tr("Extra View Splitter"));
     extra_split_.setAccessibleDescription(tr("Contains log extras and packet bytes views."));
-    master_split_.setChildrenCollapsible(false);
+    extra_split_.setFocusPolicy(Qt::NoFocus);
     extra_split_.setChildrenCollapsible(false);
-    main_ui_->mainStack->addWidget(&master_split_);
 
     empty_pane_.setObjectName("emptyPane");
     empty_pane_.setVisible(false);
 
-    packet_list_ = new PacketList(&master_split_);
+    packet_list_ = new PacketList(master_split_);
     connect(packet_list_, &PacketList::framesSelected, this, &StratosharkMainWindow::setMenusForSelectedPacket);
     connect(packet_list_, &PacketList::framesSelected, this, &StratosharkMainWindow::framesSelected);
 
@@ -508,7 +513,7 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     action->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
     connect(main_ui_->menuPacketComment, &QMenu::aboutToShow, this, &StratosharkMainWindow::setEditCommentsMenu);
 
-    proto_tree_ = new ProtoTree(&master_split_);
+    proto_tree_ = new ProtoTree(master_split_);
     proto_tree_->installEventFilter(this);
 
     packet_list_->setProtoTree(proto_tree_);
@@ -533,7 +538,7 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     connect(mainApp, &WiresharkApplication::captureActive,
             this, &StratosharkMainWindow::captureActive);
 
-    data_source_tab_ = new DataSourceTab(&master_split_);
+    data_source_tab_ = new DataSourceTab(master_split_);
 
     // Packet list and proto tree must exist before these are called.
     setMenusForSelectedPacket();
@@ -547,8 +552,10 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     updateRecentActions();
     setForCaptureInProgress(false);
 
-    setTabOrder(df_combo_box_->lineEdit(), packet_list_);
+    setTabOrder(main_ui_->mainToolBar, df_combo_box_);
+    setTabOrder(df_combo_box_, packet_list_);
     setTabOrder(packet_list_, proto_tree_);
+    setTabOrder(proto_tree_, data_source_tab_);
 
     connect(&capture_file_, &CaptureFile::captureEvent, this, &StratosharkMainWindow::captureEventHandler);
     connect(&capture_file_, &CaptureFile::captureEvent, mainApp, &WiresharkApplication::captureEventHandler);
@@ -557,7 +564,6 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
 
     connect(mainApp, &MainApplication::freezePacketList, packet_list_, &PacketList::freezePacketList);
     connect(mainApp, &MainApplication::columnsChanged, packet_list_, &PacketList::columnsChanged);
-    connect(mainApp, &MainApplication::colorsChanged, packet_list_, &PacketList::colorsChanged);
     connect(mainApp, &MainApplication::preferencesChanged, packet_list_, &PacketList::preferencesChanged);
     connect(mainApp, &MainApplication::recentPreferencesRead, this, &StratosharkMainWindow::applyRecentPaneGeometry);
     connect(mainApp, &MainApplication::recentPreferencesRead, this, &StratosharkMainWindow::updateRecentActions);
@@ -569,8 +575,8 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
 
     connect(main_ui_->mainStack, &QStackedWidget::currentChanged, this, &StratosharkMainWindow::mainStackChanged);
 
-    connect(welcome_page_, &StratosharkWelcomePage::startCapture, this, [this](QStringList) { startCapture(); });
-    connect(welcome_page_, &StratosharkWelcomePage::recentFileActivated, this, [this](QString cfile) { openCaptureFile(cfile); });
+    connect(welcome_page_->captureCard(), &CaptureCardWidget::startCapture, this, [this](QStringList) { startCapture(); });
+    connect(welcome_page_, &WelcomePage::recentFileActivated, this, [this](QString cfile) { openCaptureFile(cfile); });
 
     connect(main_ui_->addressEditorFrame, &AddressEditorFrame::redissectPackets,
             this, &StratosharkMainWindow::redissectPackets);
@@ -592,9 +598,6 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
             packet_list_, &PacketList::setCaptureFile);
     connect(this, &StratosharkMainWindow::setCaptureFile,
             proto_tree_, &ProtoTree::setCaptureFile);
-
-    connect(mainApp, &MainApplication::zoomMonospaceFont, packet_list_, &PacketList::setMonospaceFont);
-    connect(mainApp, &MainApplication::zoomMonospaceFont, proto_tree_, &ProtoTree::setMonospaceFont);
 
     connectFileMenuActions();
     connectEditMenuActions();
@@ -641,11 +644,11 @@ main_ui_->goToLineEdit->setValidator(goToLineQiv);
     if (iface_tree) {
         connect(iface_tree, &QTreeWidget::itemSelectionChanged, this, &StratosharkMainWindow::interfaceSelectionChanged);
     }
-    connect(main_ui_->welcomePage, &StratosharkWelcomePage::captureFilterSyntaxChanged,
+    connect(welcome_page_->captureCard(), &CaptureCardWidget::captureFilterSyntaxChanged,
             this, &StratosharkMainWindow::captureFilterSyntaxChanged);
 
     connect(this, &StratosharkMainWindow::showExtcapOptions, this, &StratosharkMainWindow::showExtcapOptionsDialog);
-    connect(this->welcome_page_, &StratosharkWelcomePage::showExtcapOptions, this, &StratosharkMainWindow::showExtcapOptionsDialog);
+    connect(welcome_page_->captureCard(), &CaptureCardWidget::showExtcapOptions, this, &StratosharkMainWindow::showExtcapOptionsDialog);
 
 #endif // HAVE_LIBPCAP
 
@@ -762,8 +765,6 @@ void StratosharkMainWindow::addInterfaceToolbar(const iface_toolbar *toolbar_ent
     menu->insertAction(before, action);
 
     InterfaceToolbar *interface_toolbar = new InterfaceToolbar(this, toolbar_entry);
-    connect(mainApp, &MainApplication::appInitialized, interface_toolbar, &InterfaceToolbar::interfaceListChanged);
-    connect(mainApp, &MainApplication::localInterfaceListChanged, interface_toolbar, &InterfaceToolbar::interfaceListChanged);
 
     QToolBar *toolbar = new QToolBar(this);
     toolbar->addWidget(interface_toolbar);
@@ -832,7 +833,6 @@ void StratosharkMainWindow::updateStyleSheet()
 
 #endif
     welcome_page_->updateStyleSheets();
-    df_combo_box_->updateStyleSheet();
 }
 
 bool StratosharkMainWindow::eventFilter(QObject *obj, QEvent *event) {
@@ -844,8 +844,8 @@ bool StratosharkMainWindow::eventFilter(QObject *obj, QEvent *event) {
         QKeyEvent *kevt = static_cast<QKeyEvent *>(event);
         if (kevt->text().length() > 0 && kevt->text()[0].isPrint() &&
             !(kevt->modifiers() & Qt::ControlModifier)) {
-            df_combo_box_->lineEdit()->insert(kevt->text());
-            df_combo_box_->lineEdit()->setFocus();
+            df_combo_box_->insert(kevt->text());
+            df_combo_box_->setFocus();
             return true;
         }
     }
@@ -872,6 +872,16 @@ void StratosharkMainWindow::keyPressEvent(QKeyEvent *event) {
     // Explicitly focus on the display filter combo.
     if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_Slash) {
         df_combo_box_->setFocus(Qt::ShortcutFocusReason);
+        return;
+    }
+
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_Tab) {
+        cyclePane();
+        return;
+    }
+
+    if (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier) && event->key() == Qt::Key_Backtab) {
+        cyclePane(true);
         return;
     }
 
@@ -907,8 +917,19 @@ void StratosharkMainWindow::closeEvent(QCloseEvent *event) {
         return;
     }
 
+#ifdef HAVE_LUA
+    /* Refuse to close while the Lua debugger is paused; the debugger
+     * defers and re-delivers the close once the Lua C stack has
+     * unwound. Running tryClosingCaptureFile() / mainApp->quit() with
+     * the Lua dissector still on the C stack would tear down capture /
+     * epan state and abort in wmem_cleanup_scopes() at exit. */
+    if (LuaDebugger::tryDeferMainWindowClose(event)) {
+        return;
+    }
+#endif
+
     QString before_what(tr(" before quitting"));
-    if (!testCaptureFileClose(before_what, Quit)) {
+    if (!tryClosingCaptureFile(before_what, Quit)) {
         event->ignore();
         return;
     }
@@ -1107,18 +1128,18 @@ void StratosharkMainWindow::saveWindowGeometry()
 
     g_free(recent.gui_geometry_main_master_split);
     g_free(recent.gui_geometry_main_extra_split);
-    recent.gui_geometry_main_master_split = g_strdup(master_split_.saveState().toHex().constData());
+    recent.gui_geometry_main_master_split = g_strdup(master_split_->saveState().toHex().constData());
     recent.gui_geometry_main_extra_split = g_strdup(extra_split_.saveState().toHex().constData());
 
     // Saving the QSplitter state is more accurate (#19361), but save
     // the old GTK-style pane information for backwards compatibility
     // for switching back and forth with older versions.
-    if (master_split_.sizes().length() > 0) {
-        recent.gui_geometry_main_upper_pane = master_split_.sizes()[0];
+    if (master_split_->sizes().length() > 0) {
+        recent.gui_geometry_main_upper_pane = master_split_->sizes()[0];
     }
 
-    if (master_split_.sizes().length() > 2) {
-        recent.gui_geometry_main_lower_pane = master_split_.sizes()[1];
+    if (master_split_->sizes().length() > 2) {
+        recent.gui_geometry_main_lower_pane = master_split_->sizes()[1];
     } else if (extra_split_.sizes().length() > 0) {
         recent.gui_geometry_main_lower_pane = extra_split_.sizes()[0];
     }
@@ -1310,7 +1331,7 @@ void StratosharkMainWindow::importCaptureFile() {
     ImportTextDialog import_dlg;
 
     QString before_what(tr(" before importing a capture"));
-    if (!testCaptureFileClose(before_what))
+    if (!tryClosingCaptureFile(before_what))
         return;
 
     import_dlg.exec();
@@ -1707,7 +1728,7 @@ void StratosharkMainWindow::exportDissections(export_type_e export_type) {
     ed_dlg->show();
 }
 
-bool StratosharkMainWindow::testCaptureFileClose(QString before_what, FileCloseContext context) {
+bool StratosharkMainWindow::tryClosingCaptureFile(QString before_what, FileCloseContext context) {
     bool capture_in_progress = false;
     bool do_close_file = false;
 
@@ -2292,10 +2313,8 @@ void StratosharkMainWindow::setMenusForCaptureFile(bool force_disable)
 
     main_ui_->actionViewReload->setEnabled(enable);
 
-#ifdef HAVE_SOFTWARE_UPDATE
     // We might want to enable or disable automatic checks here as well.
-    update_action_->setEnabled(!can_save);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(SoftwareUpdate::instance()->plattformSupported() && !can_save);
 }
 
 void StratosharkMainWindow::setMenusForCaptureInProgress(bool capture_in_progress) {
@@ -2314,10 +2333,9 @@ void StratosharkMainWindow::setMenusForCaptureInProgress(bool capture_in_progres
 
     main_ui_->menuFileSet->setEnabled(!capture_in_progress);
     main_ui_->actionFileQuit->setEnabled(true);
-#ifdef HAVE_SOFTWARE_UPDATE
+
     // We might want to enable or disable automatic checks here as well.
-    update_action_->setEnabled(!capture_in_progress);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(SoftwareUpdate::instance()->plattformSupported() && !capture_in_progress);
 
     main_ui_->actionStatisticsCaptureFileProperties->setEnabled(capture_in_progress);
 
@@ -2342,9 +2360,7 @@ void StratosharkMainWindow::setMenusForCaptureInProgress(bool capture_in_progres
 
 void StratosharkMainWindow::setMenusForCaptureStopping() {
     main_ui_->actionFileQuit->setEnabled(false);
-#ifdef HAVE_SOFTWARE_UPDATE
-    update_action_->setEnabled(false);
-#endif
+    main_ui_->actionHelpCheckUpdates->setEnabled(false);
     main_ui_->actionStatisticsCaptureFileProperties->setEnabled(false);
 #ifdef HAVE_LIBPCAP
     main_ui_->actionCaptureStart->setChecked(false);
@@ -2372,17 +2388,18 @@ void StratosharkMainWindow::setForCapturedPackets(bool have_captured_packets)
     main_ui_->actionGoNextConversationPacket->setEnabled(have_captured_packets);
     main_ui_->actionGoPreviousConversationPacket->setEnabled(have_captured_packets);
 
-    main_ui_->actionViewZoomIn->setEnabled(have_captured_packets);
-    main_ui_->actionViewZoomOut->setEnabled(have_captured_packets);
-    main_ui_->actionViewNormalSize->setEnabled(have_captured_packets);
     main_ui_->actionViewResizeColumns->setEnabled(have_captured_packets);
     main_ui_->actionViewRedissect->setEnabled(have_captured_packets);
 
     main_ui_->actionStatisticsCaptureFileProperties->setEnabled(have_captured_packets);
     main_ui_->actionStatisticsProtocolHierarchy->setEnabled(have_captured_packets);
     main_ui_->actionStatisticsIOGraph->setEnabled(have_captured_packets);
-    main_ui_->actionStatisticsPlot->setEnabled(have_captured_packets);
+
+    if (have_captured_packets && !packet_list_->hasFocus()) {
+        packet_list_->setFocus();
+    }
 }
+
 
 void StratosharkMainWindow::setMenusForFileSet(bool enable_list_files) {
     bool enable_next = fileset_get_next() != NULL && enable_list_files;
@@ -2741,3 +2758,10 @@ void StratosharkMainWindow::setMwFileName(QString fileName)
     mwFileName_ = fileName;
     return;
 }
+
+#ifdef HAVE_LUA
+void StratosharkMainWindow::openLuaDebuggerDialog()
+{
+    LuaDebugger::open(this);
+}
+#endif

@@ -8,10 +8,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-
-#ifndef __SECRETS_H__
-#define __SECRETS_H__
-
+#pragma once
 #include <inttypes.h>
 #include <stdbool.h>
 
@@ -38,7 +35,14 @@ extern "C" {
  * truncated by the user) and store only the bare minimum keys.
  */
 
+/**
+ * @brief Initialize the secrets management system.
+ */
 void secrets_init(void);
+
+/**
+ * @brief Cleans up all secrets-related resources.
+ */
 void secrets_cleanup(void);
 
 #if 0
@@ -99,12 +103,15 @@ typedef char* (*secret_export_func)(size_t* length);
 WS_DLL_PUBLIC void
 secrets_register_inject_type(const char* name, secret_inject_count_func count_func, secret_inject_export_func inject_func, secret_export_func export_func);
 
+/**
+ * @brief Return codes for a secrets (e.g., TLS key log) export operation.
+ */
 typedef enum {
-    SECRETS_EXPORT_SUCCESS = 0,
-    SECRETS_INVALID_CAPTURE_FILE,
-    SECRETS_UNKNOWN_PROTOCOL,
-    SECRETS_NO_SECRETS,
-    SECRETS_EXPORT_FAILED,
+    SECRETS_EXPORT_SUCCESS        = 0, /**< Secrets were exported successfully */
+    SECRETS_INVALID_CAPTURE_FILE,      /**< The provided capture file is invalid or could not be opened */
+    SECRETS_UNKNOWN_PROTOCOL,          /**< The requested protocol has no registered secrets exporter */
+    SECRETS_NO_SECRETS,                /**< No secrets were found in the capture file for the requested protocol */
+    SECRETS_EXPORT_FAILED,             /**< Export failed due to an I/O or serialization error */
 } secrets_export_values;
 
 /**
@@ -195,5 +202,3 @@ secrets_rsa_decrypt(const cert_key_id_t *key_id, const uint8_t *encr, unsigned e
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-
-#endif /* __SECRETS_H__ */

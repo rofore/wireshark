@@ -23,6 +23,7 @@
 #include <QStringList>
 
 QCache<uint32_t, QStringList> PacketListRecord::col_text_cache_(500);
+bool PacketListRecord::dissection_paused_ = false;
 QMap<int, int> PacketListRecord::cinfo_column_;
 unsigned PacketListRecord::rows_color_ver_ = 1;
 
@@ -35,6 +36,7 @@ PacketListRecord::PacketListRecord(frame_data *frameData) :
     conv_index_(0),
     read_failed_(false),
     row_(0),
+    expert_severity_(0),
     color_filters_(NULL),
     color_filter_count_(0)
 {
@@ -122,6 +124,13 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
         return;
     }
 
+    // The dissection_paused_ is used by the Lua Debugger when paused in
+    // a nested UI loop and re-entry would corrupt pause-thread state.
+    // The main UI is frozen and will dissect again when unfrozen.
+    if (dissection_paused_) {
+        return;
+    }
+
     if (dissect_columns) {
         cinfo = &cap_file->cinfo;
     }
@@ -190,6 +199,7 @@ void PacketListRecord::dissect(capture_file *cap_file, bool dissect_columns, boo
      * attempt to recover from it.
      */
     epan_dissect_run(&edt, cap_file->cd_t, &rec, fdata_, cinfo);
+    expert_severity_ = edt.pi.expert_severity;
 
     if (dissect_columns) {
         /* "Stringify" non frame_data vals */

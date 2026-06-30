@@ -9,6 +9,9 @@
 
 #include "config.h"
 
+#ifdef __HAIKU__
+#include <sys/time.h>
+#endif
 #include <sys/types.h>
 
 #ifdef HAVE_UNISTD_H
@@ -18,7 +21,7 @@
 #include <errno.h>
 
 #include "interface_toolbar_reader.h"
-#include "sync_pipe.h"
+#include <capture/sync_pipe.h>
 #include "wsutil/file_util.h"
 
 #include <QThread>

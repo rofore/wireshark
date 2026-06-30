@@ -4100,7 +4100,7 @@ add_addresses(proto_tree *tree, tvbuff_t *tvb, int hf)
             bearer_type = 0x00; /* XXX */
         }
         if (address_flags_len & PORT_NUMBER_INCLUDED) {
-                proto_tree_add_uint (addr_tree, hf_address_port_num,
+                proto_tree_add_item (addr_tree, hf_address_port_num,
                         tvb, offset, 2, ENC_BIG_ENDIAN);
             offset += 2;
         }
@@ -4609,7 +4609,7 @@ static void
 dissect_wsp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     dissector_handle_t dissector_handle, bool is_connectionless)
 {
-    int offset = 0;
+    unsigned offset = 0;
 
     uint8_t     pdut;
     unsigned    count            = 0;

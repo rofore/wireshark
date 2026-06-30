@@ -30,7 +30,7 @@
 /*
  */
 static void
-add_value_time_to_tree(uint64_t value, int len, proto_tree *tree, tvbuff_t *tvb, int offset, int hf_time_format)
+add_value_time_to_tree(uint64_t value, int len, proto_tree *tree, tvbuff_t *tvb, unsigned offset, int hf_time_format)
 {
     nstime_t dtn_time;
 
@@ -210,7 +210,6 @@ static cborObj cbor_info(tvbuff_t *tvb, unsigned offset)
 {
     int tmp = 0;
     cborObj ret;
-    ret.type = CBOR_UNKNOWN;
     ret.size = 0;
     ret.totalSize = 0;
     ret.uint = -1;
@@ -233,13 +232,13 @@ static cborObj cbor_info(tvbuff_t *tvb, unsigned offset)
             ret.uint = tvb_get_uint8(tvb, offset);
             ret.size += 1;
         } else if (theSize==25) { // next 2 bytes are uint16_t data
-            ret.uint = tvb_get_uint16(tvb, offset, 0);
+            ret.uint = tvb_get_uint16(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 2;
         } else if (theSize==26) { // next 4 bytes are uint32_t data
-            ret.uint = tvb_get_uint32(tvb, offset, 0);
+            ret.uint = tvb_get_uint32(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 4;
         } else if (theSize==27) { // next 8 bytes are uint64_t data
-            ret.uint = tvb_get_uint64(tvb, offset, 0);
+            ret.uint = tvb_get_uint64(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 8;
         }
         ret.totalSize = ret.size;
@@ -252,13 +251,13 @@ static cborObj cbor_info(tvbuff_t *tvb, unsigned offset)
             ret.uint = tvb_get_uint8(tvb, offset);
             ret.size += 1;
         } else if (theSize==25) { // next 2bytes are uint16_t data (length)
-            ret.uint = tvb_get_uint16(tvb, offset, 0);
+            ret.uint = tvb_get_uint16(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 2;
         } else if (theSize==26) { // next 4bytes are uint32_t data
-            ret.uint = tvb_get_uint32(tvb, offset, 0);
+            ret.uint = tvb_get_uint32(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 4;
         } else if (theSize==27) { // next byte is uint64_t data
-            ret.uint = tvb_get_uint64(tvb, offset, 0);
+            ret.uint = tvb_get_uint64(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 8;
         }
         ret.totalSize = ret.size+ret.uint;
@@ -274,15 +273,15 @@ static cborObj cbor_info(tvbuff_t *tvb, unsigned offset)
             ret.size += 1;
         } else if (theSize==25) // next 2bytes are uint16_t data
         {
-            ret.uint = tvb_get_uint16(tvb, offset, 0);
+            ret.uint = tvb_get_uint16(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 2;
         } else if (theSize==26) // next 4bytes are uint32_t data
         {
-            ret.uint = tvb_get_uint32(tvb, offset, 0);
+            ret.uint = tvb_get_uint32(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 4;
         } else if (theSize==27) // next byte is uint64_t data
         {
-            ret.uint = tvb_get_uint64(tvb, offset, 0);
+            ret.uint = tvb_get_uint64(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 8;
         }
         ret.totalSize = ret.size+ret.uint;
@@ -298,15 +297,15 @@ static cborObj cbor_info(tvbuff_t *tvb, unsigned offset)
             ret.size += 1;
         } else if (theSize==25) // next 2bytes are uint16_t data
         {
-            ret.uint = tvb_get_uint16(tvb, offset, 0);
+            ret.uint = tvb_get_uint16(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 2;
         } else if (theSize==26) // next 4bytes are uint32_t data
         {
-            ret.uint = tvb_get_uint32(tvb, offset, 0);
+            ret.uint = tvb_get_uint32(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 4;
         } else if (theSize==27) // next byte is uint64_t data
         {
-            ret.uint = tvb_get_uint64(tvb, offset, 0);
+            ret.uint = tvb_get_uint64(tvb, offset, ENC_BIG_ENDIAN);
             ret.size += 8;
         }
         // I know how many elements are in the array, but NOT the total

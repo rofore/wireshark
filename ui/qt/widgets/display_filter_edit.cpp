@@ -87,11 +87,11 @@ DisplayFilterEdit::DisplayFilterEdit(QWidget *parent, DisplayFilterEditType type
     connect(this, &DisplayFilterEdit::textChanged, this,
             static_cast<void (DisplayFilterEdit::*)(const QString &)>(&DisplayFilterEdit::checkFilter));
 
-    connect(mainApp, &MainApplication::appInitialized, this, &DisplayFilterEdit::updateBookmarkMenu);
+    mainApp->whenInitialized(this, [this]() { updateBookmarkMenu(); });
     connect(mainApp, &MainApplication::displayFilterListChanged, this, &DisplayFilterEdit::updateBookmarkMenu);
     connect(mainApp, &MainApplication::preferencesChanged, this, [=](){ checkFilter(); });
 
-    connect(mainApp, &MainApplication::appInitialized, this, &DisplayFilterEdit::connectToMainWindow);
+    mainApp->whenInitialized(this, [this]() { connectToMainWindow(); });
 }
 
 void DisplayFilterEdit::setType(DisplayFilterEditType type)
@@ -895,11 +895,7 @@ void DisplayFilterEdit::createFilterTextDropMenu(QDropEvent *event, bool prepare
     QMenu * applyMenu = FilterAction::createFilterMenu(filterAct, filterText, true, this);
     applyMenu->setAttribute(Qt::WA_DeleteOnClose);
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0 ,0)
     applyMenu->popup(this->mapToGlobal(event->position().toPoint()));
-#else
-    applyMenu->popup(this->mapToGlobal(event->pos()));
-#endif
 }
 
 void DisplayFilterEdit::displayFilterExpression()
